@@ -1,0 +1,18 @@
+node_modules/
+*.env
+*.xlsx
+*.csv
+*.zip
+*.pdf
+*.docx
+read_keys.js
+read_tracker.js
+extract.js
+Whatsapp Chat/
+Bali Project Keys.xlsx
+EASYBali_accessKeys (1).csv
+Services Sheet.xlsx
+EASYBali Work Tracker.xlsx
+bali-code.zip
+easy-bali-b74b61110525.json
+*.pem

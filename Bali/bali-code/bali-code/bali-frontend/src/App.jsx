@@ -14,6 +14,7 @@ import ServiceItems from "./components/services/serviceItems";
 import PrivacyPolicy from "./components/termspages/privacy-policy/PrivacyPolicy";
 import TermsConditons from "./components/termspages/terms-conditions/TermsConditons";
 import ContactUs from "./components/termspages/privacy-policy/contact-us/ContactUs";
+import GuestActivity from "./page/dashboard/GuestActivity";
 
 import DashboardLayout from "./page/dashboard/DashboardLayout";
 import DashboardMain from "./page/dashboard/DashboardMain";
@@ -89,6 +90,10 @@ const appRouter = createBrowserRouter([
       {
         path: "/dashboard", // Root of dashboard points to overview
         element: <DashboardMain />,
+      },
+      {
+        path: "guests",
+        element: <GuestActivity />,
       },
       // {
       //   path: "chats", // Further dashboard routes

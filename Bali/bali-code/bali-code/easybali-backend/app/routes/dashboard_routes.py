@@ -82,3 +82,53 @@ async def get_dashboard_stats() -> Dict[str, Any]:
                 { "id": 1, "guest": "John Doe", "action": "Booked Massage", "time": "10 mins ago", "status": "pending" }
             ]
         }
+
+@router.get("/activity")
+async def get_guest_activity() -> Dict[str, Any]:
+    try:
+        # Fetch up to 50 latest orders to represent guest activity timeline
+        recent_orders = await order_collection.find().sort("updated_at", -1).limit(50).to_list(50)
+        
+        activity_list = []
+        for order in recent_orders:
+            db_status = order.get("status", "pending")
+            if db_status == "PAID":
+                ui_status = "completed"
+                action_text = f"Paid for {order.get('service_name', 'Service')}"
+                icon_type = "payment"
+            elif db_status in ["init", "payment_pending", "pending"]:
+                ui_status = "pending"
+                action_text = f"Requested {order.get('service_name', 'Service')}"
+                icon_type = "request"
+            else:
+                ui_status = "resolved"
+                action_text = f"Update on {order.get('service_name', 'Service')}"
+                icon_type = "info"
+                
+            time_val = order.get("updated_at") or order.get("created_at")
+            time_str = time_val.strftime("%Y-%m-%d %H:%M:%S") if hasattr(time_val, "strftime") else "Recently"
+            
+            activity_list.append({
+                "id": str(order.get("_id")),
+                "order_number": order.get("order_number", "N/A"),
+                "guest_id": str(order.get("sender_id", "Unknown")),
+                "guest_name": f"Guest {str(order.get('sender_id', ''))[-4:]}",
+                "action": action_text,
+                "service": order.get("service_name", "Service"),
+                "amount": order.get("payment", {}).get("paid_amount", 0),
+                "time": time_str,
+                "status": ui_status,
+                "icon": icon_type
+            })
+
+        return {
+            "success": True,
+            "activity": activity_list
+        }
+    except Exception as e:
+        print(f"Error fetching guest activity: {e}")
+        return {
+            "success": False,
+            "error": "Failed to fetch activity timeline",
+            "activity": []
+        }

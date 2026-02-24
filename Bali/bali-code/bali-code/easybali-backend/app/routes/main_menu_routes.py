@@ -9,7 +9,6 @@ from urllib.parse import unquote
 
 # Google Sheet configurations
 SHEET_ID = "1tuGBnQFjDntJQglofA17uHhiyekkVyDoSInErbwfR24"
-workbook = get_workbook(SHEET_ID)
 
 router = APIRouter(prefix="/menu", tags=["Menu"])
 
@@ -127,7 +126,8 @@ async def add_villa_data(
         qr_code_url = await generate_and_upload_qrcode(qr_data)
 
         # Access worksheet (Google Sheets)
-        worksheet = workbook.get_worksheet(3)  # Adjust this index based on your sheet structure
+        workbook = get_workbook(SHEET_ID)
+        worksheet = workbook.get_worksheet(3)
 
         # Find the next available row number
         existing_rows = len(worksheet.get_all_values())

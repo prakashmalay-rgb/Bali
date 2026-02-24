@@ -6,7 +6,15 @@ from datetime import datetime
 
 # Google Sheet configurations
 SHEET_ID = "1tuGBnQFjDntJQglofA17uHhiyekkVyDoSInErbwfR24"
-workbook = get_workbook(SHEET_ID)
+
+_workbook = None
+
+def get_cached_workbook():
+    global _workbook
+    if _workbook is None:
+        from app.services.google_sheets import get_workbook
+        _workbook = get_workbook(SHEET_ID)
+    return _workbook
 
 # Cache for storing data
 cache = {
@@ -27,6 +35,7 @@ def load_data_into_cache():
     print(f"Refreshing data at {datetime.now()}...")
     try:
         # Load menu data
+        workbook = get_cached_workbook()
         menu_structure = workbook.get_worksheet(4)
         cache["menu_df"] = clean_dataframe(menu_structure.get_all_values())
         
@@ -36,29 +45,29 @@ def load_data_into_cache():
         columns = cache["df"][0]
         rows = cache["df"][1:]
         cache['services_df'] = pd.DataFrame(rows, columns=columns)
-
+ 
         price_distribution = workbook.get_worksheet(3)
         cache["df3"] = (price_distribution.get_all_values())
         columns = cache["df3"][0]
         rows = cache["df3"][1:]
         cache['price_distribution'] = pd.DataFrame(rows, columns=columns)
-
+ 
         service_providers = workbook.get_worksheet(2)
         cache["df1"] = (service_providers.get_all_values())
         columns = cache["df1"][0]
         rows = cache["df1"][1:]
         cache['service_providers'] = pd.DataFrame(rows, columns=columns)
-
+ 
         villas = workbook.get_worksheet(5)
         cache["df2"] = (villas.get_all_values())
         columns = cache["df2"][0]
         rows = cache["df2"][1:]
         cache['villas_data'] = pd.DataFrame(rows, columns=columns)
-
+ 
         # Load design data
         services_design = workbook.get_worksheet(1)
         cache["design_df"] = clean_dataframe(services_design.get_all_values())
-
+ 
         main_menu = workbook.get_worksheet(6)
         cache["main_menu_design"] = clean_dataframe(main_menu.get_all_values())
         

@@ -132,7 +132,7 @@ const ServiceItems = () => {
 
   const createSession = async (payload) => {
     try {
-      const response = await fetch('https://bali-v92r.onrender.com/create-session', {
+      const response = await fetch('https://easy-bali.onrender.com/create-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

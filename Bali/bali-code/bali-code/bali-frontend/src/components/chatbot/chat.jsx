@@ -15,7 +15,7 @@ const Chat = () => {
   const [messages, setMessages] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
   const [inputMessage, setInputMessage] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loadingItem, setLoadingItem] = useState(null);
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
   const [chatType, setChatType] = useState(null);
@@ -105,27 +105,76 @@ const Chat = () => {
     console.log("⏱️ Started 120-second auto-close timer");
   };
 
-  const handleOrderServicesClick = async () => {
+  const handleMenuClick = async (itemName) => {
+    if (itemName === activeTab && chatType && !['Order Services', 'Local Guide', 'Recommendations', 'Discount & Promotions'].includes(itemName)) return;
+    setLoadingItem(itemName);
     try {
-      setLoading(true);
-      const response = await getSubMenu('Order Services');
-      navigate('/categories', {
-        state: {
-          mainMenu: 'categories',
-          data: response.data || []
+      const categoryMenus = ['Order Services', 'Local Guide', 'Recommendations', 'Discount & Promotions'];
+      if (categoryMenus.includes(itemName)) {
+        const response = await getSubMenu(itemName);
+        navigate('/categories', {
+          state: {
+            mainMenu: 'categories',
+            data: response.data || []
+          }
+        });
+        return;
+      }
+
+      const chatMap = {
+        'Currency Converter': 'currency-converter',
+        'What To Do Today?': 'what-to-do',
+        'Plan My Trip!': 'plan-my-trip',
+        'Voice Translator': 'voice-translator',
+        'Passport Submission': 'passport-submission'
+      };
+
+      const newChatType = chatMap[itemName];
+      if (newChatType) {
+        setActiveTab(itemName);
+        const currentUserId = chatAPI.getUserId();
+        setChatType(newChatType);
+        setUserId(currentUserId);
+
+        const storedMessages = chatAPI.loadChatHistory(currentUserId, newChatType);
+        if (storedMessages && storedMessages.length > 0) {
+          setMessages(storedMessages);
+        } else {
+          try {
+            const response = await chatAPI.sendMessage(newChatType, currentUserId, "Hi");
+            const initialMessage = {
+              id: Date.now(),
+              text: response.response,
+              sender: "bot",
+              timestamp: getCurrentTime()
+            };
+            chatAPI.saveChatHistory(currentUserId, newChatType, [initialMessage]);
+            setMessages([initialMessage]);
+          } catch (err) {
+            console.error(err);
+            const errorMessage = {
+              id: Date.now(),
+              text: "Failed to load chat. Please try again.",
+              sender: "bot",
+              timestamp: getCurrentTime()
+            };
+            setMessages([errorMessage]);
+          }
         }
-      });
+      }
     } catch (error) {
-      console.error('Failed to fetch Order Services:', error);
-      navigate('/services', {
-        state: {
-          mainMenu: 'services',
-          data: [],
-          error: 'Failed to load services. Please try again.'
-        }
-      });
+      console.error(`Failed to fetch ${itemName}:`, error);
+      if (['Order Services', 'Local Guide', 'Recommendations', 'Discount & Promotions'].includes(itemName)) {
+        navigate('/categories', {
+          state: {
+            mainMenu: 'categories',
+            data: [],
+            error: 'Failed to load services. Please try again.'
+          }
+        });
+      }
     } finally {
-      setLoading(false);
+      setLoadingItem(null);
     }
   };
 
@@ -716,31 +765,27 @@ const Chat = () => {
           {menuItems.map((item) => (
             <button
               key={item.name}
-              onClick={
-                item.name === "Order Services"
-                  ? handleOrderServicesClick
-                  : () => setActiveTab(item.name)
-              }
-              className={`text-[16px] flex items-center justify-start gap-3 font-medium w-full px-4 py-5 rounded-[50px] transition hover:bg-[#FF8000] hover:text-white group shadow-none ${loading && item.name === "Order Services"
+              onClick={() => handleMenuClick(item.name)}
+              className={`text-[16px] flex items-center justify-start gap-3 font-medium w-full px-4 py-5 rounded-[50px] transition hover:bg-[#FF8000] hover:text-white group shadow-none ${loadingItem === item.name
                 ? "opacity-50 cursor-not-allowed"
                 : ""
-                } ${item.name !== "Order Services" && activeTab === item.name
+                } ${activeTab === item.name
                   ? "bg-[#FF8000] text-white"
                   : ""
                 }`}
-              disabled={loading && item.name === "Order Services"}
-              aria-disabled={loading && item.name === "Order Services"}
+              disabled={loadingItem === item.name}
+              aria-disabled={loadingItem === item.name}
             >
               <img
                 src={item.icon}
                 alt={item.name}
-                className={`w-5 h-5 transition group-hover:filter group-hover:invert group-hover:brightness-0 ${loading && item.name === "Order Services" ? "animate-spin" : ""
-                  } ${item.name !== "Order Services" && activeTab === item.name
+                className={`w-5 h-5 transition group-hover:filter group-hover:invert group-hover:brightness-0 ${loadingItem === item.name ? "animate-spin" : ""
+                  } ${activeTab === item.name
                     ? "filter invert brightness-0"
                     : ""
                   }`}
               />
-              {loading && item.name === "Order Services" ? "Loading..." : item.name}
+              {loadingItem === item.name ? "Loading..." : item.name}
             </button>
           ))}
         </div>

@@ -27,9 +27,9 @@ const Services = () => {
       });
     } catch (error) {
       console.error('Failed to fetch Order Services:', error);
-      navigate('/services', {
+      navigate('/categories', {
         state: {
-          mainMenu: 'services',
+          mainMenu: 'categories',
           data: []
         }
       });
@@ -50,9 +50,9 @@ const Services = () => {
       });
     } catch (error) {
       console.error('Failed to fetch Local Guide:', error);
-      navigate('/services', {
+      navigate('/categories', {
         state: {
-          mainMenu: 'services',
+          mainMenu: 'categories',
           data: []
         }
       });
@@ -73,9 +73,9 @@ const Services = () => {
       });
     } catch (error) {
       console.error('Failed to fetch Recommendations:', error);
-      navigate('/services', {
+      navigate('/categories', {
         state: {
-          mainMenu: 'services',
+          mainMenu: 'categories',
           data: []
         }
       });
@@ -162,9 +162,9 @@ const Services = () => {
       });
     } catch (error) {
       console.error('Failed to fetch Discount & Promotions:', error);
-      navigate('/services', {
+      navigate('/categories', {
         state: {
-          mainMenu: 'services',
+          mainMenu: 'categories',
           data: []
         }
       });

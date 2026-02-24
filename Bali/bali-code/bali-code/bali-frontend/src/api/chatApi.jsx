@@ -10,6 +10,8 @@ export const chatAPI = {
       'what-to-do': 'what-to-do/chat',
       'currency-converter': 'currency-converter/chat',
       'plan-my-trip': 'plan-my-trip/chat',
+      'voice-translator': 'language_lesson/chat',
+      'passport-submission': 'chatbot/generate-response',
       'general': 'chatbot/generate-response',
       'things-to-do-in-bali': "things-to-do-in-bali/chat"
     };

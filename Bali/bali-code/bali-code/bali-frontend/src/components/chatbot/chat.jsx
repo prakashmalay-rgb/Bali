@@ -21,12 +21,12 @@ const Chat = () => {
   const [chatType, setChatType] = useState(null);
   const [userId, setUserId] = useState(null);
   const [apiLoading, setApiLoading] = useState(false);
-  
+
   // ✅ NEW: Refs to prevent re-renders and duplicate connections
   const initialMessageProcessed = useRef(false);
   const hasInitialized = useRef(false);
   const isCleaningUp = useRef(false);
-  
+
   // ✅ NEW: Timeout ref for 120 second auto-close
   const autoCloseTimeoutRef = useRef(null);
 
@@ -71,13 +71,13 @@ const Chat = () => {
   // ✅ NEW: Function to close WebSocket gracefully
   const closeWebSocketConnection = (reason = "Manual close") => {
     console.log(`🔌 Closing WebSocket connection: ${reason}`);
-    
+
     // Clear auto-close timeout
     if (autoCloseTimeoutRef.current) {
       clearTimeout(autoCloseTimeoutRef.current);
       autoCloseTimeoutRef.current = null;
     }
-    
+
     // Close the socket
     if (socketRef.current) {
       const state = socketRef.current.readyState;
@@ -95,13 +95,13 @@ const Chat = () => {
     if (autoCloseTimeoutRef.current) {
       clearTimeout(autoCloseTimeoutRef.current);
     }
-    
+
     // Set new 120-second timeout
     autoCloseTimeoutRef.current = setTimeout(() => {
       console.log("⏰ 120 seconds elapsed - auto-closing WebSocket connection");
       closeWebSocketConnection("Auto-close after 120 seconds");
     }, 120000); // 120 seconds = 120000 milliseconds
-    
+
     console.log("⏱️ Started 120-second auto-close timer");
   };
 
@@ -144,7 +144,7 @@ const Chat = () => {
     if (location.state?.chatType && location.state?.userId) {
       const currentChatType = location.state.chatType;
       const currentUserId = location.state.userId;
-      
+
       console.log(`Initializing ${currentChatType} chat for user ${currentUserId}`);
       setChatType(currentChatType);
       setUserId(currentUserId);
@@ -161,10 +161,10 @@ const Chat = () => {
         console.log("📩 New message from Hero:", initialMsg.text);
         setMessages([initialMsg]);
         initialMessageProcessed.current = false;
-      } 
+      }
       else {
         const storedMessages = chatAPI.loadChatHistory(currentUserId, currentChatType);
-        
+
         if (storedMessages && storedMessages.length > 0) {
           setMessages(storedMessages);
           console.log("📂 Loaded chat history:", storedMessages.length, "messages");
@@ -179,12 +179,12 @@ const Chat = () => {
     else if (location.state?.message && location.state?.sessionId) {
       console.log("📦 WebSocket order chat initialization");
       setChatType('order-service');
-      
+
       const sessionId = location.state.sessionId;
-      
+
       // ✅ Load existing WebSocket messages from localStorage
       const savedMessages = loadWebSocketMessages(sessionId);
-      
+
       if (savedMessages.length > 0) {
         console.log("📂 Restored previous WebSocket chat:", savedMessages.length, "messages");
         setMessages(savedMessages);
@@ -205,13 +205,13 @@ const Chat = () => {
 
   // ✅ Auto-send initial message for API-based chats
   useEffect(() => {
-    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general'];
-    
+    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'passport-submission'];
+
     if (
-      chatType && 
-      userId && 
-      apiBasedChats.includes(chatType) && 
-      messages.length === 1 && 
+      chatType &&
+      userId &&
+      apiBasedChats.includes(chatType) &&
+      messages.length === 1 &&
       messages[0].sender === 'user' &&
       !apiLoading &&
       !initialMessageProcessed.current
@@ -224,7 +224,7 @@ const Chat = () => {
 
   // ✅ Save messages to localStorage for API-based chats
   useEffect(() => {
-    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general'];
+    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'passport-submission'];
     if (apiBasedChats.includes(chatType) && userId && messages.length > 0) {
       chatAPI.saveChatHistory(userId, chatType, messages);
       console.log("💾 Saved messages to localStorage");
@@ -242,23 +242,23 @@ const Chat = () => {
   // ✅ FIXED: WebSocket connection logic
   useEffect(() => {
     const sessionId = location.state?.sessionId;
-    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'general'];
-    
+    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'passport-submission'];
+
     // Wait for chatType to be set
     if (!chatType) {
       console.log("⏳ Waiting for chat type to be set...");
       return;
     }
-    
+
     // Only connect WebSocket for order services
     if (sessionId && !apiBasedChats.includes(chatType)) {
       console.log("=== ESTABLISHING WEBSOCKET CONNECTION ===");
       console.log("Session ID:", sessionId);
       console.log("Chat Type:", chatType);
-      
+
       let ws = null;
       isCleaningUp.current = false;
-      
+
       const baseUrl = import.meta.env.VITE_BASE_URL;
       if (!baseUrl) {
         console.error("❌ VITE_BASE_URL is not defined in environment variables");
@@ -267,7 +267,7 @@ const Chat = () => {
       const wsUrl = baseUrl.replace(/^http/, 'ws') + `/ws/${sessionId}`;
 
       console.log("🔗 WebSocket URL:", wsUrl);
-      
+
       const connectWebSocket = () => {
         if (isCleaningUp.current) {
           console.log("⚠️ Component is cleaning up, skipping connection");
@@ -277,33 +277,33 @@ const Chat = () => {
         try {
           console.log("🔌 Attempting WebSocket connection...");
           ws = new WebSocket(wsUrl);
-          
+
           ws.onopen = () => {
             if (isCleaningUp.current) return;
             console.log("✅ WebSocket connected successfully");
             setIsConnected(true);
-            
+
             // ✅ NEW: Start 120-second auto-close timer
             startAutoCloseTimer();
           };
-          
+
           ws.onmessage = (event) => {
             if (isCleaningUp.current) return;
             console.log("📨 Received WebSocket message:", event.data);
-            
+
             try {
               const data = JSON.parse(event.data);
-              
+
               // ✅ NEW: Handle "destroy" type message
               if (data.type === "destroy") {
                 console.log("🛑 Received destroy message - closing connection");
                 closeWebSocketConnection("Destroy message received");
-                
+
                 // Optional: Clear saved messages when destroy is received
                 clearWebSocketMessages(sessionId);
                 return;
               }
-              
+
               const newMessage = {
                 id: Date.now(),
                 text: data.message || data.text || JSON.stringify(data),
@@ -312,10 +312,10 @@ const Chat = () => {
                 type: data.type || "text", // ✅ Store message type
               };
               setMessages((prev) => [...prev, newMessage]);
-              
+
               // ✅ NEW: Reset the 120-second timer on each message
               startAutoCloseTimer();
-              
+
             } catch (e) {
               console.error("Error parsing message:", e);
               const newMessage = {
@@ -327,14 +327,14 @@ const Chat = () => {
               setMessages((prev) => [...prev, newMessage]);
             }
           };
-          
+
           ws.onerror = (error) => {
             if (isCleaningUp.current) return;
             console.error("❌ WebSocket error:", error);
             console.error("WebSocket readyState:", ws?.readyState);
             setIsConnected(false);
           };
-          
+
           ws.onclose = (event) => {
             if (isCleaningUp.current) return;
             console.log("❌ WebSocket closed:", {
@@ -343,13 +343,13 @@ const Chat = () => {
               wasClean: event.wasClean
             });
             setIsConnected(false);
-            
+
             // ✅ Clear the auto-close timeout when connection closes
             if (autoCloseTimeoutRef.current) {
               clearTimeout(autoCloseTimeoutRef.current);
               autoCloseTimeoutRef.current = null;
             }
-            
+
             // Auto-reconnect for abnormal closures
             if (event.code !== 1000 && event.code !== 1001 && !isCleaningUp.current) {
               console.log("🔄 Attempting to reconnect in 3 seconds...");
@@ -360,29 +360,29 @@ const Chat = () => {
               }, 3000);
             }
           };
-          
+
           socketRef.current = ws;
           setSocket(ws);
-          
+
         } catch (error) {
           console.error("❌ Failed to create WebSocket connection:", error);
           setIsConnected(false);
         }
       };
-      
+
       connectWebSocket();
-      
+
       // ✅ Cleanup function
       return () => {
         isCleaningUp.current = true;
         console.log("🧹 Cleaning up WebSocket connection");
-        
+
         // Clear auto-close timeout
         if (autoCloseTimeoutRef.current) {
           clearTimeout(autoCloseTimeoutRef.current);
           autoCloseTimeoutRef.current = null;
         }
-        
+
         if (socketRef.current) {
           const state = socketRef.current.readyState;
           if (state === WebSocket.OPEN || state === WebSocket.CONNECTING) {
@@ -414,7 +414,7 @@ const Chat = () => {
     try {
       setApiLoading(true);
       console.log(`📤 Sending message to ${chatType} endpoint for user ${userId}`);
-      
+
       const response = await chatAPI.sendMessage(chatType, userId, userMessage);
 
       const botMessage = {
@@ -427,7 +427,7 @@ const Chat = () => {
       setMessages((prev) => [...prev, botMessage]);
     } catch (error) {
       console.error("❌ Error sending message:", error);
-      
+
       const errorMessage = {
         id: Date.now(),
         text: error.response?.data?.detail || "Sorry, I couldn't process that. Please try again! 🙏",
@@ -453,8 +453,8 @@ const Chat = () => {
 
     setMessages((prev) => [...prev, newUserMessage]);
 
-    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'general'];
-    
+    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'passport-submission'];
+
     if (apiBasedChats.includes(chatType) && userId) {
       // API-based chat
       console.log("📤 Sending via API");
@@ -469,10 +469,10 @@ const Chat = () => {
         });
         socketRef.current.send(payload);
         console.log("✅ Sent message via WebSocket:", inputMessage);
-        
+
         // ✅ NEW: Reset the 120-second timer when user sends a message
         startAutoCloseTimer();
-        
+
       } catch (error) {
         console.error("❌ Error sending WebSocket message:", error);
         const errorMessage = {
@@ -504,105 +504,105 @@ const Chat = () => {
   };
 
   const renderBotMessage = (text) => {
-  if (!text || typeof text !== "string") {
-    return <span>Sorry, no message content available.</span>;
-  }
-
-  // Convert escaped newlines to real line breaks
-  text = text.replace(/\\n/g, "\n");
-
-  // Split message parts by markdown tokens
-  const regex =
-    /(\*\*\*[^\*]+\*\*\*|\*\*[^\*]+\*\*|\^\^[^\^]+\^\^|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|\n)/gi;
-
-  const parts = text.split(regex).filter(Boolean);
-
-  return parts.map((part, index) => {
-    if (part === "\n") return <br key={index} />;
-
-    // Bold + large
-    if (part.startsWith("***") && part.endsWith("***")) {
-      return (
-        <span key={index} className="font-bold text-lg">
-          {part.slice(3, -3)}
-        </span>
-      );
+    if (!text || typeof text !== "string") {
+      return <span>Sorry, no message content available.</span>;
     }
 
-    // Bold
-    if (part.startsWith("**") && part.endsWith("**")) {
-      return (
-        <span key={index} className="font-bold">
-          {part.slice(2, -2)}
-        </span>
-      );
-    }
+    // Convert escaped newlines to real line breaks
+    text = text.replace(/\\n/g, "\n");
 
-    // Large
-    if (part.startsWith("^^") && part.endsWith("^^")) {
-      return (
-        <span key={index} className="text-lg">
-          {part.slice(2, -2)}
-        </span>
-      );
-    }
+    // Split message parts by markdown tokens
+    const regex =
+      /(\*\*\*[^\*]+\*\*\*|\*\*[^\*]+\*\*|\^\^[^\^]+\^\^|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|\n)/gi;
 
-    // ✅ Handle Markdown-style links
-    const linkMatch = part.match(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/i);
-    if (linkMatch) {
-      const url = linkMatch[2];
-      const isPaymentLink = /(xendit|stripe|paypal|checkout|paystack)/i.test(url);
-      const isInvoiceLink = /(invoice|receipt|pdf|\.pdf)/i.test(url);
+    const parts = text.split(regex).filter(Boolean);
 
-      if (isPaymentLink) {
+    return parts.map((part, index) => {
+      if (part === "\n") return <br key={index} />;
+
+      // Bold + large
+      if (part.startsWith("***") && part.endsWith("***")) {
+        return (
+          <span key={index} className="font-bold text-lg">
+            {part.slice(3, -3)}
+          </span>
+        );
+      }
+
+      // Bold
+      if (part.startsWith("**") && part.endsWith("**")) {
+        return (
+          <span key={index} className="font-bold">
+            {part.slice(2, -2)}
+          </span>
+        );
+      }
+
+      // Large
+      if (part.startsWith("^^") && part.endsWith("^^")) {
+        return (
+          <span key={index} className="text-lg">
+            {part.slice(2, -2)}
+          </span>
+        );
+      }
+
+      // ✅ Handle Markdown-style links
+      const linkMatch = part.match(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/i);
+      if (linkMatch) {
+        const url = linkMatch[2];
+        const isPaymentLink = /(xendit|stripe|paypal|checkout|paystack)/i.test(url);
+        const isInvoiceLink = /(invoice|receipt|pdf|\.pdf)/i.test(url);
+
+        if (isPaymentLink) {
+          return (
+            <a
+              key={index}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block mt-2 bg-white text-orange-600 font-semibold px-4 py-2 rounded-2xl shadow-md border border-white hover:bg-orange-600 hover:text-white transition"
+            >
+              💳 Pay Now
+            </a>
+          );
+        }
+        if (isInvoiceLink) {
+          return (
+            <a
+              key={index}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block mt-2 bg-white text-orange-600 font-semibold px-4 py-2 rounded-2xl shadow-md border border-white hover:bg-orange-600 hover:text-white transition"
+            >
+              📄 Download Invoice
+            </a>
+          );
+        }
+
+        // For normal links
         return (
           <a
             key={index}
             href={url}
+            className="underline text-blue-200"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-block mt-2 bg-white text-orange-600 font-semibold px-4 py-2 rounded-2xl shadow-md border border-white hover:bg-orange-600 hover:text-white transition"
           >
-            💳 Pay Now
-          </a>
-        );
-      }
-      if (isInvoiceLink) {
-        return (
-          <a
-            key={index}
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-block mt-2 bg-white text-orange-600 font-semibold px-4 py-2 rounded-2xl shadow-md border border-white hover:bg-orange-600 hover:text-white transition"
-          >
-            📄 Download Invoice
+            {linkMatch[1]}
           </a>
         );
       }
 
-      // For normal links
-      return (
-        <a
-          key={index}
-          href={url}
-          className="underline text-blue-200"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          {linkMatch[1]}
-        </a>
-      );
-    }
+      // ❌ Skip plain leftover "link" text from Markdown
+      if (part.trim() === "link" || part.match(/https?:\/\/[^\s]+/)) {
+        return null;
+      }
 
-    // ❌ Skip plain leftover "link" text from Markdown
-    if (part.trim() === "link" || part.match(/https?:\/\/[^\s]+/)) {
-      return null;
-    }
-
-    return <span key={index}>{part}</span>;
-  });
-};
+      return <span key={index}>{part}</span>;
+    });
+  };
 
 
 
@@ -677,28 +677,24 @@ const Chat = () => {
                   ? handleOrderServicesClick
                   : () => setActiveTab(item.name)
               }
-              className={`text-[16px] flex items-center justify-start gap-3 font-medium w-full px-4 py-5 rounded-[50px] transition hover:bg-[#FF8000] hover:text-white group shadow-none ${
-                loading && item.name === "Order Services"
+              className={`text-[16px] flex items-center justify-start gap-3 font-medium w-full px-4 py-5 rounded-[50px] transition hover:bg-[#FF8000] hover:text-white group shadow-none ${loading && item.name === "Order Services"
                   ? "opacity-50 cursor-not-allowed"
                   : ""
-              } ${
-                item.name !== "Order Services" && activeTab === item.name
+                } ${item.name !== "Order Services" && activeTab === item.name
                   ? "bg-[#FF8000] text-white"
                   : ""
-              }`}
+                }`}
               disabled={loading && item.name === "Order Services"}
               aria-disabled={loading && item.name === "Order Services"}
             >
               <img
                 src={item.icon}
                 alt={item.name}
-                className={`w-5 h-5 transition group-hover:filter group-hover:invert group-hover:brightness-0 ${
-                  loading && item.name === "Order Services" ? "animate-spin" : ""
-                } ${
-                  item.name !== "Order Services" && activeTab === item.name
+                className={`w-5 h-5 transition group-hover:filter group-hover:invert group-hover:brightness-0 ${loading && item.name === "Order Services" ? "animate-spin" : ""
+                  } ${item.name !== "Order Services" && activeTab === item.name
                     ? "filter invert brightness-0"
                     : ""
-                }`}
+                  }`}
               />
               {loading && item.name === "Order Services" ? "Loading..." : item.name}
             </button>
@@ -808,9 +804,8 @@ const Chat = () => {
                 src="/assets/chat-btn.svg"
                 alt=""
                 onClick={handleSendClick}
-                className={`w-[35px] h-[35px] sm:w-[50px] sm:h-[50px] ${
-                  apiLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-                }`}
+                className={`w-[35px] h-[35px] sm:w-[50px] sm:h-[50px] ${apiLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                  }`}
               />
             </div>
           </div>

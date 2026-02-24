@@ -29,7 +29,8 @@ origins = [
     "https://www.easy-bali.com",
     "https://easy-bali.onrender.com",
     "https://bali-v92r.onrender.com",
-    "https://bali-3o33wubjp-prakashmalay-4140s-projects.vercel.app"
+    "https://bali-3o33wubjp-prakashmalay-4140s-projects.vercel.app",
+    "https://bali-zeta.vercel.app"
 ]
 
 app.add_middleware(

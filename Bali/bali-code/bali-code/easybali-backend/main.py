@@ -64,8 +64,9 @@ try:
     app.include_router(websockett.router)
     app.include_router(what_to_do.router)
     
-    from app.routes import dashboard_routes
+    from app.routes import dashboard_routes, admin_routes
     app.include_router(dashboard_routes.router)
+    app.include_router(admin_routes.router)
 except NameError as e:
     logger.error(f"Skipping some router registrations due to import errors: {e}")
 

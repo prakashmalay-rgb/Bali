@@ -17,7 +17,7 @@ const DashboardLayout = () => {
     const handleLogout = () => {
         // Clear tokens
         localStorage.removeItem('easybali_token');
-        navigate('/login');
+        navigate('/admin/login');
     };
 
     const navItems = [

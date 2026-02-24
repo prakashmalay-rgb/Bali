@@ -15,9 +15,18 @@ import PrivacyPolicy from "./components/termspages/privacy-policy/PrivacyPolicy"
 import TermsConditons from "./components/termspages/terms-conditions/TermsConditons";
 import ContactUs from "./components/termspages/privacy-policy/contact-us/ContactUs";
 
-// Import Dashboard Components
 import DashboardLayout from "./page/dashboard/DashboardLayout";
 import DashboardMain from "./page/dashboard/DashboardMain";
+import DashboardLogin from "./page/dashboard/Login";
+import { Navigate } from "react-router-dom";
+
+const ProtectedRoute = ({ children }) => {
+  const token = localStorage.getItem("easybali_token");
+  if (!token) {
+    return <Navigate to="/admin/login" replace />;
+  }
+  return children;
+};
 
 const AppLayout = () => {
   return (
@@ -35,6 +44,10 @@ const appRouter = createBrowserRouter([
   {
     path: "/",
     element: <Home />,
+  },
+  {
+    path: "/admin/login",
+    element: <DashboardLogin />
   },
   {
     path: "/categories",
@@ -67,7 +80,11 @@ const appRouter = createBrowserRouter([
   // Dashboard Routes
   {
     path: "/dashboard",
-    element: <DashboardLayout />,
+    element: (
+      <ProtectedRoute>
+        <DashboardLayout />
+      </ProtectedRoute>
+    ),
     children: [
       {
         path: "/dashboard", // Root of dashboard points to overview

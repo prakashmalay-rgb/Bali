@@ -132,3 +132,34 @@ async def get_guest_activity() -> Dict[str, Any]:
             "error": "Failed to fetch activity timeline",
             "activity": []
         }
+
+@router.get("/chats")
+async def get_concierge_chats() -> Dict[str, Any]:
+    from app.utils.chat_memory import chat_memory
+    try:
+        chat_sessions = []
+        for user_id, messages in chat_memory.items():
+            # Calculate simple metrics for the UI
+            user_messages = [m for m in messages if m.get("role") == "user"]
+            last_message_time = "Recently" # Since memory is volatile, we assume active
+            
+            chat_sessions.append({
+                "guest_id": user_id,
+                "guest_name": f"Guest {str(user_id)[-4:]}",
+                "message_count": len(messages),
+                "last_active": last_message_time,
+                "transcript": messages
+            })
+            
+        return {
+            "success": True,
+            "sessions": chat_sessions
+        }
+    except Exception as e:
+        print(f"Error fetching chat memory: {e}")
+        return {
+            "success": False,
+            "error": "Failed to fetch chat logs",
+            "sessions": []
+        }
+

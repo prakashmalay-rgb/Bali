@@ -56,6 +56,7 @@ class ResponseOptimizer:
             return result
 
         except Exception as e:
-            raise HTTPException(status_code=500, detail="Teaching session disrupted")
+            print(f"Error in quantum_response: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
 
 optimizer = ResponseOptimizer()

@@ -68,8 +68,8 @@ try:
     from app.routes import dashboard_routes, admin_routes
     app.include_router(dashboard_routes.router)
     app.include_router(admin_routes.router)
-except NameError as e:
-    logger.error(f"Skipping some router registrations due to import errors: {e}")
+except Exception as e:
+    logger.error(f"Skipping some router registrations due to errors: {e}")
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

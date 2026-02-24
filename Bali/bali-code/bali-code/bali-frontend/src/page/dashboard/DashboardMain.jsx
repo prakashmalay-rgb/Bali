@@ -13,20 +13,30 @@ const DashboardMain = () => {
     const [recentActivity, setRecentActivity] = useState([]);
 
     useEffect(() => {
-        // In a real app, this would fetch from backend API
-        // Setting up mock data for UI demo purposes per design token
-        setStats({
-            activeGuests: 12,
-            totalBookings: 48,
-            revenue: 14500000,
-            pendingInquiries: 3
-        });
+        const fetchDashboardStats = async () => {
+            try {
+                const baseUrl = import.meta.env.VITE_BASE_URL || 'https://easy-bali.onrender.com';
+                const response = await axios.get(`${baseUrl}/dashboard-api/stats`);
+                const { stats, recentActivity } = response.data;
 
-        setRecentActivity([
-            { id: 1, guest: 'John Doe', action: 'Booked Massage', time: '10 mins ago', status: 'pending' },
-            { id: 2, guest: 'Sarah Smith', action: 'Requested Airport Pickup', time: '1 hour ago', status: 'confirmed' },
-            { id: 3, guest: 'Mike Johnson', action: 'Chatted with AI Concierge', time: '2 hours ago', status: 'resolved' },
-        ]);
+                if (stats) setStats(stats);
+                if (recentActivity) setRecentActivity(recentActivity);
+            } catch (error) {
+                console.error('Failed to fetch dashboard stats:', error);
+                // Fallback for visual demonstration if backend breaks
+                setStats({
+                    activeGuests: 12,
+                    totalBookings: 48,
+                    revenue: 14500000,
+                    pendingInquiries: 3
+                });
+                setRecentActivity([
+                    { id: 1, guest: 'System', action: 'Could not connect to database', time: 'Just now', status: 'error' }
+                ]);
+            }
+        };
+
+        fetchDashboardStats();
     }, []);
 
     const formatIDR = (num) => {

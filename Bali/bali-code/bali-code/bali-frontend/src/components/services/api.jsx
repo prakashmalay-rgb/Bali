@@ -1,13 +1,13 @@
-const BASE_URL = import.meta.env.VITE_BASE_URL || 'https://easy-bali.onrender.com';
+const BASE_URL = import.meta.env.VITE_BASE_URL || 'https://bali-v92r.onrender.com';
 
 export const getSubMenu = async (mainMenu) => {
   try {
     const response = await fetch(`${BASE_URL}/menu/sub/${encodeURIComponent(mainMenu)}`);
-    
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-    
+
     const data = await response.json();
     return data;
   } catch (error) {
@@ -20,11 +20,11 @@ export const getSubMenu = async (mainMenu) => {
 export const getSubCategory = async (category) => {
   try {
     const response = await fetch(`${BASE_URL}/menu/sub-category/${encodeURIComponent(category)}`);
-    
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-    
+
     const data = await response.json();
     return data;
   } catch (error) {
@@ -37,11 +37,11 @@ export const getSubCategory = async (category) => {
 export const getServiceItems = async (category) => {
   try {
     const response = await fetch(`${BASE_URL}/menu/service-items/${encodeURIComponent(category)}`);
-    
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-    
+
     const data = await response.json();
     return data;
   } catch (error) {

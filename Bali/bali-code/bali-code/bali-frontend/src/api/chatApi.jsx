@@ -1,7 +1,7 @@
 // src/services/chatApi.js
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_BASE_URL || 'https://easy-bali.onrender.com';
+const API_BASE_URL = import.meta.env.VITE_BASE_URL || 'https://bali-v92r.onrender.com';
 
 export const chatAPI = {
   // Send message to specific chat endpoint
@@ -15,7 +15,7 @@ export const chatAPI = {
     };
 
     const endpoint = endpoints[chatType] || endpoints.general;
-    
+
     try {
       const response = await axios.post(
         `${API_BASE_URL}/${endpoint}`,

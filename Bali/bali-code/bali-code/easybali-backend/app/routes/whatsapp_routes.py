@@ -124,10 +124,16 @@ try:
         print("⚠️  Warning: WHATSAPP_PRIVATE_KEY_PASSWORD environment variable not set")
         print("You can set it or modify the code to use a different method")
     
-    crypto_handler = FlowCrypto(
-        private_key_path="private.pem", 
-        password=PRIVATE_KEY_PASSWORD
-    )
+    if settings.WHATSAPP_PRIVATE_KEY:
+        crypto_handler = FlowCrypto(
+            private_key_content=settings.WHATSAPP_PRIVATE_KEY,
+            password=PRIVATE_KEY_PASSWORD
+        )
+    else:
+        crypto_handler = FlowCrypto(
+            private_key_path="private.pem", 
+            password=PRIVATE_KEY_PASSWORD
+        )
     print("🚀 Crypto handler initialized successfully!")
     
 except Exception as e:

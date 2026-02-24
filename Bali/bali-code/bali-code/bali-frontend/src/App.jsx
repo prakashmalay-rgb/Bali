@@ -19,6 +19,7 @@ import GuestActivity from "./page/dashboard/GuestActivity";
 import DashboardLayout from "./page/dashboard/DashboardLayout";
 import DashboardMain from "./page/dashboard/DashboardMain";
 import DashboardLogin from "./page/dashboard/Login";
+import DashboardChats from "./page/dashboard/DashboardChats";
 import { Navigate } from "react-router-dom";
 
 const ProtectedRoute = ({ children }) => {
@@ -95,10 +96,10 @@ const appRouter = createBrowserRouter([
         path: "guests",
         element: <GuestActivity />,
       },
-      // {
-      //   path: "chats", // Further dashboard routes
-      //   element: <DashboardChats />,
-      // }
+      {
+        path: "chats",
+        element: <DashboardChats />,
+      }
     ],
   },
 ]);

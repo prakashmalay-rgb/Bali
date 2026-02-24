@@ -52,6 +52,31 @@ async def root():
 
 # Register Routers safely
 try:
+    from app.services.menu_services import start_cache_refresh, stop_cache_refresh
+    from app.services.openai_client import client
+    from app.settings.config import settings
+
+    @app.on_event("startup")
+    async def startup_event():
+        logger.info("Starting cache refresh service...")
+        start_cache_refresh()
+        
+        # System check for OpenAI
+        try:
+            logger.info("Running OpenAI system check...")
+            await client.chat.completions.create(
+                model=settings.OPENAI_MODEL_NAME,
+                messages=[{"role": "system", "content": "System check"}]
+            )
+            logger.info("✅ OpenAI check successful!")
+        except Exception as e:
+            logger.error(f"❌ OpenAI check failed: {e}")
+
+    @app.on_event("shutdown")
+    def shutdown_event():
+        logger.info("Stopping cache refresh service...")
+        stop_cache_refresh()
+
     app.include_router(whatsapp_routes.router)
     app.include_router(chatbot_routes.router)
     app.include_router(currency_route.router)

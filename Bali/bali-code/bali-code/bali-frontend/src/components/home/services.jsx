@@ -120,7 +120,8 @@ const Services = () => {
       });
     } catch (error) {
       console.error(`Failed to initialize ${chatType} chat:`, error);
-      alert('Failed to start chat. Please try again.');
+      const detail = error.response?.data?.detail || error.message || 'Check your connection or API key';
+      alert(`Failed to start chat: ${detail}. Please try again.`);
     } finally {
       setLoadingState(false);
     }

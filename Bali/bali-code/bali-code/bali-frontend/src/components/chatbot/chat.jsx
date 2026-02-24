@@ -154,7 +154,7 @@ const Chat = () => {
             console.error(err);
             const errorMessage = {
               id: Date.now(),
-              text: "Failed to load chat. Please try again.",
+              text: `Failed to load chat: ${err.response?.data?.detail || err.message}. Please try again.`,
               sender: "bot",
               timestamp: getCurrentTime()
             };

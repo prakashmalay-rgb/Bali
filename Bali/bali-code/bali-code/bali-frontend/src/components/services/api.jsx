@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_BASE_URL || 'https://easy-bali.onrender.com';
+const BASE_URL = 'https://easy-bali.onrender.com';
 
 export const getSubMenu = async (mainMenu) => {
   try {

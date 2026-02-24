@@ -15,7 +15,7 @@ const DashboardMain = () => {
     useEffect(() => {
         const fetchDashboardStats = async () => {
             try {
-                const baseUrl = import.meta.env.VITE_BASE_URL || 'https://easy-bali.onrender.com';
+                const baseUrl = 'https://easy-bali.onrender.com';
                 const response = await axios.get(`${baseUrl}/dashboard-api/stats`);
                 const { stats, recentActivity } = response.data;
 

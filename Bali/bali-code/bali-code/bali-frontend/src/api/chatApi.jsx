@@ -1,7 +1,7 @@
 // src/services/chatApi.js
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_BASE_URL || 'https://easy-bali.onrender.com';
+const API_BASE_URL = 'https://easy-bali.onrender.com';
 
 export const chatAPI = {
   // Send message to specific chat endpoint

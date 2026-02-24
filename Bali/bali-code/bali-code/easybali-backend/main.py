@@ -42,7 +42,7 @@ app.add_middleware(
 )
 
 # Root/Healthcheck
-@app.get("/", tags=["Health"])
+@app.api_route("/", methods=["GET", "HEAD"], tags=["Health"])
 async def root():
     return {
         "status": "online",

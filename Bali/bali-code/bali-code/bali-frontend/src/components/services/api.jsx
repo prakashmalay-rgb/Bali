@@ -1,4 +1,4 @@
-const BASE_URL = 'https://easy-bali.onrender.com';
+const BASE_URL = 'https://bali-v92r.onrender.com';
 
 export const getSubMenu = async (mainMenu) => {
   try {

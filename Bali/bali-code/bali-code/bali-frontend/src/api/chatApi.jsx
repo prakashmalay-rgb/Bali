@@ -31,6 +31,29 @@ export const chatAPI = {
     }
   },
 
+  // Upload Passport
+  uploadPassport: async (userId, file) => {
+    try {
+      const formData = new FormData();
+      formData.append('user_id', userId);
+      formData.append('file', file);
+
+      const response = await axios.post(
+        `${API_BASE_URL}/chatbot/upload-passport`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error uploading passport:', error);
+      throw error;
+    }
+  },
+
   // Get or create user ID
   getUserId: () => {
     let userId = localStorage.getItem('userId');

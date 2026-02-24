@@ -409,6 +409,50 @@ const Chat = () => {
     scrollToBottom();
   }, [messages]);
 
+  const handleFileChange = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+      setApiLoading(true);
+      console.log(`📤 Uploading passport image for user ${userId}`);
+
+      // Add optimistic user message for the file
+      const userFileMessage = {
+        id: Date.now(),
+        text: `📸 Uploaded: ${file.name}`,
+        sender: "user",
+        timestamp: getCurrentTime(),
+      };
+      setMessages((prev) => [...prev, userFileMessage]);
+
+      // Call API
+      const response = await chatAPI.uploadPassport(userId, file);
+
+      const botMessage = {
+        id: Date.now() + 1,
+        text: response.response,
+        sender: "bot",
+        timestamp: getCurrentTime(),
+      };
+
+      setMessages((prev) => [...prev, botMessage]);
+    } catch (error) {
+      console.error("❌ Error uploading passport:", error);
+
+      const errorMessage = {
+        id: Date.now() + 1,
+        text: error.response?.data?.detail || "Sorry, the upload failed. Please try again! 🙏",
+        sender: "bot",
+        timestamp: getCurrentTime(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setApiLoading(false);
+      event.target.value = null; // reset input
+    }
+  };
+
   // ✅ Function to send message to API
   const sendMessageToAPI = async (userMessage) => {
     try {
@@ -678,8 +722,8 @@ const Chat = () => {
                   : () => setActiveTab(item.name)
               }
               className={`text-[16px] flex items-center justify-start gap-3 font-medium w-full px-4 py-5 rounded-[50px] transition hover:bg-[#FF8000] hover:text-white group shadow-none ${loading && item.name === "Order Services"
-                  ? "opacity-50 cursor-not-allowed"
-                  : ""
+                ? "opacity-50 cursor-not-allowed"
+                : ""
                 } ${item.name !== "Order Services" && activeTab === item.name
                   ? "bg-[#FF8000] text-white"
                   : ""
@@ -788,7 +832,23 @@ const Chat = () => {
           </div>
         </div>
         <div className="px-[10px]">
-          <div className="rounded-full bg-white shadow-lg flex px-[40px] py-[20px] items-center justify-between h-[85px] mb-[20px] border-class">
+          <div className="rounded-full bg-white shadow-lg flex px-[20px] sm:px-[40px] py-[20px] items-center justify-between h-[85px] mb-[20px] border-class">
+            {chatType === 'passport-submission' && (
+              <>
+                <input
+                  type="file"
+                  accept="image/*"
+                  id="passport-upload"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+                <label htmlFor="passport-upload" className={`cursor-pointer mr-3 ${apiLoading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500 hover:text-orange-500 transition">
+                    <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                  </svg>
+                </label>
+              </>
+            )}
             <input
               type="text"
               placeholder="Chat with our AI Bot"
@@ -796,7 +856,7 @@ const Chat = () => {
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={handleKeyPress}
               disabled={apiLoading}
-              className="w-[90%] py-4 sm:py-6 rounded-[50px] text-[#333] text-[16px] sm:text-[18px] placeholder:text-[#8e8e8e] disabled:opacity-50"
+              className="w-[90%] py-4 sm:py-6 rounded-[50px] text-[#333] text-[16px] sm:text-[18px] placeholder:text-[#8e8e8e] disabled:opacity-50 outline-none"
             />
             <div className="flex items-center gap-4">
               <img src="/assets/mic.svg" alt="" className="cursor-pointer" />

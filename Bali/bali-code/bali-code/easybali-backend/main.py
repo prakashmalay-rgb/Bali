@@ -27,7 +27,9 @@ origins = [
     "http://localhost:3000",
     "http://localhost:5173", # Vite dev server
     "https://www.easy-bali.com",
-    "https://easy-bali.onrender.com"
+    "https://easy-bali.onrender.com",
+    "https://bali-v92r.onrender.com",
+    "https://bali-3o33wubjp-prakashmalay-4140s-projects.vercel.app"
 ]
 
 app.add_middleware(

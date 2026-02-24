@@ -6,7 +6,8 @@ import {
     FiLogOut,
     FiMenu,
     FiX,
-    FiUser
+    FiUser,
+    FiFileText
 } from 'react-icons/fi';
 
 const DashboardLayout = () => {
@@ -24,6 +25,7 @@ const DashboardLayout = () => {
         { path: '/dashboard', icon: <FiHome className="text-xl" />, label: 'Overview' },
         { path: '/dashboard/guests', icon: <FiUser className="text-xl" />, label: 'Guest Activity' },
         { path: '/dashboard/chats', icon: <FiMessageSquare className="text-xl" />, label: 'Concierge Chats' },
+        { path: '/dashboard/passports', icon: <FiFileText className="text-xl" />, label: 'Passports' },
     ];
 
     return (

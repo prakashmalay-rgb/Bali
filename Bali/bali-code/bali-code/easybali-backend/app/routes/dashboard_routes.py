@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.db.session import order_collection
+from app.db.session import order_collection, passport_collection
 from typing import Dict, Any
 from datetime import datetime
 
@@ -161,5 +161,38 @@ async def get_concierge_chats() -> Dict[str, Any]:
             "success": False,
             "error": "Failed to fetch chat logs",
             "sessions": []
+        }
+
+@router.get("/passports")
+async def get_passport_submissions() -> Dict[str, Any]:
+    try:
+        # Fetch latest passports explicitly tracked by the bot
+        recent_passports = await passport_collection.find().sort("uploaded_at", -1).limit(50).to_list(50)
+        
+        passport_list = []
+        for passport in recent_passports:
+            time_val = passport.get("uploaded_at")
+            time_str = time_val.strftime("%Y-%m-%d %H:%M:%S") if hasattr(time_val, "strftime") else "Recently"
+            user_id = str(passport.get("user_id", "Unknown"))
+            
+            passport_list.append({
+                "id": str(passport.get("_id")),
+                "guest_id": user_id,
+                "guest_name": f"Guest {user_id[-4:]}",
+                "passport_url": passport.get("passport_url"),
+                "status": passport.get("status", "pending_verification"),
+                "time": time_str
+            })
+
+        return {
+            "success": True,
+            "passports": passport_list
+        }
+    except Exception as e:
+        print(f"Error fetching passports: {e}")
+        return {
+            "success": False,
+            "error": "Failed to fetch passport submissions",
+            "passports": []
         }
 

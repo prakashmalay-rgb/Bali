@@ -20,6 +20,7 @@ import DashboardLayout from "./page/dashboard/DashboardLayout";
 import DashboardMain from "./page/dashboard/DashboardMain";
 import DashboardLogin from "./page/dashboard/Login";
 import DashboardChats from "./page/dashboard/DashboardChats";
+import PassportVerification from "./page/dashboard/PassportVerification";
 import { Navigate } from "react-router-dom";
 
 const ProtectedRoute = ({ children }) => {
@@ -99,6 +100,10 @@ const appRouter = createBrowserRouter([
       {
         path: "chats",
         element: <DashboardChats />,
+      },
+      {
+        path: "passports",
+        element: <PassportVerification />,
       }
     ],
   },

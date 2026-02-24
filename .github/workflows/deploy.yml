@@ -49,4 +49,4 @@ jobs:
       - name: Trigger Render Deploy
         run: |
           echo "Triggering Render webhook"
-          curl -X POST "https://api.render.com/deploy/srv-YOUR_RENDER_SERVICE_ID?key=rnd_H6Xd7sAYZ9acxXunVReAIBE91BvE"
+          curl -X POST "https://api.render.com/deploy/srv-d6ekq6buibrs73df3e80?key=rnd_H6Xd7sAYZ9acxXunVReAIBE91BvE"

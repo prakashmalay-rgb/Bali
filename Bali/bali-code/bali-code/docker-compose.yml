@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./easybali-backend
+    container_name: easybali-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./easybali-backend/.env
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./bali-frontend
+    container_name: easybali-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

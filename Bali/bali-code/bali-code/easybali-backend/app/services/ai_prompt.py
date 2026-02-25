@@ -86,69 +86,102 @@ class ConciergeAI:
         return context
 
     async def process_query(self, query: str, user_id: str, chat_type: str, language: str) -> Dict[str, Any]:
-        # Handle Greetings for specific types
-        if chat_type == "passport-submission" and query.lower() in ["hi", "hello", "hi there"]:
-            return self._passport_hi(user_id, language)
+        """Process user query with local-first priority and RAG fallback."""
+        try:
+            # Handle Greetings for specific types
+            if chat_type == "passport-submission" and query.lower() in ["hi", "hello", "hi there"]:
+                return self._passport_hi(user_id, language)
 
-        # Service / Booking Check
-        service_check = await ai_menu_generator.intelligent_service_check(query)
-        if service_check.get("is_service_request") and service_check.get("we_offer_it"):
-            menu = await self._handle_booking(query, user_id, language, service_check)
-            if menu: return menu
+            # Service / Booking Check
+            try:
+                service_check = await ai_menu_generator.intelligent_service_check(query)
+                if service_check.get("is_service_request") and service_check.get("we_offer_it"):
+                    menu = await self._handle_booking(query, user_id, language, service_check)
+                    if menu: return menu
+            except Exception as e:
+                logger.error(f"Service Check Error: {e}")
+                # Continue to general AI if service check fails
 
-        # General Logic
-        sheet_ctx = self.get_sheet_context()
-        rag_ctx = await self.get_rag_context(query, chat_type)
-        
-        history = get_conversation_history(user_id)
-        conv = trim_history(history + [{"role": "user", "content": query}])
-        
-        system = f"""
-            PERSONA: {PERSONAS.get(chat_type, PERSONAS['general'])}
+            # General Logic - Fetch Context
+            sheet_ctx = self.get_sheet_context()
+            rag_ctx = await self.get_rag_context(query, chat_type)
             
-            INTERNAL DB (PRIORITY): 
-            {sheet_ctx if sheet_ctx else "No internal sheet data."}
+            history = get_conversation_history(user_id)
+            conv = trim_history(history + [{"role": "user", "content": query}])
             
-            EXTERNAL KNOWLEDGE: 
-            {rag_ctx}
+            # Format history for prompt
+            formatted_history = "\n".join([f"{m['role'].capitalize()}: {m['content']}" for m in conv])
             
-            RULES:
-            1. Language: {language}
-            2. Local First: Use INTERNAL DB for any service/price question.
-            3. Voice Friendly: Keep responses under 3 sentences for better text-to-speech.
-            4. Rules of Villa: {rules}
-            
-            History: {conv}
-        """
+            system = f"""
+                PERSONA: {PERSONAS.get(chat_type, PERSONAS['general'])}
+                
+                INTERNAL DB (PRIORITY): 
+                {sheet_ctx if sheet_ctx else "No internal sheet data."}
+                
+                EXTERNAL KNOWLEDGE: 
+                {rag_ctx if rag_ctx else "Use general knowledge."}
+                
+                RULES:
+                1. Language: {language}
+                2. Local First: Use INTERNAL DB for any service/price question.
+                3. Voice Friendly: Keep responses under 3 sentences for better text-to-speech.
+                4. Rules of Villa: {rules}
+                
+                CONVERSATION HISTORY:
+                {formatted_history}
+            """
 
-        comp = await client.chat.completions.create(
-            model=settings.OPENAI_MODEL_NAME,
-            messages=[{"role": "system", "content": system}, {"role": "user", "content": query}],
-            temperature=0.7,
-            max_tokens=500
-        )
-        resp = comp.choices[0].message.content
-        save_message(user_id, "user", query); save_message(user_id, "assistant", resp)
-        return {"response": resp}
+            try:
+                comp = await client.chat.completions.create(
+                    model=settings.OPENAI_MODEL_NAME,
+                    messages=[{"role": "system", "content": system}, {"role": "user", "content": query}],
+                    temperature=0.7,
+                    max_tokens=500
+                )
+                resp = comp.choices[0].message.content or "I'm here to help! How can I assist you today?"
+            except Exception as ai_err:
+                logger.error(f"OpenAI Completion Error: {ai_err}")
+                resp = "I'm sorry, I'm having a bit of trouble connecting to my brain. How can I help you today? (Fallback)"
+
+            save_message(user_id, "user", query)
+            save_message(user_id, "assistant", resp)
+            return {"response": resp}
+
+        except Exception as e:
+            logger.error(f"Critical process_query Error: {e}")
+            fallback_text = "Hi! I'm your EASYBali concierge. I'm currently experiencing some technical hiccups, but I'm still here to help with your villa stay. What can I do for you?"
+            if language == "ID":
+                fallback_text = "Halo! Saya pramutamu EASYBali Anda. Saat ini saya sedang mengalami sedikit masalah teknis, tetapi saya tetap di sini untuk membantu masa inap vila Anda. Apa yang bisa saya bantu?"
+            return {"response": fallback_text}
 
     def _passport_hi(self, user_id, lang):
-        txt = "Pindah paspor Anda menggunakan ikon klip kertas 📎" if lang == "ID" else "Please upload your passport using the paperclip icon 📎"
+        txt = "Pindah paspor Anda menggunakan ikon klip kertas \ud83d\udcce" if lang == "ID" else "Please upload your passport using the paperclip icon \ud83d\udcce"
         save_message(user_id, "assistant", txt)
         return {"response": txt}
 
     async def _handle_booking(self, query, user_id, lang, check):
-        intent = ai_menu_generator.detect_service_intent(check.get("matched_service") or query)
-        if intent:
-            reqs = ai_menu_generator.extract_requirements(query)
-            menu = await ai_menu_generator.generate_service_menu(intent["category"], intent["subcategory"], reqs)
-            if menu and "sections" in menu:
-                title = f"Pilihan untuk {intent['subcategory']}" if lang == "ID" else f"Options for {intent['subcategory']}"
-                table = {"type": "service_selection", "title": title, "message": "I found these in our internal DB:", "options": menu["sections"][0]["rows"]}
-                resp = f"SERVICES_DATA|{json.dumps(table)}"
-                save_message(user_id, "assistant", resp)
-                return {"response": resp}
+        try:
+            matched_name = check.get("matched_service") or query
+            intent = ai_menu_generator.detect_service_intent(matched_name)
+            if intent:
+                reqs = ai_menu_generator.extract_requirements(query)
+                menu = await ai_menu_generator.generate_service_menu(intent["category"], intent["subcategory"], reqs)
+                if menu and "sections" in menu:
+                    title = f"Pilihan untuk {intent['subcategory']}" if lang == "ID" else f"Options for {intent['subcategory']}"
+                    table = {
+                        "type": "service_selection", 
+                        "title": title, 
+                        "message": "I found these in our internal DB:", 
+                        "options": menu["sections"][0]["rows"]
+                    }
+                    resp = f"SERVICES_DATA|{json.dumps(table)}"
+                    save_message(user_id, "assistant", resp)
+                    return {"response": resp}
+        except Exception as e:
+            logger.error(f"Handle Booking Error: {e}")
         return None
 
 concierge_ai = ConciergeAI()
 async def generate_response(query:str, user_id:str, chat_type:str="general", language:str="EN"):
     return await concierge_ai.process_query(query, user_id, chat_type, language)
+

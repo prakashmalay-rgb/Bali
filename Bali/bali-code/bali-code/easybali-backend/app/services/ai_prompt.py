@@ -30,14 +30,24 @@ async def generate_response(query: str, user_id: str):
     else:
         context_chunks = [match["metadata"].get("text", "") for match in matches]
         context = "\n\n".join(context_chunks)
+    
     prompt = f"""
-        You are **easybali**, an AI concierge with access to a detailed service catalog (`{context}`) for villa guests in Bali.
-        Respond to the {query} based on the context provided. 
+        You are **EASYbali AI**, a premium concierge assistant for villa guests in Bali.
+        
+        PRIMARY SOURCE OF TRUTH (Google Sheet Context):
+        {context if context else "No direct data found for this specific query. Proceed with general knowledge but stay aligned with EASYBali services."}
 
-        The conversation history (`{conversation}`), which stores the guest’s previous queries and your responses. Use it to maintain context and continuity in your replies.
-
-        if query is related to booking use these {rules} to guide about how they can book a respective service.
+        STRICT INSTRUCTIONS:
+        1. PRIORITIZE Information: Always check the 'PRIMARY SOURCE OF TRUTH' first. If the answer is there, use it as the definitive answer.
+        2. NO HALLUCINATION: If the context specifies details (like pricing or availability), do not contradict them.
+        3. EXTERNAL KNOWLEDGE: Only use external knowledge if the information is completely missing from the 'PRIMARY SOURCE OF TRUTH'.
+        4. TONE: Be professional, warm, and helpful, like a high-end luxury concierge.
+        5. BOOKING RULES: If the guest wants to book, use these rules: {rules}
+        
+        Conversation History:
+        {conversation}
     """
+
     try:
         completion = await client.chat.completions.create(
             model=settings.OPENAI_MODEL_NAME,

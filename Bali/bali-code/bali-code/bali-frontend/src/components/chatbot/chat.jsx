@@ -23,9 +23,26 @@ const Chat = () => {
   const [userId, setUserId] = useState(null);
   const [apiLoading, setApiLoading] = useState(false);
 
-  const { isListening, toggleListening } = useVoiceToText((transcript) => {
-    setInputMessage((prev) => (prev ? `${prev} ${transcript}` : transcript));
-  });
+  const [language, setLanguage] = useState(localStorage.getItem("language") || "EN");
+
+  const toggleLanguage = () => {
+    const newLang = language === "EN" ? "ID" : "EN";
+    setLanguage(newLang);
+    localStorage.setItem("language", newLang);
+  };
+
+  const { isListening, toggleListening } = useVoiceToText(
+    (transcript) => setInputMessage(transcript),
+    (finalTranscript) => handleAutoSend(finalTranscript)
+  );
+
+  const handleAutoSend = (text) => {
+    if (!text.trim()) return;
+
+    // We use a small timeout to ensure state has updated or we just pass the text directly
+    // to a new version of handleSendClick that can accept a direct message.
+    handleSendClick(text);
+  };
 
   // ✅ NEW: Refs to prevent re-renders and duplicate connections
   const initialMessageProcessed = useRef(false);
@@ -539,12 +556,14 @@ const Chat = () => {
   };
 
   // ✅ FIXED: Handle send click for both WebSocket and API
-  const handleSendClick = () => {
-    if (!inputMessage.trim()) return;
+  const handleSendClick = (messageOverride) => {
+    const textToSend = typeof messageOverride === 'string' ? messageOverride : inputMessage;
+
+    if (!textToSend.trim()) return;
 
     const newUserMessage = {
       id: Date.now(),
-      text: inputMessage,
+      text: textToSend,
       sender: "user",
       timestamp: getCurrentTime(),
     };
@@ -556,17 +575,17 @@ const Chat = () => {
     if (apiBasedChats.includes(chatType) && userId) {
       // API-based chat
       console.log("📤 Sending via API");
-      sendMessageToAPI(inputMessage);
+      sendMessageToAPI(textToSend);
     } else if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       // WebSocket-based chat (Order Services)
       try {
         const payload = JSON.stringify({
-          message: inputMessage,
+          message: textToSend,
           timestamp: getCurrentTime(),
           type: "user_message"
         });
         socketRef.current.send(payload);
-        console.log("✅ Sent message via WebSocket:", inputMessage);
+        console.log("✅ Sent message via WebSocket:", textToSend);
 
         // ✅ NEW: Reset the 120-second timer when user sends a message
         startAutoCloseTimer();
@@ -819,8 +838,11 @@ const Chat = () => {
               Chat with our AI Bot
             </h5>
           </div>
-          <div className="flex justify-center items-center size-12 md:size-16 rounded-full border-[1px] border-solid border-black">
-            <h6 className="font-semibold text-sm md:text-base">EN</h6>
+          <div
+            className="flex justify-center items-center size-12 md:size-16 rounded-full border-[1px] border-solid border-black cursor-pointer hover:bg-black hover:text-white transition-all"
+            onClick={toggleLanguage}
+          >
+            <h6 className="font-semibold text-sm md:text-base">{language}</h6>
           </div>
         </div>
         <div className="flex flex-col h-[calc(100vh-245px)] overflow-hidden gap-10">
@@ -913,7 +935,7 @@ const Chat = () => {
                 src="/assets/mic.svg"
                 alt="Voice Search"
                 onClick={toggleListening}
-                className={`cursor-pointer transition-all duration-300 ${isListening ? 'scale-125 filter invert sepia(100%) saturate(10000%) hue-rotate(0deg) brightness(100%) contrast(100%)' : ''}`}
+                className={`cursor-pointer transition-all duration-300 ${isListening ? 'scale-150 mic-glow filter invert sepia(100%) saturate(10000%) hue-rotate(0deg) brightness(100%) contrast(100%)' : ''}`}
               />
               <img
                 src="/assets/chat-btn.svg"

@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 
-export const useVoiceToText = (onTranscript) => {
+export const useVoiceToText = (onTranscript, onFinalTranscript) => {
     const [isListening, setIsListening] = useState(false);
 
-    const toggleListening = () => {
+    const toggleListening = useCallback(() => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
         if (!SpeechRecognition) {
@@ -23,12 +23,12 @@ export const useVoiceToText = (onTranscript) => {
 
         recognition.onstart = () => {
             setIsListening(true);
-            console.log("🎙️ Listening...");
         };
 
         recognition.onresult = (event) => {
             const transcript = event.results[0][0].transcript;
             if (onTranscript) onTranscript(transcript);
+            if (onFinalTranscript) onFinalTranscript(transcript);
         };
 
         recognition.onerror = (event) => {
@@ -38,11 +38,10 @@ export const useVoiceToText = (onTranscript) => {
 
         recognition.onend = () => {
             setIsListening(false);
-            console.log("🎙️ Stopped listening.");
         };
 
         recognition.start();
-    };
+    }, [isListening, onTranscript, onFinalTranscript]);
 
     return { isListening, toggleListening };
 };

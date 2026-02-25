@@ -23,12 +23,28 @@ const TripServices = () => {
   const [buttonLoading, setButtonLoading] = useState(null);
   const [chatInput, setChatInput] = useState("");
 
-  const { isListening, toggleListening } = useVoiceToText((transcript) => {
-    setChatInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
-  });
+  const [language, setLanguage] = useState(localStorage.getItem("language") || "EN");
 
-  const handleGeneralChat = async () => {
-    if (!chatInput.trim()) return;
+  const toggleLanguage = () => {
+    const newLang = language === "EN" ? "ID" : "EN";
+    setLanguage(newLang);
+    localStorage.setItem("language", newLang);
+  };
+
+  const { isListening, toggleListening } = useVoiceToText(
+    (transcript) => setChatInput(transcript),
+    (finalTranscript) => handleAutoSend(finalTranscript)
+  );
+
+  const handleAutoSend = (text) => {
+    if (!text.trim()) return;
+    handleGeneralChat(text);
+  };
+
+  const handleGeneralChat = async (messageOverride) => {
+    const textToSend = typeof messageOverride === 'string' ? messageOverride : chatInput;
+    if (!textToSend.trim()) return;
+
     const currentUserId = localStorage.getItem("userId") || chatAPI.getUserId();
     navigate('/chatbot', {
       state: {
@@ -36,7 +52,7 @@ const TripServices = () => {
         userId: currentUserId,
         initialMessage: {
           id: Date.now(),
-          text: chatInput,
+          text: textToSend,
           sender: "user",
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
         },
@@ -311,7 +327,15 @@ const TripServices = () => {
             onClick={() => navigate('/')}
             className='cursor-pointer h-[30px] lg:h-auto'
           />
-          <img src={secondlogo} alt='Second Logo' className='w-[62px] h-[32px] lg:h-[40px] cursor-pointer' />
+          <div className='flex items-center gap-4'>
+            <img src={secondlogo} alt='Second Logo' className='w-[62px] h-[32px] lg:h-[40px] cursor-pointer' />
+            <div
+              className="flex justify-center items-center size-8 sm:size-12 rounded-full border-[1px] border-solid border-black cursor-pointer hover:bg-black hover:text-white transition-all ml-2"
+              onClick={toggleLanguage}
+            >
+              <h6 className="font-semibold text-xs sm:text-sm">{language}</h6>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -391,7 +415,7 @@ const TripServices = () => {
               src="/assets/mic.svg"
               alt="Voice Search"
               onClick={toggleListening}
-              className={`cursor-pointer transition-all duration-300 ${isListening ? 'scale-125 filter invert sepia(100%) saturate(10000%) hue-rotate(0deg) brightness(100%) contrast(100%)' : ''}`}
+              className={`cursor-pointer transition-all duration-300 ${isListening ? 'scale-150 mic-glow filter invert sepia(100%) saturate(10000%) hue-rotate(0deg) brightness(100%) contrast(100%)' : ''}`}
             />
             <img
               src="/assets/chat-btn.svg"

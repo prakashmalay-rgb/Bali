@@ -12,9 +12,24 @@ const Hero = () => {
   const [chatInput, setChatInput] = useState("");
   const navigate = useNavigate();
 
-  const { isListening, toggleListening } = useVoiceToText((transcript) => {
-    setChatInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
-  });
+  const [language, setLanguage] = useState(localStorage.getItem("language") || "EN");
+
+  const { isListening, toggleListening } = useVoiceToText(
+    (transcript) => setChatInput(transcript),
+    (finalTranscript) => handleAutoSend(finalTranscript)
+  );
+
+  const handleAutoSend = (text) => {
+    if (!text.trim()) return;
+    // We need to make sure state is updated or pass text directly
+    handleChat(text);
+  };
+
+  const toggleLanguage = () => {
+    const newLang = language === "EN" ? "ID" : "EN";
+    setLanguage(newLang);
+    localStorage.setItem("language", newLang);
+  };
 
   const showModal = () => {
     setIsModalOpen(true);
@@ -32,8 +47,9 @@ const Hero = () => {
     setSelectedVilla(value);
   };
 
-  const handleChat = async () => {
-    if (!chatInput.trim()) {
+  const handleChat = async (messageOverride) => {
+    const textToSend = typeof messageOverride === 'string' ? messageOverride : chatInput;
+    if (!textToSend.trim()) {
       message.warning("Please enter a message");
       return;
     }
@@ -53,7 +69,7 @@ const Hero = () => {
         activeTab: 'Chat', // Or whatever you want to call it
         initialMessage: {
           id: Date.now(),
-          text: chatInput,
+          text: textToSend,
           sender: "user",
           timestamp: new Date().toLocaleTimeString([], {
             hour: "2-digit",
@@ -93,11 +109,11 @@ const Hero = () => {
           className="hero-logo absolute top-[30px] left-[30px]"
         />
         <div
-          className="language cursor-pointer flex justify-center items-center absolute top-[30px] right-[30px] rounded-full size-9 sm:size-[60px] border-[2px] border-solid border-white"
-          onClick={showModal}
+          className="language cursor-pointer flex justify-center items-center absolute top-[30px] right-[30px] rounded-full size-9 sm:size-[60px] border-[2px] border-solid border-white hover:bg-white hover:text-black transition-all"
+          onClick={toggleLanguage}
         >
           <h5 className="text-[10px] sm:text-[22px] font-semibold text-white">
-            EN
+            {language}
           </h5>
         </div>
         <div className="hero-chat-input absolute -bottom-[7%] sm:-bottom-[10%] left-[12px] sm:left-0 z-[3] w-[90%] lg:w-full">
@@ -114,7 +130,7 @@ const Hero = () => {
               src="/assets/mic.svg"
               alt="Voice Search"
               onClick={toggleListening}
-              className={`cursor-pointer transition-all duration-300 ${isListening ? 'scale-125 filter invert sepia(100%) saturate(10000%) hue-rotate(0deg) brightness(100%) contrast(100%)' : ''}`}
+              className={`cursor-pointer transition-all duration-300 ${isListening ? 'scale-150 mic-glow filter invert sepia(100%) saturate(10000%) hue-rotate(0deg) brightness(100%) contrast(100%)' : ''}`}
             />
             <img
               src="/assets/chat-btn.svg"

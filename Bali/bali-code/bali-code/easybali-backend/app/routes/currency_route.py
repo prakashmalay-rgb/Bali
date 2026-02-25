@@ -1,22 +1,23 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from app.schemas.ai_response import ChatbotQuery
-from fastapi import HTTPException
-from app.services.currency_convertor import currency_ai
-
-
+from app.services.ai_prompt import generate_response
 
 router = APIRouter(prefix="/currency-converter", tags=["Chatbot"])
 
-
 @router.post("/chat")
-async def chat_endpoint(request: ChatbotQuery, user_id: str):  
-    try:
-        user_query = request.query
-        response = await currency_ai(user_id=user_id, query=user_query, language=request.language)
-        
-        return {"response": response,}
-        
-    except HTTPException as he:
-        raise he
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating response: {e}")
+async def chat_endpoint(request: ChatbotQuery, user_id: str):
+    """
+    Isolated Currency Converter Chat.
+    Uses centralized generate_response for Local-First data fetching.
+    """
+    user_query = request.query
+    if not user_query:
+        raise HTTPException(status_code=400, detail="No query provided.")
+    
+    # Use centralized module with specific chat_type
+    return await generate_response(
+        query=user_query, 
+        user_id=user_id, 
+        chat_type="currency-converter", 
+        language=request.language
+    )

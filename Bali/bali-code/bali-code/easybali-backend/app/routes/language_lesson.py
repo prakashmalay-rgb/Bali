@@ -1,24 +1,23 @@
 from fastapi import APIRouter, HTTPException
-from fastapi import HTTPException
 from app.schemas.ai_response import ChatbotQuery
-from app.services.language import optimizer
-
-
+from app.services.ai_prompt import generate_response
 
 router = APIRouter(prefix="/language_lesson", tags=["Chatbot"])
 
 @router.post("/chat")
-async def ultra_chat_endpoint(request: ChatbotQuery, user_id:str):
-    try:
-        sanitized_input = request.query.strip().replace('\n', ' ')
-        if not sanitized_input:
-            raise HTTPException(status_code=400, detail="Empty message received")
-        
-        response = await optimizer.quantum_response(user_id, sanitized_input)
-        
-        return {"response": response,}
-        
-    except HTTPException as he:
-        raise he
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating response: {e}")
+async def chat_endpoint(request: ChatbotQuery, user_id: str):
+    """
+    Isolated Voice Translator / Language Lesson Chat.
+    Uses centralized generate_response for Local-First data fetching.
+    """
+    user_query = request.query
+    if not user_query:
+        raise HTTPException(status_code=400, detail="No query provided.")
+    
+    # Use centralized module with specific chat_type
+    return await generate_response(
+        query=user_query, 
+        user_id=user_id, 
+        chat_type="voice-translator", 
+        language=request.language
+    )

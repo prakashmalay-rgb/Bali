@@ -15,9 +15,13 @@ async def chat_endpoint(request: ChatbotQuery, user_id: str):
         raise HTTPException(status_code=400, detail="No query provided.")
     
     # Use centralized module with specific chat_type
-    return await generate_response(
-        query=user_query, 
-        user_id=user_id, 
-        chat_type="currency-converter", 
-        language=request.language
-    )
+    try:
+        return await generate_response(
+            query=user_query, 
+            user_id=user_id, 
+            chat_type="currency-converter", 
+            language=request.language
+        )
+    except Exception as e:
+        import traceback
+        return {"response": f"DEBUG: {str(e)} - TRACE: {traceback.format_exc()}"}

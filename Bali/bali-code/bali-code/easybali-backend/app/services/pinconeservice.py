@@ -1,23 +1,32 @@
 import os
-import pinecone
-from pinecone import ServerlessSpec
+from pinecone import Pinecone, ServerlessSpec
 from app.settings.config import settings
 
-def get_index(index_name: str, dimension: int = 1536, metric: str = "cosine") -> pinecone.Index:
-    pinecone_api_key = settings.pinecone_api_key
-    pinecone_region = settings.pinecone_region
-    pinecone_cloud = settings.pinecone_cloud
+def get_index(index_name: str, dimension: int = 1536, metric: str = "cosine") -> Any:
+    """Safely get or create a Pinecone index."""
+    try:
+        pinecone_api_key = settings.pinecone_api_key
+        pinecone_region = settings.pinecone_region
+        pinecone_cloud = settings.pinecone_cloud
 
-    pc = pinecone.Pinecone(api_key=pinecone_api_key)
+        if not pinecone_api_key:
+            print("⚠️ PINECONE_API_KEY not found in settings")
+            return None
 
-    existing_indexes = pc.list_indexes().names()
-    if index_name not in existing_indexes:
-        pc.create_index(
-            name=index_name,
-            dimension=dimension,
-            metric=metric,
-            spec=ServerlessSpec(cloud=pinecone_cloud, region=pinecone_region)
-        )
-    
-    # Return the index object.
-    return pc.Index(index_name)
+        pc = Pinecone(api_key=pinecone_api_key)
+
+        existing_indexes = [idx.name for idx in pc.list_indexes()]
+        if index_name not in existing_indexes:
+            pc.create_index(
+                name=index_name,
+                dimension=dimension,
+                metric=metric,
+                spec=ServerlessSpec(cloud=pinecone_cloud, region=pinecone_region)
+            )
+        
+        return pc.Index(index_name)
+    except Exception as e:
+        print(f"❌ Pinecone Error: {e}")
+        return None
+
+from typing import Any

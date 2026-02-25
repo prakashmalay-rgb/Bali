@@ -859,6 +859,7 @@ const Chat = () => {
 
 
   const menuItems = [
+    { id: "chat_tab", name: t("chat_tab"), icon: "/chat-icons/today.svg" },
     { id: "order_services", name: t("order_services"), icon: "/chat-icons/order.svg" },
     { id: "local_guide", name: t("local_guide"), icon: "/chat-icons/guide.svg" },
     { id: "voice_translator", name: t("voice_translator"), icon: "/chat-icons/translator.svg" },

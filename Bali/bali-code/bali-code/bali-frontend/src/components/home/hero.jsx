@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { Modal, Select } from "antd";
+import { Modal, Select, message } from "antd";
 import Button from "../shared/button";
 import { useNavigate } from "react-router-dom";
+import { useVoiceToText } from "../../hooks/useVoiceToText";
 
 const { Option } = Select;
 
@@ -10,6 +11,10 @@ const Hero = () => {
   const [selectedVilla, setSelectedVilla] = useState(null);
   const [chatInput, setChatInput] = useState("");
   const navigate = useNavigate();
+
+  const { isListening, toggleListening } = useVoiceToText((transcript) => {
+    setChatInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
+  });
 
   const showModal = () => {
     setIsModalOpen(true);
@@ -41,8 +46,8 @@ const Hero = () => {
     }
 
     // Navigate to chatbot with general chat type
-    navigate("/chatbot", { 
-      state: { 
+    navigate("/chatbot", {
+      state: {
         chatType: 'general', // This is the general chatbot
         userId: userId,
         activeTab: 'Chat', // Or whatever you want to call it
@@ -50,12 +55,12 @@ const Hero = () => {
           id: Date.now(),
           text: chatInput,
           sender: "user",
-          timestamp: new Date().toLocaleTimeString([], { 
-            hour: "2-digit", 
-            minute: "2-digit" 
+          timestamp: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit"
           })
         }
-      } 
+      }
     });
     setChatInput("");
   };
@@ -83,9 +88,9 @@ const Hero = () => {
     <>
       <section className="hero relative max-w-[1392px] w-full flex flex-col justify-center items-center gap-[12px] rounded-[35px] sm:rounded-[50px] h-[500px] sm:h-[711px] z-[1] bg-no-repeat bg-cover bg-center">
         <img
-         src="/assets/logo.svg"
-         alt="logo"
-         className="hero-logo absolute top-[30px] left-[30px]"
+          src="/assets/logo.svg"
+          alt="logo"
+          className="hero-logo absolute top-[30px] left-[30px]"
         />
         <div
           className="language cursor-pointer flex justify-center items-center absolute top-[30px] right-[30px] rounded-full size-9 sm:size-[60px] border-[2px] border-solid border-white"
@@ -105,7 +110,12 @@ const Hero = () => {
             onKeyPress={handleKeyPress}
           />
           <div className="btns flex items-center justify-center gap-3 sm:gap-[30px] absolute bottom-6 sm:bottom-[17px] right-[35px]">
-            <img src="/assets/mic.svg" alt="" className="cursor-pointer" />
+            <img
+              src="/assets/mic.svg"
+              alt="Voice Search"
+              onClick={toggleListening}
+              className={`cursor-pointer transition-all duration-300 ${isListening ? 'scale-125 filter invert sepia(100%) saturate(10000%) hue-rotate(0deg) brightness(100%) contrast(100%)' : ''}`}
+            />
             <img
               src="/assets/chat-btn.svg"
               alt=""

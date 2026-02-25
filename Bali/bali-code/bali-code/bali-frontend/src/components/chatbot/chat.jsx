@@ -5,6 +5,7 @@ import bottomRightPng from "../../assets/images/right-bottom.png";
 import topLeftPng from "../../assets/images/top-left.png";
 import { getSubMenu } from '../services/api';
 import { chatAPI } from "../../api/chatApi"
+import { useVoiceToText } from "../../hooks/useVoiceToText";
 
 const Chat = () => {
   const location = useLocation();
@@ -21,6 +22,10 @@ const Chat = () => {
   const [chatType, setChatType] = useState(null);
   const [userId, setUserId] = useState(null);
   const [apiLoading, setApiLoading] = useState(false);
+
+  const { isListening, toggleListening } = useVoiceToText((transcript) => {
+    setInputMessage((prev) => (prev ? `${prev} ${transcript}` : transcript));
+  });
 
   // ✅ NEW: Refs to prevent re-renders and duplicate connections
   const initialMessageProcessed = useRef(false);
@@ -904,7 +909,12 @@ const Chat = () => {
               className="w-[90%] py-4 sm:py-6 rounded-[50px] text-[#333] text-[16px] sm:text-[18px] placeholder:text-[#8e8e8e] disabled:opacity-50 outline-none"
             />
             <div className="flex items-center gap-4">
-              <img src="/assets/mic.svg" alt="" className="cursor-pointer" />
+              <img
+                src="/assets/mic.svg"
+                alt="Voice Search"
+                onClick={toggleListening}
+                className={`cursor-pointer transition-all duration-300 ${isListening ? 'scale-125 filter invert sepia(100%) saturate(10000%) hue-rotate(0deg) brightness(100%) contrast(100%)' : ''}`}
+              />
               <img
                 src="/assets/chat-btn.svg"
                 alt=""

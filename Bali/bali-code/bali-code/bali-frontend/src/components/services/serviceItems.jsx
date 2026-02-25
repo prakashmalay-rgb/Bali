@@ -10,6 +10,8 @@ import secondlogo from '../../assets/images/secondlogo.svg'
 import bottomRightPng from '../../assets/images/right-bottom.png'
 import topLeftPng from '../../assets/images/top-left.png'
 import { getServiceItems } from './api.jsx'
+import { useVoiceToText } from "../../hooks/useVoiceToText";
+import { chatAPI } from '../../api/chatApi';
 
 const ServiceItems = () => {
   const navigate = useNavigate();
@@ -31,6 +33,30 @@ const ServiceItems = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiMessage, setApiMessage] = useState('');
   const [sessionId, setSessionId] = useState('');
+  const [chatInput, setChatInput] = useState("");
+
+  const { isListening, toggleListening } = useVoiceToText((transcript) => {
+    setChatInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
+  });
+
+  const handleGeneralChat = async () => {
+    if (!chatInput.trim()) return;
+    const currentUserId = localStorage.getItem("userId") || chatAPI.getUserId();
+    navigate('/chatbot', {
+      state: {
+        chatType: 'general',
+        userId: currentUserId,
+        initialMessage: {
+          id: Date.now(),
+          text: chatInput,
+          sender: "user",
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        },
+        activeTab: "Chat"
+      }
+    });
+    setChatInput("");
+  };
 
   // Default fallback
   const defaultSliderData = [
@@ -262,8 +288,8 @@ const ServiceItems = () => {
                 <div className='px-[8px] w-full pt-[12px] pb-[12px] flex-shrink-0'>
                   <button
                     className={`h-[63px] rounded-[50px] text-white font-medium w-full mb-[4px] transition-all flex items-center justify-center gap-2 ${buttonLoading === slide.id
-                        ? 'bg-gray-400 cursor-not-allowed'
-                        : 'bg-[#FF8000] hover:bg-[#e6720a] cursor-pointer'
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : 'bg-[#FF8000] hover:bg-[#e6720a] cursor-pointer'
                       }`}
                     onClick={() => handleBookingClick(slide.id)}
                     disabled={buttonLoading === slide.id}
@@ -286,10 +312,27 @@ const ServiceItems = () => {
 
       <div className='px-[24px] lg:px-[100px] z-10'>
         <div className='rounded-full bg-white shadow-lg flex px-[40px] py-[20px] items-center justify-between h-[85px] mb-[30px] border-class'>
-          <input type="text" placeholder="Chat with our AI Bot" className="w-[90%] py-4 sm:py-6 rounded-[50px] text-[#8e8e8e] text-[16px] sm:text-[18px] placeholder:text-[#8e8e8e]" />
+          <input
+            type="text"
+            placeholder="Chat with our AI Bot"
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleGeneralChat()}
+            className="w-[90%] py-4 sm:py-6 rounded-[50px] text-[#333] text-[16px] sm:text-[18px] placeholder:text-[#8e8e8e] outline-none"
+          />
           <div className='flex items-center gap-4'>
-            <img src="/assets/mic.svg" alt="" className="cursor-pointer" />
-            <img src="/assets/chat-btn.svg" alt="" className="cursor-pointer w-[40px] h-[40px] sm:w-[50px] sm:h-[50px]" />
+            <img
+              src="/assets/mic.svg"
+              alt="Voice Search"
+              onClick={toggleListening}
+              className={`cursor-pointer transition-all duration-300 ${isListening ? 'scale-125 filter invert sepia(100%) saturate(10000%) hue-rotate(0deg) brightness(100%) contrast(100%)' : ''}`}
+            />
+            <img
+              src="/assets/chat-btn.svg"
+              alt=""
+              onClick={handleGeneralChat}
+              className="cursor-pointer w-[40px] h-[40px] sm:w-[50px] sm:h-[50px]"
+            />
           </div>
         </div>
       </div>
@@ -419,8 +462,8 @@ const ServiceItems = () => {
                 type='submit'
                 disabled={isSubmitting}
                 className={`w-full h-[56px] sm:h-[70px] text-white text-[16px] sm:text-[18px] font-medium py-3 sm:py-4 rounded-[40px] transition-colors flex items-center justify-center gap-2 ${isSubmitting
-                    ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-[#FF8000] hover:bg-[#e6720a]'
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-[#FF8000] hover:bg-[#e6720a]'
                   }`}
               >
                 {isSubmitting ? (

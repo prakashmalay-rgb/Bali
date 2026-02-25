@@ -17,179 +17,68 @@ const Services = () => {
   const [discountPromotionsLoading, setDiscountPromotionsLoading] = useState(false);
   const [passportSubmissionLoading, setPassportSubmissionLoading] = useState(false);
 
-  const handleOrderServicesClick = async () => {
-    try {
-      setOrderServicesLoading(true);
-      const response = await getSubMenu('Order Services');
-      navigate('/categories', {
-        state: {
-          mainMenu: 'categories',
-          data: response.data
-        }
-      });
-    } catch (error) {
-      console.error('Failed to fetch Order Services:', error);
-      navigate('/categories', {
-        state: {
-          mainMenu: 'categories',
-          data: []
-        }
-      });
-    } finally {
-      setOrderServicesLoading(false);
-    }
+  const handleOrderServicesClick = () => {
+    navigate('/categories', {
+      state: {
+        mainMenu: 'Order Services'
+      }
+    });
   };
 
-  const handlelocalGuideClick = async () => {
-    try {
-      setLocalGuideLoading(true);
-      const response = await getSubMenu('Local Guide');
-      navigate('/categories', {
-        state: {
-          mainMenu: 'categories',
-          data: response.data
-        }
-      });
-    } catch (error) {
-      console.error('Failed to fetch Local Guide:', error);
-      navigate('/categories', {
-        state: {
-          mainMenu: 'categories',
-          data: []
-        }
-      });
-    } finally {
-      setLocalGuideLoading(false);
-    }
+  const handlelocalGuideClick = () => {
+    navigate('/categories', {
+      state: {
+        mainMenu: 'Local Guide'
+      }
+    });
   };
 
-  const handleRecommendationsClick = async () => {
-    try {
-      setRecommendationsLoading(true);
-      const response = await getSubMenu('Recommendations');
-      navigate('/categories', {
-        state: {
-          mainMenu: 'categories',
-          data: response.data
-        }
-      });
-    } catch (error) {
-      console.error('Failed to fetch Recommendations:', error);
-      navigate('/categories', {
-        state: {
-          mainMenu: 'categories',
-          data: []
-        }
-      });
-    } finally {
-      setRecommendationsLoading(false);
-    }
+  const handleRecommendationsClick = () => {
+    navigate('/categories', {
+      state: {
+        mainMenu: 'Recommendations'
+      }
+    });
   };
 
   // Generic function to initialize chat-based services
-  const initializeChatService = async (chatType, activeTabName, setLoadingState) => {
-    try {
-      setLoadingState(true);
-
-      // Get or create user ID
-      const userId = chatAPI.getUserId();
-
-      // Send initial "Hi" message to get bot's greeting
-      const response = await chatAPI.sendMessage(chatType, userId, "Hi");
-
-      // Create initial message object
-      const initialMessage = {
-        id: Date.now(),
-        text: response.response,
-        sender: "bot",
-        timestamp: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit"
-        }),
-      };
-
-      // Save to localStorage using the centralized API
-      chatAPI.saveChatHistory(userId, chatType, [initialMessage]);
-
-      // Navigate to chatbot
-      navigate('/chatbot', {
-        state: {
-          activeTab: activeTabName,
-          chatType: chatType,
-          userId: userId,
-          initialMessage: initialMessage
-        }
-      });
-    } catch (error) {
-      console.error(`Failed to initialize ${chatType} chat:`, error);
-      const detail = error.response?.data?.detail || error.message || 'Check your connection or API key';
-      alert(`Failed to start chat: ${detail}. Please try again.`);
-    } finally {
-      setLoadingState(false);
-    }
+  const initializeChatService = (chatType, activeTabId) => {
+    const userId = chatAPI.getUserId();
+    navigate('/chatbot', {
+      state: {
+        activeTab: activeTabId,
+        chatType: chatType,
+        userId: userId
+      }
+    });
   };
 
   const handleCurrencyConverterClick = () => {
-    initializeChatService(
-      'currency-converter',
-      'Currency Converter',
-      setCurrencyConverterLoading
-    );
+    initializeChatService('currency-converter', 'currency_converter');
   };
 
   const handlePlanMyTripClick = () => {
-    initializeChatService(
-      'plan-my-trip',
-      'Plan My Trip!',
-      setPlanMyTripLoading
-    );
+    initializeChatService('plan-my-trip', 'plan_my_trip');
   };
 
   const handleWhatToDoClick = () => {
-    initializeChatService(
-      'what-to-do',
-      'What To Do Today?',
-      setWhatToDoLoading
-    );
+    initializeChatService('what-to-do', 'what_to_do');
   };
 
-  const handleDiscountPromotionsClick = async () => {
-    try {
-      setDiscountPromotionsLoading(true);
-      const response = await getSubMenu('Discount & Promotions');
-      navigate('/categories', {
-        state: {
-          mainMenu: 'categories',
-          data: response.data
-        }
-      });
-    } catch (error) {
-      console.error('Failed to fetch Discount & Promotions:', error);
-      navigate('/categories', {
-        state: {
-          mainMenu: 'categories',
-          data: []
-        }
-      });
-    } finally {
-      setDiscountPromotionsLoading(false);
-    }
+  const handleDiscountPromotionsClick = () => {
+    navigate('/categories', {
+      state: {
+        mainMenu: 'Discount & Promotions'
+      }
+    });
   };
 
   const handleVoiceTranslatorClick = () => {
-    initializeChatService(
-      'voice-translator',
-      'Voice Translator',
-      setVoiceTranslatorLoading
-    );
+    initializeChatService('voice-translator', 'voice_translator');
   };
 
   const handlePassportSubmissionClick = () => {
-    initializeChatService(
-      'passport-submission',
-      'Passport Submission',
-      setPassportSubmissionLoading
-    );
+    initializeChatService('passport-submission', 'passport_submission');
   };
 
   return (

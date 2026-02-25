@@ -61,7 +61,7 @@ const Hero = () => {
       state: {
         chatType: 'general', // This is the general chatbot
         userId: userId,
-        activeTab: 'Chat', // Or whatever you want to call it
+        activeTab: 'chat_tab', // Or whatever you want to call it
         initialMessage: {
           id: Date.now(),
           text: textToSend,

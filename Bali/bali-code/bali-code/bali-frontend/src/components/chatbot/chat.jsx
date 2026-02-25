@@ -12,7 +12,7 @@ const Chat = () => {
   const { language, toggleLanguage, t } = useLanguage();
   const location = useLocation();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("order-services");
+  const [activeTab, setActiveTab] = useState("order_services");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [socket, setSocket] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -288,14 +288,18 @@ const Chat = () => {
       chatType &&
       userId &&
       apiBasedChats.includes(chatType) &&
-      messages.length === 1 &&
-      messages[0].sender === 'user' &&
       !apiLoading &&
       !initialMessageProcessed.current
     ) {
-      console.log('🚀 Auto-sending initial message to API:', messages[0].text);
-      initialMessageProcessed.current = true;
-      sendMessageToAPI(messages[0].text);
+      if (messages.length === 1 && messages[0].sender === 'user') {
+        console.log('🚀 Auto-sending initial message to API:', messages[0].text);
+        initialMessageProcessed.current = true;
+        sendMessageToAPI(messages[0].text);
+      } else if (messages.length === 0) {
+        console.log('🚀 Auto-starting chat with Hi');
+        initialMessageProcessed.current = true;
+        sendMessageToAPI("Hi");
+      }
     }
   }, [chatType, userId, messages.length, apiLoading]);
 

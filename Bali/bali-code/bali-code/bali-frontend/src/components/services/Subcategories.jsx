@@ -49,7 +49,7 @@ const SubCategories = () => {
           sender: "user",
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
         },
-        activeTab: "Chat"
+        activeTab: "chat_tab"
       }
     });
     setChatInput("");

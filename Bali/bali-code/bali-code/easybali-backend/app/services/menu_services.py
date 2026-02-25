@@ -349,6 +349,7 @@ async def get_service_items(subcategory: str):
             "description": row["Service Item Description"],
             "picture": row["Image URL"],
             "button": row["Final Price (Service Item Button)"],
+            "service_provider_code": row.get("Service Provider Number"), # Assuming this column exists based on common patterns
         }
         for _, row in filtered_df.drop_duplicates(subset=["Service Item"]).iterrows()
     ]

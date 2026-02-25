@@ -3,15 +3,93 @@ from app.schemas.ai_response import ChatbotResponse
 from app.models.chatbot_models import ChatRequest
 from app.services.ai_prompt import generate_response
 from app.utils.bucket import upload_to_s3
-from app.db.session import passport_collection
+from app.db.session import passport_collection, order_collection
+from app.models.order_summary import Order, PaymentInfo
+from app.services.payment_service import create_xendit_payment_with_distribution, update_order_with_payment_info
+from app.services.order_summary import get_next_order_id, save_order_to_db
+from app.services.menu_services import cache
 from datetime import datetime
+from pydantic import BaseModel
+from typing import Optional
+import json
 
 router = APIRouter(prefix="/chatbot", tags=["Chatbot"])
+
+class BookingRequest(BaseModel):
+    id: str
+    title: str
+    price: str
+    user_id: str
 
 @router.post("/generate-response", response_model=ChatbotResponse)
 async def generate_chatbot_response(request: ChatRequest, user_id: str):
     query = request.query
-    return await generate_response(query, user_id)
+    chat_type = request.chat_type
+    return await generate_response(query, user_id, chat_type)
+
+@router.post("/create-booking-payment")
+async def create_booking_payment(request: BookingRequest):
+    try:
+        # 1. Find service details in cache
+        service_name = request.title
+        df = cache.get("services_df")
+        if df is None:
+            raise HTTPException(status_code=500, detail="Service data not loaded")
+            
+        match = df[df["Service Item"] == service_name]
+        if match.empty:
+            # Try partial match
+            match = df[df["Service Item"].str.contains(service_name, case=False, na=False)]
+            
+        if match.empty:
+            raise HTTPException(status_code=404, detail=f"Service '{service_name}' not found")
+            
+        row = match.iloc[0]
+        
+        # 2. Extract provider details
+        sp_code = row.get("Service Provider Number") or "DEFAULT_SP"
+        # For web, we might need a default villa code if not found
+        villa_code = "WEB_VILLA_01" 
+        
+        # 3. Create Order
+        order_number = await get_next_order_id()
+        current_time = datetime.now()
+        
+        new_order = Order(
+            sender_id=request.user_id,
+            order_number=order_number,
+            service_name=service_name,
+            price=request.price,
+            confirmation=True,
+            status="pending",
+            service_provider_code=sp_code,
+            villa_code=villa_code,
+            created_at=current_time,
+            updated_at=current_time
+        )
+        
+        # 4. Save to DB
+        await save_order_to_db(new_order.dict())
+        
+        # 5. Create Xendit Payment
+        payment_result = await create_xendit_payment_with_distribution(new_order)
+        
+        if payment_result.get("success"):
+            # 6. Update Order with payment info
+            await update_order_with_payment_info(order_number, payment_result)
+            
+            payment_url = payment_result.get("payment_url")
+            return {
+                "response": f"Successfully generated your payment link for **{service_name}**!\n\n[💳 Click here to pay via Xendit]({payment_url})\n\nYou will receive a confirmation once the payment is completed."
+            }
+        else:
+            return {
+                "response": f"Sorry, I encountered an error while generating the payment link: {payment_result.get('error')}. Please try again later."
+            }
+            
+    except Exception as e:
+        print(f"Error in create_booking_payment: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/upload-passport")
 async def upload_passport_file(user_id: str = Form(...), file: UploadFile = File(...)):

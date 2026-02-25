@@ -150,6 +150,21 @@ class AIMenuGenerator:
                 "subcategory": "Laundry",
                 "keywords": ["laundry", "wash", "dry clean", "express laundry"]
             },
+            "discounts": {
+                "category": "Discount & Promotions",
+                "subcategory": "Discount & Promotions",
+                "keywords": ["discount", "promotion", "promo", "deal", "offer", "exclusive", "save", "referral"]
+            },
+            "car_rental": {
+                "category": "Rental",
+                "subcategory": "Car Rental",
+                "keywords": ["car", "toyota", "avanza", "xenia", "brio", "innova", "pajero", "fortuner", "automatic", "manual"]
+            },
+            "bike_rental": {
+                "category": "Rental",
+                "subcategory": "Bike Rental",
+                "keywords": ["scooter", "bike", "nmax", "pcx", "scoopy", "motorcycle", "rent bike", "yamaha", "honda"]
+            }
         }
     
     async def intelligent_service_check(self, query: str) -> Dict[str, Any]:
@@ -160,14 +175,28 @@ class AIMenuGenerator:
         3. Do we offer it?
         """
         
-        # Get all our available services from the service_categories
+        # Pull categories from cache for more dynamic matching
         our_services = []
-        for service_type, info in self.service_categories.items():
-            our_services.append({
-                "name": info["subcategory"],
-                "category": info["category"],
-                "keywords": info["keywords"][:5]  # Sample keywords for context
-            })
+        if cache.get("design_df") is not None:
+            # Menu Location in design_df acts as top-level category
+            df = cache["design_df"]
+            # Filter to relevant menu sections
+            services_rows = df[df["Menu Location"].isin(["Services", "Rental", "Discount & Promotions", "Recommendation"])]
+            for _, row in services_rows.iterrows():
+                our_services.append({
+                    "name": row.get("Title"),
+                    "category": row.get("Menu Location"),
+                    "keywords": [] # Will use AI to match based on title/category
+                })
+        
+        # Fallback to hardcoded list if cache is empty or for specific detail
+        if not our_services:
+            for service_type, info in self.service_categories.items():
+                our_services.append({
+                    "name": info["subcategory"],
+                    "category": info["category"],
+                    "keywords": info["keywords"][:5]
+                })
         
         services_list = "\n".join([
             f"- {s['name']} (Category: {s['category']})" 

@@ -614,6 +614,91 @@ const Chat = () => {
     setInputMessage("");
   };
 
+  const handleServiceSelect = (service) => {
+    const confirmMsg = `CONFIRM_BOOKING|${JSON.stringify({
+      id: service.id,
+      title: service.title,
+      price: service.price
+    })}`;
+
+    // Add a synthetic user message for better UX
+    const userMsg = {
+      id: Date.now(),
+      text: `I'd like to book ${service.title}`,
+      sender: "user",
+      timestamp: getCurrentTime(),
+    };
+
+    setMessages(prev => [...prev, userMsg]);
+
+    // Then show confirmation
+    setTimeout(() => {
+      const botMsg = {
+        id: Date.now() + 1,
+        text: confirmMsg,
+        sender: "bot",
+        timestamp: getCurrentTime(),
+      };
+      setMessages(prev => [...prev, botMsg]);
+    }, 500);
+  };
+
+  const handleConfirmBooking = async (service) => {
+    setApiLoading(true);
+    try {
+      // Add "Confirmed" message from user
+      const userMsg = {
+        id: Date.now(),
+        text: "Yes, I confirm the booking.",
+        sender: "user",
+        timestamp: getCurrentTime(),
+      };
+      setMessages(prev => [...prev, userMsg]);
+
+      // Call API to generate Xendit link
+      const response = await chatAPI.createPayment(userId, service);
+
+      const botMsg = {
+        id: Date.now() + 1,
+        text: response.response,
+        sender: "bot",
+        timestamp: getCurrentTime(),
+      };
+      setMessages(prev => [...prev, botMsg]);
+    } catch (err) {
+      console.error("Error confirming booking:", err);
+      const errorMsg = {
+        id: Date.now() + 1,
+        text: "Sorry, I couldn't generate the payment link. Please try again.",
+        sender: "bot",
+        timestamp: getCurrentTime(),
+      };
+      setMessages(prev => [...prev, errorMsg]);
+    } finally {
+      setApiLoading(false);
+    }
+  };
+
+  const handleCancelSelection = () => {
+    const userMsg = {
+      id: Date.now(),
+      text: "Cancel selection",
+      sender: "user",
+      timestamp: getCurrentTime(),
+    };
+    setMessages(prev => [...prev, userMsg]);
+
+    setTimeout(() => {
+      const botMsg = {
+        id: Date.now() + 1,
+        text: "Selection cancelled. How else can I help you?",
+        sender: "bot",
+        timestamp: getCurrentTime(),
+      };
+      setMessages(prev => [...prev, botMsg]);
+    }, 500);
+  };
+
   const handleKeyPress = (e) => {
     if (e.key === "Enter") {
       handleSendClick();
@@ -623,6 +708,81 @@ const Chat = () => {
   const renderBotMessage = (text) => {
     if (!text || typeof text !== "string") {
       return <span>Sorry, no message content available.</span>;
+    }
+
+    // Handle structured services data
+    if (text.startsWith("SERVICES_DATA|")) {
+      try {
+        const data = JSON.parse(text.split("|")[1]);
+        return (
+          <div className="services-table-container mt-2">
+            <p className="mb-3 text-white font-medium">{data.message}</p>
+            <div className="overflow-x-auto rounded-xl border border-white/20">
+              <table className="min-w-full bg-[#FF8000] text-white text-sm">
+                <thead>
+                  <tr className="bg-white/10">
+                    <th className="px-4 py-2 text-left">Service</th>
+                    <th className="px-4 py-2 text-left">Price (IDR)</th>
+                    <th className="px-4 py-2 text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.options.map((opt, i) => (
+                    <tr key={i} className="border-t border-white/10 hover:bg-white/5 transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="font-bold">{opt.title}</div>
+                        <div className="text-xs text-white/70 line-clamp-1">{opt.description}</div>
+                      </td>
+                      <td className="px-4 py-3 font-mono">{opt.price}</td>
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          onClick={() => handleServiceSelect(opt)}
+                          className="bg-white text-orange-600 px-3 py-1 rounded-full text-xs font-bold hover:bg-orange-600 hover:text-white transition shadow-sm"
+                        >
+                          Book
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      } catch (e) {
+        console.error("Error parsing services data:", e);
+      }
+    }
+
+    // Handle Confirmation data
+    if (text.startsWith("CONFIRM_BOOKING|")) {
+      try {
+        const data = JSON.parse(text.split("|")[1]);
+        return (
+          <div className="confirmation-container mt-2">
+            <p className="mb-4 text-white font-medium">
+              You've selected **{data.title}** for **IDR {data.price}**.
+              Would you like to confirm this booking and generate a secure payment link?
+            </p>
+            <div className="flex gap-4">
+              <button
+                onClick={() => handleConfirmBooking(data)}
+                className="bg-green-500 text-white px-6 py-2 rounded-full font-bold hover:bg-green-600 transition shadow-md"
+              >
+                Yes, Confirm
+              </button>
+              <button
+                onClick={() => handleCancelSelection()}
+                className="bg-red-500 text-white px-6 py-2 rounded-full font-bold hover:bg-red-600 transition shadow-md"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        );
+      } catch (e) {
+        console.error("Error parsing confirmation data:", e);
+      }
     }
 
     // Convert escaped newlines to real line breaks

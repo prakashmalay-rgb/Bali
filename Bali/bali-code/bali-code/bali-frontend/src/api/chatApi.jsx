@@ -1,9 +1,23 @@
 // src/services/chatApi.js
 import axios from 'axios';
 
-const API_BASE_URL = 'https://bali-v92r.onrender.com';
+const API_BASE_URL = window.location.hostname === 'localhost'
+  ? 'http://localhost:8000'
+  : 'https://bali-v92r.onrender.com';
 
 export const chatAPI = {
+  createPayment: async (userId, service) => {
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/chatbot/create-booking-payment`,
+        { ...service, user_id: userId }
+      );
+      return response.data;
+    } catch (error) {
+      console.error("Error creating payment:", error);
+      throw error;
+    }
+  },
   // Send message to specific chat endpoint
   sendMessage: async (chatType, userId, query) => {
     const endpoints = {
@@ -21,7 +35,7 @@ export const chatAPI = {
     try {
       const response = await axios.post(
         `${API_BASE_URL}/${endpoint}`,
-        { query },
+        { query, chat_type: chatType },
         { params: { user_id: userId } }
       );
       return response.data;

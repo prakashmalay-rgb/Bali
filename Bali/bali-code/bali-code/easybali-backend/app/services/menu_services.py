@@ -4,8 +4,9 @@ from app.utils.data_processing import clean_dataframe
 import threading
 from datetime import datetime
 
+import os
 # Google Sheet configurations
-SHEET_ID = "1tuGBnQFjDntJQglofA17uHhiyekkVyDoSInErbwfR24"
+SHEET_ID = os.getenv("GOOGLE_SHEET_ID", "1tuGBnQFjDntJQglofA17uHhiyekkVyDoSInErbwfR24")
 
 _workbook = None
 

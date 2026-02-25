@@ -155,7 +155,7 @@ class ConciergeAI:
             return {"response": fallback_text}
 
     def _passport_hi(self, user_id, lang):
-        txt = "Pindah paspor Anda menggunakan ikon klip kertas \ud83d\udcce" if lang == "ID" else "Please upload your passport using the paperclip icon \ud83d\udcce"
+        txt = "Pindah paspor Anda menggunakan ikon klip kertas 📎" if lang == "ID" else "Please upload your passport using the paperclip icon 📎"
         save_message(user_id, "assistant", txt)
         return {"response": txt}
 

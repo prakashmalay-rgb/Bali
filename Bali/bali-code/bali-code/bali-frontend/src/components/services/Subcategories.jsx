@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useVoiceToText } from "../../hooks/useVoiceToText";
 import { chatAPI } from '../../api/chatApi';
+import { useLanguage } from '../../context/LanguageContext';
 import Slider from "react-slick"
 import "slick-carousel/slick/slick.css"
 import "slick-carousel/slick/slick-theme.css"
@@ -12,6 +13,7 @@ import topLeftPng from '../../assets/images/top-left.png'
 import { getSubCategory, getServiceItems } from './api.jsx'
 
 const SubCategories = () => {
+  const { t, language, toggleLanguage } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
   const [screenSize, setScreenSize] = useState('desktop');
@@ -21,14 +23,6 @@ const SubCategories = () => {
   // ← NEW: Track which button is loading
   const [buttonLoading, setButtonLoading] = useState(null);
   const [chatInput, setChatInput] = useState("");
-
-  const [language, setLanguage] = useState(localStorage.getItem("language") || "EN");
-
-  const toggleLanguage = () => {
-    const newLang = language === "EN" ? "ID" : "EN";
-    setLanguage(newLang);
-    localStorage.setItem("language", newLang);
-  };
 
   const { isListening, toggleListening } = useVoiceToText(
     (transcript) => setChatInput(transcript),
@@ -64,10 +58,10 @@ const SubCategories = () => {
   const defaultSliderData = [
     {
       id: 1,
-      title: "Coming Soon",
-      subtitle: "Coming Soon",
-      description: "Exciting options coming soon!",
-      buttonText: "Back",
+      title: t("coming_soon"),
+      subtitle: t("coming_soon"),
+      description: t("coming_soon_desc"),
+      buttonText: t("back"),
       image: "https://easybali.s3.ap-southeast-2.amazonaws.com/EASYBali+-+Web+Images/imagebrand-webp/sub-massage.webp"
     }
   ];
@@ -249,10 +243,10 @@ const SubCategories = () => {
                       {buttonLoading === slide.id ? (
                         <>
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                          Loading...
+                          {t("loading")}
                         </>
                       ) : (
-                        slide.buttonText
+                        slide.buttonText === "See Options" ? t("see_options") : slide.buttonText === "See Details" ? t("see_details") : slide.buttonText
                       )}
                     </button>
                   </div>
@@ -267,7 +261,7 @@ const SubCategories = () => {
         <div className='rounded-full bg-white shadow-lg flex px-[40px] py-[20px] items-center justify-between h-[85px] mb-[30px] border-class'>
           <input
             type="text"
-            placeholder="Chat with our AI Bot"
+            placeholder={t("chat_placeholder")}
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleGeneralChat()}

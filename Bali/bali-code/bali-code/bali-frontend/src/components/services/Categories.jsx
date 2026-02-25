@@ -61,50 +61,50 @@ const TripServices = () => {
   const defaultSliderData = [
     {
       id: 1,
-      title: "Villa Experiences",
-      subtitle: "Villa Experiences",
-      description: "Enhance your villa stay with curated experiences like movie night, and shisha rental.",
-      buttonText: "See Options",
+      title: t("order_services"),
+      subtitle: t("order_services"),
+      description: t("villa_exp_desc"),
+      buttonText: t("see_options"),
       image: "https://easybali.s3.ap-southeast-2.amazonaws.com/EASYBali+-+Web+Images/imagebrand-webp/main-villaexperiences.webp"
     },
     {
       id: 2,
-      title: "Health & Wellness",
-      subtitle: "Wellness & Spa",
-      description: "Pamper yourself with rejuvenating spa treatments, massages, and wellness services during your stay.",
-      buttonText: "See Options",
+      title: t("local_guide"),
+      subtitle: t("local_guide"),
+      description: t("wellness_desc"),
+      buttonText: t("see_options"),
       image: "https://easybali.s3.ap-southeast-2.amazonaws.com/EASYBali+-+Web+Images/imagebrand-webp/main-healthandwellness.webp"
     },
     {
       id: 3,
-      title: "Rentals",
-      subtitle: "Rentals",
-      description: "Enhance your villa stay with curated experiences like movie night, and cultural activities.",
-      buttonText: "See Options",
+      title: t("rentals"),
+      subtitle: t("rentals"),
+      description: t("rentals_desc"),
+      buttonText: t("see_options"),
       image: "https://easybali.s3.ap-southeast-2.amazonaws.com/EASYBali+-+Web+Images/imagebrand-webp/main-rentals.webp"
     },
     {
       id: 4,
-      title: "Transportation",
-      subtitle: "Transportation",
-      description: "Book hassle-free transportation services, from airport pickups to private drivers, for smooth travel.",
-      buttonText: "See Options",
+      title: t("trans_desc"),
+      subtitle: t("trans_desc"),
+      description: t("trans_desc"),
+      buttonText: t("see_options"),
       image: "https://easybali.s3.ap-southeast-2.amazonaws.com/EASYBali+-+Web+Images/imagebrand-webp/main-transportation.webp"
     },
     {
       id: 5,
-      title: "Extra Service",
-      subtitle: "Extra Service",
-      description: "Discover additional services like babysitting, laundry, and more to make your stay even more comfortable.",
-      buttonText: "See Options",
+      title: t("extra_service"),
+      subtitle: t("extra_service"),
+      description: t("extra_desc"),
+      buttonText: t("see_options"),
       image: "https://easybali.s3.ap-southeast-2.amazonaws.com/EASYBali+-+Web+Images/imagebrand-webp/main-extraservices.webp"
     },
     {
       id: 6,
-      title: "Food & Beverages",
-      subtitle: "Food & Beverages",
-      description: "Enjoy gourmet meals, snacks, and beverages delivered straight to your villa or reserved for you.",
-      buttonText: "See Options",
+      title: t("food_beverages"),
+      subtitle: t("food_beverages"),
+      description: t("fb_desc"),
+      buttonText: t("see_options"),
       image: "https://easybali.s3.ap-southeast-2.amazonaws.com/EASYBali+-+Web+Images/imagebrand-webp/main-f%26b.webp"
     }
   ];
@@ -384,7 +384,7 @@ const TripServices = () => {
                           {t("loading")}
                         </>
                       ) : (
-                        slide.buttonText
+                        slide.buttonText === "See Options" ? t("see_options") : slide.buttonText === "See Details" ? t("see_details") : slide.buttonText
                       )}
                     </button>
                   </div>

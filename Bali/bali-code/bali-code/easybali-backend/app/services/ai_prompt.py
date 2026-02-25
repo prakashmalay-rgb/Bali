@@ -15,15 +15,26 @@ async def generate_response(query: str, user_id: str, chat_type: str = "general"
     # 1. Handle specialized chat types
     if chat_type == "passport-submission":
         if query.lower() in ["hi", "hello", "hi there", "hey"]:
-            response_text = (
-                "Welcome to the **Passport Submission** center! 🛂\n\n"
-                "To ensure a smooth check-in and comply with local regulations, we need a clear photo of your passport (the main page with your photo and details).\n\n"
-                "**How to upload:**\n"
-                "1. Click the **paperclip icon** 📎 next to the chat input.\n"
-                "2. Select your passport image.\n"
-                "3. I'll confirm once it's securely received!\n\n"
-                "Do you have your passport ready?"
-            )
+            if language == "ID":
+                response_text = (
+                    "Selamat datang di pusat **Pengiriman Paspor**! 🛂\n\n"
+                    "Untuk memastikan proses check-in yang lancar dan mematuhi peraturan setempat, kami memerlukan foto paspor Anda yang jelas (halaman utama dengan foto dan detail Anda).\n\n"
+                    "**Cara mengunggah:**\n"
+                    "1. Klik **ikon klip kertas** 📎 di sebelah input obrolan.\n"
+                    "2. Pilih gambar paspor Anda.\n"
+                    "3. Saya akan mengonfirmasi setelah diterima dengan aman!\n\n"
+                    "Apakah paspor Anda sudah siap?"
+                )
+            else:
+                response_text = (
+                    "Welcome to the **Passport Submission** center! 🛂\n\n"
+                    "To ensure a smooth check-in and comply with local regulations, we need a clear photo of your passport (the main page with your photo and details).\n\n"
+                    "**How to upload:**\n"
+                    "1. Click the **paperclip icon** 📎 next to the chat input.\n"
+                    "2. Select your passport image.\n"
+                    "3. I'll confirm once it's securely received!\n\n"
+                    "Do you have your passport ready?"
+                )
             save_message(user_id, "user", query)
             save_message(user_id, "assistant", response_text)
             return {"response": response_text}
@@ -44,10 +55,17 @@ async def generate_response(query: str, user_id: str, chat_type: str = "general"
             )
             
             if menu_data and menu_data.get("sections") and menu_data["sections"][0].get("rows"):
+                if language == "ID":
+                    title = f"Pilihan Tersedia untuk {intent['subcategory']}"
+                    message = f"Saya telah menemukan beberapa opsi epik untuk **{intent['subcategory']}**. Pilih favorit Anda untuk mulai memesan!"
+                else:
+                    title = f"Available Options for {intent['subcategory']}"
+                    message = f"I've found some epic options for **{intent['subcategory']}**. Pick your favorite to start booking!"
+                    
                 table_response = {
                     "type": "service_selection",
-                    "title": f"Available Options for {intent['subcategory']}",
-                    "message": f"I've found some epic options for **{intent['subcategory']}**. Pick your favorite to start booking!",
+                    "title": title,
+                    "message": message,
                     "options": menu_data["sections"][0]["rows"]
                 }
                 response_text = f"SERVICES_DATA|{json.dumps(table_response)}"

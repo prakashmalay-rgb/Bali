@@ -12,8 +12,10 @@ import topLeftPng from '../../assets/images/top-left.png'
 import { getServiceItems } from './api.jsx'
 import { useVoiceToText } from "../../hooks/useVoiceToText";
 import { chatAPI } from '../../api/chatApi';
+import { useLanguage } from '../../context/LanguageContext';
 
 const ServiceItems = () => {
+  const { t, language, toggleLanguage } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -34,14 +36,6 @@ const ServiceItems = () => {
   const [apiMessage, setApiMessage] = useState('');
   const [sessionId, setSessionId] = useState('');
   const [chatInput, setChatInput] = useState("");
-
-  const [language, setLanguage] = useState(localStorage.getItem("language") || "EN");
-
-  const toggleLanguage = () => {
-    const newLang = language === "EN" ? "ID" : "EN";
-    setLanguage(newLang);
-    localStorage.setItem("language", newLang);
-  };
 
   const { isListening, toggleListening } = useVoiceToText(
     (transcript) => setChatInput(transcript),
@@ -78,9 +72,9 @@ const ServiceItems = () => {
   const defaultSliderData = [
     {
       id: 1,
-      title: "Coming Soon",
-      subtitle: "Coming Soon",
-      description: "Service details coming soon!",
+      title: t("coming_soon"),
+      subtitle: t("coming_soon"),
+      description: t("coming_soon_desc"),
       buttonText: "IDR 0",
       image: "https://easybali.s3.ap-southeast-2.amazonaws.com/EASYBali+-+Web+Images/serviceitems/SI-Balinese.webp"
     }
@@ -321,7 +315,7 @@ const ServiceItems = () => {
                     {buttonLoading === slide.id ? (
                       <>
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        Loading...
+                        {t("loading")}
                       </>
                     ) : (
                       slide.buttonText
@@ -338,7 +332,7 @@ const ServiceItems = () => {
         <div className='rounded-full bg-white shadow-lg flex px-[40px] py-[20px] items-center justify-between h-[85px] mb-[30px] border-class'>
           <input
             type="text"
-            placeholder="Chat with our AI Bot"
+            placeholder={t("chat_placeholder")}
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleGeneralChat()}
@@ -382,14 +376,14 @@ const ServiceItems = () => {
               <div className='grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-2'>
                 <div className='relative'>
                   <label className='absolute -top-2 left-3 bg-white px-2 sm:px-5 text-[16px] sm:text-[18px] font-semibold text-gray-900 z-10'>
-                    Full Name
+                    {t("full_name")}
                   </label>
                   <input
                     type='text'
                     name='fullName'
                     value={formData.fullName}
                     onChange={handleInputChange}
-                    placeholder='Name here'
+                    placeholder={t("name_placeholder")}
                     required
                     className='w-full h-[56px] sm:h-[70px] text-[16px] sm:text-[18px] px-4 sm:px-8 py-3 border border-black rounded-[20px] focus:outline-none focus:border-blue-400 text-black bg-white'
                   />
@@ -397,7 +391,7 @@ const ServiceItems = () => {
 
                 <div className='relative'>
                   <label className='absolute -top-2 left-3 bg-white px-2 text-[16px] sm:text-[18px] font-semibold text-gray-700 z-10'>
-                    Phone Number
+                    {t("phone_number")}
                   </label>
                   <div className='flex'>
                     <select
@@ -426,7 +420,7 @@ const ServiceItems = () => {
               {/* Select Date */}
               <div className='relative'>
                 <label className='absolute -top-2 left-3 bg-white px-2 sm:px-5 text-[16px] sm:text-[18px] font-semibold text-gray-700 z-10'>
-                  Select Date
+                  {t("select_date")}
                 </label>
                 <input
                   type='date'
@@ -437,14 +431,14 @@ const ServiceItems = () => {
                   className='w-full h-[56px] sm:h-[70px] px-4 sm:px-8 py-3 border border-black rounded-[20px] focus:outline-none focus:border-blue-400 text-black bg-white'
                 />
                 <p className='text-[12px] sm:text-[14px] text-gray-500 mt-2 px-2'>
-                  To avoid scheduling issues, please select a 2+ hour time window for your service. While our providers aim to start at your chosen time, this window helps prevent delays and ensures a smooth experience. Thanks for your understanding!
+                  {t("booking_note")}
                 </p>
               </div>
 
               {/* Select Time */}
               <div className='relative'>
                 <label className='absolute -top-2 left-3 bg-white px-2 sm:px-5 text-[16px] sm:text-[18px] font-semibold text-gray-700 z-20'>
-                  Select Time
+                  {t("select_time")}
                 </label>
                 <select
                   name='time'
@@ -461,7 +455,7 @@ const ServiceItems = () => {
               {/* No Of Person */}
               <div className='relative'>
                 <label className='absolute -top-2 left-3 bg-white px-2 sm:px-5 text-[16px] sm:text-[18px] font-semibold text-gray-700 z-20'>
-                  No Of Person
+                  {t("no_of_person")}
                 </label>
                 <select
                   name='noOfPerson'
@@ -478,7 +472,7 @@ const ServiceItems = () => {
 
               {/* Phone Number Note */}
               <p className='text-[12px] sm:text-[16px] text-gray-500'>
-                Please enter a valid Bali number (e.g 081234567890)
+                {t("phone_note")}
               </p>
 
               {/* Submit Button */}
@@ -490,14 +484,7 @@ const ServiceItems = () => {
                   : 'bg-[#FF8000] hover:bg-[#e6720a]'
                   }`}
               >
-                {isSubmitting ? (
-                  <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                    Submitting...
-                  </>
-                ) : (
-                  'Submit'
-                )}
+                {isSubmitting ? t("submitting") : t("submit")}
               </button>
             </form>
 

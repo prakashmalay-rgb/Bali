@@ -4,17 +4,18 @@ test.describe('EASY Bali Sanity Tests', () => {
 
     test('Home page loads correctly', async ({ page }) => {
         await page.goto('/');
+        await page.waitForLoadState('networkidle');
 
-        // Check if the logo exists
-        await expect(page.locator('img[alt="logo"]')).toBeVisible();
+        // Check if the language switcher exists
+        await expect(page.locator('.language')).toBeVisible();
 
         // Check if the chat input exists
-        const chatInput = page.locator('input[placeholder*="Bot"]');
-        await expect(chatInput).toBeVisible();
+        await expect(page.locator('input[placeholder*="Bot"]')).toBeVisible();
     });
 
     test('Language switcher updates the UI', async ({ page }) => {
         await page.goto('/');
+        await page.waitForLoadState('networkidle');
 
         // Check initial state (default EN)
         const langButton = page.locator('.language');
@@ -38,6 +39,7 @@ test.describe('EASY Bali Sanity Tests', () => {
 
     test('Navigation to chatbot page works', async ({ page }) => {
         await page.goto('/');
+        await page.waitForLoadState('networkidle');
 
         // Type something in chat and press enter or click chat button
         const chatInput = page.locator('input[placeholder*="Bot"]');

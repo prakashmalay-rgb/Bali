@@ -12,7 +12,7 @@ const Chat = () => {
   const { language, toggleLanguage, t } = useLanguage();
   const location = useLocation();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("Order Services");
+  const [activeTab, setActiveTab] = useState("order-services");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [socket, setSocket] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -121,13 +121,25 @@ const Chat = () => {
     console.log("⏱️ Started 120-second auto-close timer");
   };
 
-  const handleMenuClick = async (itemName) => {
-    if (itemName === activeTab && chatType && !['Order Services', 'Local Guide', 'Recommendations', 'Discount & Promotions'].includes(itemName)) return;
-    setLoadingItem(itemName);
+  const handleMenuClick = async (itemId) => {
+    if (itemId === activeTab && chatType && !['order_services', 'local_guide', 'recommendations', 'discounts_promotions'].includes(itemId)) return;
+    setLoadingItem(itemId);
     try {
-      const categoryMenus = ['Order Services', 'Local Guide', 'Recommendations', 'Discount & Promotions'];
-      if (categoryMenus.includes(itemName)) {
-        const response = await getSubMenu(itemName);
+      const idToEnglish = {
+        'order_services': 'Order Services',
+        'local_guide': 'Local Guide',
+        'recommendations': 'Recommendations',
+        'discounts_promotions': 'Discount & Promotions',
+        'currency_converter': 'Currency Converter',
+        'what_to_do': 'What To Do Today?',
+        'plan_my_trip': 'Plan My Trip!',
+        'voice_translator': 'Voice Translator',
+        'passport_submission': 'Passport Submission'
+      };
+
+      const categoryMenus = ['order_services', 'local_guide', 'recommendations', 'discounts_promotions'];
+      if (categoryMenus.includes(itemId)) {
+        const response = await getSubMenu(idToEnglish[itemId] || itemId);
         navigate('/categories', {
           state: {
             mainMenu: 'categories',
@@ -138,16 +150,16 @@ const Chat = () => {
       }
 
       const chatMap = {
-        'Currency Converter': 'currency-converter',
-        'What To Do Today?': 'what-to-do',
-        'Plan My Trip!': 'plan-my-trip',
-        'Voice Translator': 'voice-translator',
-        'Passport Submission': 'passport-submission'
+        'currency_converter': 'currency-converter',
+        'what_to_do': 'what-to-do',
+        'plan_my_trip': 'plan-my-trip',
+        'voice_translator': 'voice-translator',
+        'passport_submission': 'passport-submission'
       };
 
-      const newChatType = chatMap[itemName];
+      const newChatType = chatMap[itemId];
       if (newChatType) {
-        setActiveTab(itemName);
+        setActiveTab(itemId);
         const currentUserId = chatAPI.getUserId();
         setChatType(newChatType);
         setUserId(currentUserId);
@@ -179,8 +191,8 @@ const Chat = () => {
         }
       }
     } catch (error) {
-      console.error(`Failed to fetch ${itemName}:`, error);
-      if (['Order Services', 'Local Guide', 'Recommendations', 'Discount & Promotions'].includes(itemName)) {
+      console.error(`Failed to fetch ${itemId}:`, error);
+      if (['order_services', 'local_guide', 'recommendations', 'discounts_promotions'].includes(itemId)) {
         navigate('/categories', {
           state: {
             mainMenu: 'categories',
@@ -213,7 +225,7 @@ const Chat = () => {
       console.log(`Initializing ${currentChatType} chat for user ${currentUserId}`);
       setChatType(currentChatType);
       setUserId(currentUserId);
-      setActiveTab(location.state?.activeTab || "Chat");
+      setActiveTab(location.state?.activeTab || "chat_tab");
 
       if (location.state?.initialBotMessage) {
         const botMsg = location.state.initialBotMessage;
@@ -507,7 +519,7 @@ const Chat = () => {
 
       const errorMessage = {
         id: Date.now() + 1,
-        text: error.response?.data?.detail || "Sorry, the upload failed. Please try again! 🙏",
+        text: error.response?.data?.detail || t("upload_error"),
         sender: "bot",
         timestamp: getCurrentTime(),
       };
@@ -539,7 +551,7 @@ const Chat = () => {
 
       const errorMessage = {
         id: Date.now(),
-        text: error.response?.data?.detail || "Sorry, I couldn't process that. Please try again! 🙏",
+        text: error.response?.data?.detail || t("process_error"),
         sender: "bot",
         timestamp: getCurrentTime(),
       };
@@ -588,7 +600,7 @@ const Chat = () => {
         console.error("❌ Error sending WebSocket message:", error);
         const errorMessage = {
           id: Date.now(),
-          text: "Failed to send message. Please check your connection.",
+          text: t("connection_error"),
           sender: "bot",
           timestamp: getCurrentTime(),
         };
@@ -598,7 +610,7 @@ const Chat = () => {
       console.warn("⚠️ No active connection available");
       const warningMessage = {
         id: Date.now(),
-        text: "Connection not established. Please wait or refresh the page.",
+        text: t("connection_error"),
         sender: "bot",
         timestamp: getCurrentTime(),
       };
@@ -615,10 +627,9 @@ const Chat = () => {
       price: service.price
     })}`;
 
-    // Add a synthetic user message for better UX
     const userMsg = {
       id: Date.now(),
-      text: `I'd like to book ${service.title}`,
+      text: `${t("booking_intent_msg")} ${service.title}`,
       sender: "user",
       timestamp: getCurrentTime(),
     };
@@ -643,7 +654,7 @@ const Chat = () => {
       // Add "Confirmed" message from user
       const userMsg = {
         id: Date.now(),
-        text: "Yes, I confirm the booking.",
+        text: t("confirm_user_msg"),
         sender: "user",
         timestamp: getCurrentTime(),
       };
@@ -663,7 +674,7 @@ const Chat = () => {
       console.error("Error confirming booking:", err);
       const errorMsg = {
         id: Date.now() + 1,
-        text: "Sorry, I couldn't generate the payment link. Please try again.",
+        text: t("generate_payment_error"),
         sender: "bot",
         timestamp: getCurrentTime(),
       };
@@ -685,7 +696,7 @@ const Chat = () => {
     setTimeout(() => {
       const botMsg = {
         id: Date.now() + 1,
-        text: "Selection cancelled. How else can I help you?",
+        text: t("selection_cancelled"),
         sender: "bot",
         timestamp: getCurrentTime(),
       };
@@ -701,7 +712,7 @@ const Chat = () => {
 
   const renderBotMessage = (text) => {
     if (!text || typeof text !== "string") {
-      return <span>Sorry, no message content available.</span>;
+      return <span>{t("no_message_error")}</span>;
     }
 
     // Handle structured services data
@@ -715,9 +726,9 @@ const Chat = () => {
               <table className="min-w-full bg-[#FF8000] text-white text-sm">
                 <thead>
                   <tr className="bg-white/10">
-                    <th className="px-4 py-2 text-left">Service</th>
-                    <th className="px-4 py-2 text-left">Price (IDR)</th>
-                    <th className="px-4 py-2 text-center">Action</th>
+                    <th className="px-4 py-2 text-left">{t("service_col")}</th>
+                    <th className="px-4 py-2 text-left">{t("price_col")}</th>
+                    <th className="px-4 py-2 text-center">{t("action_col")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -733,7 +744,7 @@ const Chat = () => {
                           onClick={() => handleServiceSelect(opt)}
                           className="bg-white text-orange-600 px-3 py-1 rounded-full text-xs font-bold hover:bg-orange-600 hover:text-white transition shadow-sm"
                         >
-                          Book
+                          {t("book_btn")}
                         </button>
                       </td>
                     </tr>
@@ -755,21 +766,21 @@ const Chat = () => {
         return (
           <div className="confirmation-container mt-2">
             <p className="mb-4 text-white font-medium">
-              You've selected **{data.title}** for **IDR {data.price}**.
-              Would you like to confirm this booking and generate a secure payment link?
+              {t("confirm_booking_desc_prefix")} **{data.title}** {t("confirm_booking_desc_mid")} **IDR {data.price}**.
+              {t("confirm_booking_desc_suffix")}
             </p>
             <div className="flex gap-4">
               <button
                 onClick={() => handleConfirmBooking(data)}
                 className="bg-green-500 text-white px-6 py-2 rounded-full font-bold hover:bg-green-600 transition shadow-md"
               >
-                Yes, Confirm
+                {t("confirm_booking_title")}
               </button>
               <button
                 onClick={() => handleCancelSelection()}
                 className="bg-red-500 text-white px-6 py-2 rounded-full font-bold hover:bg-red-600 transition shadow-md"
               >
-                Cancel
+                {t("cancel_btn")}
               </button>
             </div>
           </div>
@@ -834,7 +845,7 @@ const Chat = () => {
               rel="noopener noreferrer"
               className="inline-block mt-2 bg-white text-orange-600 font-semibold px-4 py-2 rounded-2xl shadow-md border border-white hover:bg-orange-600 hover:text-white transition"
             >
-              💳 Pay Now
+              💳 {t("pay_now")}
             </a>
           );
         }
@@ -847,7 +858,7 @@ const Chat = () => {
               rel="noopener noreferrer"
               className="inline-block mt-2 bg-white text-orange-600 font-semibold px-4 py-2 rounded-2xl shadow-md border border-white hover:bg-orange-600 hover:text-white transition"
             >
-              📄 Download Invoice
+              📄 {t("download_invoice")}
             </a>
           );
         }
@@ -880,15 +891,15 @@ const Chat = () => {
 
 
   const menuItems = [
-    { name: t("order_services"), icon: "/chat-icons/order.svg" },
-    { name: t("local_guide"), icon: "/chat-icons/guide.svg" },
-    { name: t("voice_translator"), icon: "/chat-icons/translator.svg" },
-    { name: t("currency_converter"), icon: "/chat-icons/currency.svg" },
-    { name: t("what_to_do"), icon: "/chat-icons/today.svg" },
-    { name: t("plan_my_trip"), icon: "/chat-icons/trip.svg" },
-    { name: t("recommendations"), icon: "/chat-icons/recommend.svg" },
-    { name: t("discounts_promotions"), icon: "/chat-icons/discount.svg" },
-    { name: t("passport_submission"), icon: "/chat-icons/passport.svg" },
+    { id: "order_services", name: t("order_services"), icon: "/chat-icons/order.svg" },
+    { id: "local_guide", name: t("local_guide"), icon: "/chat-icons/guide.svg" },
+    { id: "voice_translator", name: t("voice_translator"), icon: "/chat-icons/translator.svg" },
+    { id: "currency_converter", name: t("currency_converter"), icon: "/chat-icons/currency.svg" },
+    { id: "what_to_do", name: t("what_to_do"), icon: "/chat-icons/today.svg" },
+    { id: "plan_my_trip", name: t("plan_my_trip"), icon: "/chat-icons/trip.svg" },
+    { id: "recommendations", name: t("recommendations"), icon: "/chat-icons/recommend.svg" },
+    { id: "discounts_promotions", name: t("discounts_promotions"), icon: "/chat-icons/discount.svg" },
+    { id: "passport_submission", name: t("passport_submission"), icon: "/chat-icons/passport.svg" },
   ];
 
   return (
@@ -942,28 +953,28 @@ const Chat = () => {
         <div className="flex flex-col w-full">
           {menuItems.map((item) => (
             <button
-              key={item.name}
-              onClick={() => handleMenuClick(item.name)}
-              className={`text-[16px] flex items-center justify-start gap-3 font-medium w-full px-4 py-5 rounded-[50px] transition hover:bg-[#FF8000] hover:text-white group shadow-none ${loadingItem === item.name
+              key={item.id}
+              onClick={() => handleMenuClick(item.id)}
+              className={`text-[16px] flex items-center justify-start gap-3 font-medium w-full px-4 py-5 rounded-[50px] transition hover:bg-[#FF8000] hover:text-white group shadow-none ${loadingItem === item.id
                 ? "opacity-50 cursor-not-allowed"
                 : ""
-                } ${activeTab === item.name
+                } ${activeTab === item.id
                   ? "bg-[#FF8000] text-white"
                   : ""
                 }`}
-              disabled={loadingItem === item.name}
-              aria-disabled={loadingItem === item.name}
+              disabled={loadingItem === item.id}
+              aria-disabled={loadingItem === item.id}
             >
               <img
                 src={item.icon}
                 alt={item.name}
-                className={`w-5 h-5 transition group-hover:filter group-hover:invert group-hover:brightness-0 ${loadingItem === item.name ? "animate-spin" : ""
-                  } ${activeTab === item.name
+                className={`w-5 h-5 transition group-hover:filter group-hover:invert group-hover:brightness-0 ${loadingItem === item.id ? "animate-spin" : ""
+                  } ${activeTab === item.id
                     ? "filter invert brightness-0"
                     : ""
                   }`}
               />
-              {loadingItem === item.name ? t("loading") : item.name}
+              {loadingItem === item.id ? t("loading") : item.name}
             </button>
           ))}
         </div>

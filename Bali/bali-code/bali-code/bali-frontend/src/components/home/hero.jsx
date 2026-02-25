@@ -149,10 +149,9 @@ const Hero = () => {
       >
         <div className="scan-modal-content">
           <div className="modal-inner-content">
-            <h2 className="modal-title">Please Scan The QR Code</h2>
+            <h2 className="modal-title">{t("scan_qr_title")}</h2>
             <p className="modal-subtitle">
-              Welcome to EASY Bali! If you discovered us in your villa, please
-              scan the QR code placed there.
+              {t("scan_qr_subtitle")}
             </p>
             <div className="qr-image-wrapper">
               <img src="/images/scanner.png" alt="img" className="qr-image" />
@@ -164,7 +163,7 @@ const Hero = () => {
             <Button text={t("skip")} className="btn-primary modal-skip-btn" />
             <div className="villa-dropdown-wrapper">
               <Select
-                placeholder="Select Villas from Our List Here"
+                placeholder={t("villas_placeholder")}
                 className="villa-dropdown"
                 onChange={handleVillaChange}
                 value={selectedVilla}

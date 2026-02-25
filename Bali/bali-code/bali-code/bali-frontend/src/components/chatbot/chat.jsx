@@ -121,88 +121,52 @@ const Chat = () => {
     console.log("⏱️ Started 120-second auto-close timer");
   };
 
-  const handleMenuClick = async (itemId) => {
+  const handleMenuClick = (itemId) => {
     if (itemId === activeTab && chatType && !['order_services', 'local_guide', 'recommendations', 'discounts_promotions'].includes(itemId)) return;
-    setLoadingItem(itemId);
-    try {
-      const idToEnglish = {
-        'order_services': 'Order Services',
-        'local_guide': 'Local Guide',
-        'recommendations': 'Recommendations',
-        'discounts_promotions': 'Discount & Promotions',
-        'currency_converter': 'Currency Converter',
-        'what_to_do': 'What To Do Today?',
-        'plan_my_trip': 'Plan My Trip!',
-        'voice_translator': 'Voice Translator',
-        'passport_submission': 'Passport Submission'
-      };
 
-      const categoryMenus = ['order_services', 'local_guide', 'recommendations', 'discounts_promotions'];
-      if (categoryMenus.includes(itemId)) {
-        const response = await getSubMenu(idToEnglish[itemId] || itemId);
-        navigate('/categories', {
-          state: {
-            mainMenu: 'categories',
-            data: response.data || []
-          }
-        });
-        return;
-      }
+    const idToEnglish = {
+      'order_services': 'Order Services',
+      'local_guide': 'Local Guide',
+      'recommendations': 'Recommendations',
+      'discounts_promotions': 'Discount & Promotions',
+      'currency_converter': 'Currency Converter',
+      'what_to_do': 'What To Do Today?',
+      'plan_my_trip': 'Plan My Trip!',
+      'voice_translator': 'Voice Translator',
+      'passport_submission': 'Passport Submission'
+    };
 
-      const chatMap = {
-        'currency_converter': 'currency-converter',
-        'what_to_do': 'what-to-do',
-        'plan_my_trip': 'plan-my-trip',
-        'voice_translator': 'voice-translator',
-        'passport_submission': 'passport-submission'
-      };
-
-      const newChatType = chatMap[itemId];
-      if (newChatType) {
-        setActiveTab(itemId);
-        const currentUserId = chatAPI.getUserId();
-        setChatType(newChatType);
-        setUserId(currentUserId);
-
-        const storedMessages = chatAPI.loadChatHistory(currentUserId, newChatType);
-        if (storedMessages && storedMessages.length > 0) {
-          setMessages(storedMessages);
-        } else {
-          try {
-            const response = await chatAPI.sendMessage(newChatType, currentUserId, "Hi");
-            const initialMessage = {
-              id: Date.now(),
-              text: response.response,
-              sender: "bot",
-              timestamp: getCurrentTime()
-            };
-            chatAPI.saveChatHistory(currentUserId, newChatType, [initialMessage]);
-            setMessages([initialMessage]);
-          } catch (err) {
-            console.error(err);
-            const errorMessage = {
-              id: Date.now(),
-              text: `Failed to load chat: ${err.response?.data?.detail || err.message}. Please try again.`,
-              sender: "bot",
-              timestamp: getCurrentTime()
-            };
-            setMessages([errorMessage]);
-          }
+    const categoryMenus = ['order_services', 'local_guide', 'recommendations', 'discounts_promotions'];
+    if (categoryMenus.includes(itemId)) {
+      navigate('/categories', {
+        state: {
+          mainMenu: idToEnglish[itemId] || itemId
         }
-      }
-    } catch (error) {
-      console.error(`Failed to fetch ${itemId}:`, error);
-      if (['order_services', 'local_guide', 'recommendations', 'discounts_promotions'].includes(itemId)) {
-        navigate('/categories', {
-          state: {
-            mainMenu: 'categories',
-            data: [],
-            error: 'Failed to load services. Please try again.'
-          }
-        });
-      }
-    } finally {
-      setLoadingItem(null);
+      });
+      return;
+    }
+
+    const chatMap = {
+      'currency_converter': 'currency-converter',
+      'what_to_do': 'what-to-do',
+      'plan_my_trip': 'plan-my-trip',
+      'voice_translator': 'voice-translator',
+      'passport_submission': 'passport-submission'
+    };
+
+    const newChatType = chatMap[itemId];
+    if (newChatType) {
+      setActiveTab(itemId);
+      const currentUserId = chatAPI.getUserId();
+
+      // Reset state for new chat type
+      initialMessageProcessed.current = false;
+      setChatType(newChatType);
+      setUserId(currentUserId);
+
+      // Load history or clear
+      const storedMessages = chatAPI.loadChatHistory(currentUserId, newChatType);
+      setMessages(storedMessages);
     }
   };
 

@@ -12,10 +12,7 @@ router = APIRouter(prefix="/currency-converter", tags=["Chatbot"])
 async def chat_endpoint(request: ChatbotQuery, user_id: str):  
     try:
         user_query = request.query
-        if not user_query:
-            raise HTTPException(status_code=400, detail="No query provided.")
-            
-        response = await currency_ai(user_id=user_id, query=user_query)
+        response = await currency_ai(user_id=user_id, query=user_query, language=request.language)
         
         return {"response": response,}
         

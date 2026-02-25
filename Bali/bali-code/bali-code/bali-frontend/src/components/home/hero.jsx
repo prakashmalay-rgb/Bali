@@ -3,6 +3,7 @@ import { Modal, Select, message } from "antd";
 import Button from "../shared/button";
 import { useNavigate } from "react-router-dom";
 import { useVoiceToText } from "../../hooks/useVoiceToText";
+import { useLanguage } from "../../context/LanguageContext";
 
 const { Option } = Select;
 
@@ -12,7 +13,7 @@ const Hero = () => {
   const [chatInput, setChatInput] = useState("");
   const navigate = useNavigate();
 
-  const [language, setLanguage] = useState(localStorage.getItem("language") || "EN");
+  const { language, toggleLanguage, t } = useLanguage();
 
   const { isListening, toggleListening } = useVoiceToText(
     (transcript) => setChatInput(transcript),
@@ -23,12 +24,6 @@ const Hero = () => {
     if (!text.trim()) return;
     // We need to make sure state is updated or pass text directly
     handleChat(text);
-  };
-
-  const toggleLanguage = () => {
-    const newLang = language === "EN" ? "ID" : "EN";
-    setLanguage(newLang);
-    localStorage.setItem("language", newLang);
   };
 
   const showModal = () => {
@@ -119,7 +114,7 @@ const Hero = () => {
         <div className="hero-chat-input absolute -bottom-[7%] sm:-bottom-[10%] left-[12px] sm:left-0 z-[3] w-[90%] lg:w-full">
           <input
             type="text"
-            placeholder="Chat with our AI Bot"
+            placeholder={t("chat_placeholder")}
             className="w-full px-5 sm:px-10 pr-[100px] sm:pr-[150px] py-7 sm:py-10 rounded-[50px] text-[#8e8e8e] text-[16px] sm:text-[18px] border border-[#c6c6c6] placeholder:text-[#8e8e8e] outline-none focus:outline-none focus:border-[#c6c6c6] bg-white"
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
@@ -166,7 +161,7 @@ const Hero = () => {
               You can also do this later if you would like to order any of our
               services.
             </p>
-            <Button text="Skip" className="btn-primary modal-skip-btn" />
+            <Button text={t("skip")} className="btn-primary modal-skip-btn" />
             <div className="villa-dropdown-wrapper">
               <Select
                 placeholder="Select Villas from Our List Here"

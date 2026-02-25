@@ -6,8 +6,10 @@ import topLeftPng from "../../assets/images/top-left.png";
 import { getSubMenu } from '../services/api';
 import { chatAPI } from "../../api/chatApi"
 import { useVoiceToText } from "../../hooks/useVoiceToText";
+import { useLanguage } from "../../context/LanguageContext";
 
 const Chat = () => {
+  const { language, toggleLanguage, t } = useLanguage();
   const location = useLocation();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("Order Services");
@@ -22,14 +24,6 @@ const Chat = () => {
   const [chatType, setChatType] = useState(null);
   const [userId, setUserId] = useState(null);
   const [apiLoading, setApiLoading] = useState(false);
-
-  const [language, setLanguage] = useState(localStorage.getItem("language") || "EN");
-
-  const toggleLanguage = () => {
-    const newLang = language === "EN" ? "ID" : "EN";
-    setLanguage(newLang);
-    localStorage.setItem("language", newLang);
-  };
 
   const { isListening, toggleListening } = useVoiceToText(
     (transcript) => setInputMessage(transcript),
@@ -886,15 +880,15 @@ const Chat = () => {
 
 
   const menuItems = [
-    { name: "Order Services", icon: "/chat-icons/order.svg" },
-    { name: "Local Guide", icon: "/chat-icons/guide.svg" },
-    { name: "Voice Translator", icon: "/chat-icons/translator.svg" },
-    { name: "Currency Converter", icon: "/chat-icons/currency.svg" },
-    { name: "What To Do Today?", icon: "/chat-icons/today.svg" },
-    { name: "Plan My Trip!", icon: "/chat-icons/trip.svg" },
-    { name: "Recommendations", icon: "/chat-icons/recommend.svg" },
-    { name: "Discount & Promotions", icon: "/chat-icons/discount.svg" },
-    { name: "Passport Submission", icon: "/chat-icons/passport.svg" },
+    { name: t("order_services"), icon: "/chat-icons/order.svg" },
+    { name: t("local_guide"), icon: "/chat-icons/guide.svg" },
+    { name: t("voice_translator"), icon: "/chat-icons/translator.svg" },
+    { name: t("currency_converter"), icon: "/chat-icons/currency.svg" },
+    { name: t("what_to_do"), icon: "/chat-icons/today.svg" },
+    { name: t("plan_my_trip"), icon: "/chat-icons/trip.svg" },
+    { name: t("recommendations"), icon: "/chat-icons/recommend.svg" },
+    { name: t("discounts_promotions"), icon: "/chat-icons/discount.svg" },
+    { name: t("passport_submission"), icon: "/chat-icons/passport.svg" },
   ];
 
   return (
@@ -969,7 +963,7 @@ const Chat = () => {
                     : ""
                   }`}
               />
-              {loadingItem === item.name ? "Loading..." : item.name}
+              {loadingItem === item.name ? t("loading") : item.name}
             </button>
           ))}
         </div>
@@ -995,7 +989,7 @@ const Chat = () => {
               </svg>
             </button>
             <h5 className="font-bold text-[18px] md:text-[24px] md:px-6">
-              Chat with our AI Bot
+              {t("chat_placeholder")}
             </h5>
           </div>
           <div
@@ -1083,7 +1077,7 @@ const Chat = () => {
             )}
             <input
               type="text"
-              placeholder="Chat with our AI Bot"
+              placeholder={t("chat_placeholder")}
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={handleKeyPress}

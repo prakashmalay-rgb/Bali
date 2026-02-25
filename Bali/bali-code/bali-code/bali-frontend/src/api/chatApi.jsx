@@ -20,6 +20,7 @@ export const chatAPI = {
   },
   // Send message to specific chat endpoint
   sendMessage: async (chatType, userId, query) => {
+    const language = localStorage.getItem('language') || 'EN';
     const endpoints = {
       'what-to-do': 'what-to-do/chat',
       'currency-converter': 'currency-converter/chat',
@@ -35,7 +36,7 @@ export const chatAPI = {
     try {
       const response = await axios.post(
         `${API_BASE_URL}/${endpoint}`,
-        { query, chat_type: chatType },
+        { query, chat_type: chatType, language: language },
         { params: { user_id: userId } }
       );
       return response.data;

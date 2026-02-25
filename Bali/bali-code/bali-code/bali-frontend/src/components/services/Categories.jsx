@@ -10,6 +10,7 @@ import topLeftPng from '../../assets/images/top-left.png'
 import { getSubMenu, getSubCategory } from './api.jsx'
 import { chatAPI } from '../../api/chatApi'
 import { useVoiceToText } from "../../hooks/useVoiceToText";
+import { useLanguage } from '../../context/LanguageContext'
 
 const TripServices = () => {
   const navigate = useNavigate();
@@ -23,13 +24,7 @@ const TripServices = () => {
   const [buttonLoading, setButtonLoading] = useState(null);
   const [chatInput, setChatInput] = useState("");
 
-  const [language, setLanguage] = useState(localStorage.getItem("language") || "EN");
-
-  const toggleLanguage = () => {
-    const newLang = language === "EN" ? "ID" : "EN";
-    setLanguage(newLang);
-    localStorage.setItem("language", newLang);
-  };
+  const { language, toggleLanguage, t } = useLanguage();
 
   const { isListening, toggleListening } = useVoiceToText(
     (transcript) => setChatInput(transcript),
@@ -386,7 +381,7 @@ const TripServices = () => {
                       {buttonLoading === slide.id ? (
                         <>
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                          Loading...
+                          {t("loading")}
                         </>
                       ) : (
                         slide.buttonText
@@ -404,7 +399,7 @@ const TripServices = () => {
         <div className='rounded-full bg-white shadow-lg flex px-[40px] py-[20px] items-center justify-between h-[85px] mb-[30px] border-class'>
           <input
             type="text"
-            placeholder="Chat with our AI Bot"
+            placeholder={t("chat_placeholder")}
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleGeneralChat()}

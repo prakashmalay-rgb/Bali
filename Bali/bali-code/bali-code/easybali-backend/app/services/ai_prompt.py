@@ -11,7 +11,7 @@ import json
 service_index="ai-data"
 
 
-async def generate_response(query: str, user_id: str, chat_type: str = "general"):
+async def generate_response(query: str, user_id: str, chat_type: str = "general", language: str = "EN"):
     # 1. Handle specialized chat types
     if chat_type == "passport-submission":
         if query.lower() in ["hi", "hello", "hi there", "hey"]:
@@ -58,14 +58,22 @@ async def generate_response(query: str, user_id: str, chat_type: str = "general"
     # 3. Fallback to RAG + Dynamic Sheet Context
     # We'll pull some fresh data from the cache to ensure the AI knows about new promos/rentals
     sheet_context = ""
+    # 3.1 Pull from specialized 'AI Data' sheet first
+    if cache.get("ai_data_df") is not None and not cache["ai_data_df"].empty:
+        ai_df = cache["ai_data_df"]
+        # Convert top rows to a readable format for prompt
+        sheet_context += "REAL-TIME SERVICE DATA (AI Data Sheet):\n"
+        for _, row in ai_df.head(25).iterrows():
+            sheet_context += f"- {row.get('Service Item')}: {row.get('Service Item Description')} price: {row.get('Price (Service Item Button)')}\n"
+
+    # 3.2 Add general services for additional coverage
     if cache.get("services_df") is not None:
-        # Get a small sample of categories and services to ground the AI
         relevant_categories = ["Rental", "Discount & Promotions", "Villa Experiences", "Food and Beverage", "Transportation"]
         df = cache["services_df"]
-        sample_df = df[df["Category"].isin(relevant_categories)].head(30)
-        sheet_context = "AVAILABLE SERVICES & PROMOS FROM GOOGLE SHEETS (REAL-TIME DATA):\n"
+        sample_df = df[df["Category"].isin(relevant_categories)].head(15)
+        sheet_context += "\nOTHER CATEGORIES:\n"
         for _, row in sample_df.iterrows():
-            sheet_context += f"- {row.get('Service Item')} ({row.get('Category')}): {row.get('Service Item Description')} price: {row.get('Price (Service Item Button)')}\n"
+            sheet_context += f"- {row.get('Service Item')} ({row.get('Category')}): price: {row.get('Price (Service Item Button)')}\n"
 
     index = get_index(service_index)
     chat_history = get_conversation_history(user_id)
@@ -90,11 +98,12 @@ async def generate_response(query: str, user_id: str, chat_type: str = "general"
         {full_context if full_context.strip() else "No specific data found. Be helpful based on general Bali knowledge but focus on EASYBali standard of luxury."}
 
         STRICT INSTRUCTIONS:
-        1. LOCALLY GROWN DATA: Prioritize the 'KNOWLEDGE BASE' for prices, discounts, and specific rental options.
-        2. RENTALS & PROMOS: If the user asks for rentals (cars, bikes, gear) or discounts, check the context specifically for those keywords.
-        3. PASSING THE MIC: If a user wants to book, refer to these rules: {rules}
-        4. TONE: Professional, infectious excitement, high-end concierge.
-        5. CURRENT CHAT TYPE: {chat_type}
+        1. RESPONSE LANGUAGE: You MUST respond in the following language: {language}. If the language is ID, use Indonesian/Balinese style. If EN, use English.
+        2. LOCALLY GROWN DATA: Prioritize the 'KNOWLEDGE BASE' for prices, discounts, and specific rental options.
+        3. RENTALS & PROMOS: If the user asks for rentals (cars, bikes, gear) or discounts, check the context specifically for those keywords.
+        4. PASSING THE MIC: If a user wants to book, refer to these rules: {rules}
+        5. TONE: Professional, infectious excitement, high-end concierge.
+        6. CURRENT CHAT TYPE: {chat_type}
         
         Conversation History:
         {conversation}

@@ -2,8 +2,10 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getSubMenu } from '../services/api';
 import { chatAPI } from '../../api/chatApi'; // Import the centralized API service
+import { useLanguage } from "../../context/LanguageContext";
 
 const Services = () => {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [orderServicesLoading, setOrderServicesLoading] = useState(false);
   const [localGuideLoading, setLocalGuideLoading] = useState(false);
@@ -193,7 +195,7 @@ const Services = () => {
   return (
     <section className="services flex flex-col gap-[40px]">
       <h2 className="font-semibold text-black text-center">
-        Everything You Need, Right At Your Fingertips
+        {t("services_header")}
       </h2>
 
       <div className="service-cards grid grid-cols-2 md:grid-cols-3 gap-[12px] md:gap-[20px] place-items-center">
@@ -213,7 +215,7 @@ const Services = () => {
           </div>
           <h5 className={`text-black font-semibold text-center text-[12px] md:text-[24px] transition duration-300 ease-in-out group-hover:text-white ${orderServicesLoading ? 'text-gray-400' : ''
             }`}>
-            {orderServicesLoading ? 'Loading...' : 'Order Services'}
+            {orderServicesLoading ? t("loading") : t("order_services")}
           </h5>
         </div>
 
@@ -233,7 +235,7 @@ const Services = () => {
           </div>
           <h5 className={`text-black font-semibold text-center text-[12px] md:text-[24px] transition duration-300 ease-in-out group-hover:text-white ${localGuideLoading ? 'text-gray-400' : ''
             }`}>
-            {localGuideLoading ? 'Loading...' : 'Local Guide'}
+            {localGuideLoading ? t("loading") : t("local_guide")}
           </h5>
         </div>
 
@@ -251,7 +253,7 @@ const Services = () => {
           />
           <h5 className={`text-black font-semibold text-center text-[12px] md:text-[24px] transition duration-300 ease-in-out group-hover:text-white ${voiceTranslatorLoading ? 'text-gray-400' : ''
             }`}>
-            {voiceTranslatorLoading ? 'Loading...' : 'Voice Translator'}
+            {voiceTranslatorLoading ? t("loading") : t("voice_translator")}
           </h5>
         </div>
 
@@ -269,7 +271,7 @@ const Services = () => {
           />
           <h5 className={`text-black font-semibold text-center text-[12px] md:text-[24px] transition duration-300 ease-in-out group-hover:text-white ${currencyConverterLoading ? 'text-gray-400' : ''
             }`}>
-            {currencyConverterLoading ? 'Loading...' : 'Currency Converter'}
+            {currencyConverterLoading ? t("loading") : t("currency_converter")}
           </h5>
         </div>
 
@@ -287,7 +289,7 @@ const Services = () => {
           />
           <h5 className={`text-black font-semibold text-center text-[12px] md:text-[24px] transition duration-300 ease-in-out group-hover:text-white ${whatToDoLoading ? 'text-gray-400' : ''
             }`}>
-            {whatToDoLoading ? 'Loading...' : 'What To Do Today?'}
+            {whatToDoLoading ? t("loading") : t("what_to_do")}
           </h5>
         </div>
 
@@ -305,7 +307,7 @@ const Services = () => {
           />
           <h5 className={`text-black font-semibold text-center text-[12px] md:text-[24px] transition duration-300 ease-in-out group-hover:text-white ${planMyTripLoading ? 'text-gray-400' : ''
             }`}>
-            {planMyTripLoading ? 'Loading...' : 'Plan My Trip!'}
+            {planMyTripLoading ? t("loading") : t("plan_my_trip")}
           </h5>
         </div>
 
@@ -325,7 +327,7 @@ const Services = () => {
           </div>
           <h5 className={`text-black font-semibold text-center text-[12px] md:text-[24px] transition duration-300 ease-in-out group-hover:text-white ${recommendationsLoading ? 'text-gray-400' : ''
             }`}>
-            {recommendationsLoading ? 'Loading...' : 'Recommendations'}
+            {recommendationsLoading ? t("loading") : t("recommendations")}
           </h5>
         </div>
 
@@ -345,7 +347,7 @@ const Services = () => {
           </div>
           <h5 className={`text-black font-semibold text-center text-[12px] md:text-[24px] transition duration-300 ease-in-out group-hover:text-white ${discountPromotionsLoading ? 'text-gray-400' : ''
             }`}>
-            {discountPromotionsLoading ? 'Loading...' : 'Discount & Promotions'}
+            {discountPromotionsLoading ? t("loading") : t("discounts_promotions")}
           </h5>
         </div>
 
@@ -363,7 +365,7 @@ const Services = () => {
           />
           <h5 className={`text-black font-semibold text-center text-[12px] md:text-[24px] transition duration-300 ease-in-out group-hover:text-white ${passportSubmissionLoading ? 'text-gray-400' : ''
             }`}>
-            {passportSubmissionLoading ? 'Loading...' : 'Passport Submission'}
+            {passportSubmissionLoading ? t("loading") : t("passport_submission")}
           </h5>
         </div>
       </div>

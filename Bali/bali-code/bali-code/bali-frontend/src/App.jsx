@@ -22,6 +22,7 @@ import DashboardLogin from "./page/dashboard/Login";
 import DashboardChats from "./page/dashboard/DashboardChats";
 import PassportVerification from "./page/dashboard/PassportVerification";
 import { Navigate } from "react-router-dom";
+import { LanguageProvider } from "./context/LanguageContext";
 
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem("easybali_token");
@@ -33,9 +34,9 @@ const ProtectedRoute = ({ children }) => {
 
 const AppLayout = () => {
   return (
-    <>
+    <LanguageProvider>
       <RouterProvider router={appRouter} />
-    </>
+    </LanguageProvider>
   );
 };
 

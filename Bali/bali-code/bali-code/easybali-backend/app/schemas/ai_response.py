@@ -6,3 +6,4 @@ class ChatbotResponse(BaseModel):
 
 class ChatbotQuery(BaseModel):
     query: str
+    language: str = "EN"

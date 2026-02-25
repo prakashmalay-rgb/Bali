@@ -31,48 +31,42 @@ should_stop = False
 refresh_thread = None
 
 def load_data_into_cache():
-    """Loads data from Google Sheets into cache."""
+    """Loads data from Google Sheets into cache using worksheet names."""
     print(f"Refreshing data at {datetime.now()}...")
     try:
-        # Load menu data
         workbook = get_cached_workbook()
-        menu_structure = workbook.get_worksheet(4)
-        cache["menu_df"] = clean_dataframe(menu_structure.get_all_values())
         
-        # Load services data
-        services_overview = workbook.get_worksheet(0)
-        cache["df"] = (services_overview.get_all_values())
-        columns = cache["df"][0]
-        rows = cache["df"][1:]
-        cache['services_df'] = pd.DataFrame(rows, columns=columns)
- 
-        price_distribution = workbook.get_worksheet(3)
-        cache["df3"] = (price_distribution.get_all_values())
-        columns = cache["df3"][0]
-        rows = cache["df3"][1:]
-        cache['price_distribution'] = pd.DataFrame(rows, columns=columns)
- 
-        service_providers = workbook.get_worksheet(2)
-        cache["df1"] = (service_providers.get_all_values())
-        columns = cache["df1"][0]
-        rows = cache["df1"][1:]
-        cache['service_providers'] = pd.DataFrame(rows, columns=columns)
- 
-        villas = workbook.get_worksheet(5)
-        cache["df2"] = (villas.get_all_values())
-        columns = cache["df2"][0]
-        rows = cache["df2"][1:]
-        cache['villas_data'] = pd.DataFrame(rows, columns=columns)
- 
-        # Load design data
-        services_design = workbook.get_worksheet(1)
-        cache["design_df"] = clean_dataframe(services_design.get_all_values())
- 
-        main_menu = workbook.get_worksheet(6)
-        cache["main_menu_design"] = clean_dataframe(main_menu.get_all_values())
+        # Load worksheets by name for robustness
+        cache["menu_df"] = clean_dataframe(workbook.worksheet("Menu Structure").get_all_values())
         
+        services_sheet = workbook.worksheet("Services Overview")
+        data = services_sheet.get_all_values()
+        cache['services_df'] = pd.DataFrame(data[1:], columns=data[0]) if data else pd.DataFrame()
+
+        price_distribution = workbook.worksheet("Mark-up")
+        data3 = price_distribution.get_all_values()
+        cache['price_distribution'] = pd.DataFrame(data3[1:], columns=data3[0]) if data3 else pd.DataFrame()
+
+        service_providers = workbook.worksheet("Services Providers")
+        data1 = service_providers.get_all_values()
+        cache['service_providers'] = pd.DataFrame(data1[1:], columns=data1[0]) if data1 else pd.DataFrame()
+
+        villas = workbook.worksheet("QR Codes")
+        data2 = villas.get_all_values()
+        cache['villas_data'] = pd.DataFrame(data2[1:], columns=data2[0]) if data2 else pd.DataFrame()
+
+        cache["design_df"] = clean_dataframe(workbook.worksheet("Services Designs").get_all_values())
+        cache["main_menu_design"] = clean_dataframe(workbook.worksheet("Menu Design").get_all_values())
         
-        # Update timestamp
+        # Load specialized AI Data for refined RAG context
+        try:
+            ai_data_sheet = workbook.worksheet("AI Data")
+            ai_data = ai_data_sheet.get_all_values()
+            cache["ai_data_df"] = pd.DataFrame(ai_data[1:], columns=ai_data[0]) if ai_data else pd.DataFrame()
+        except:
+            print("⚠️ 'AI Data' worksheet not found, skipping.")
+            cache["ai_data_df"] = pd.DataFrame()
+        
         cache["last_updated"] = datetime.now()
     except Exception as e:
         print(f"Error while refreshing data: {e}")

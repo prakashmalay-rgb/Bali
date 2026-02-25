@@ -25,7 +25,8 @@ class BookingRequest(BaseModel):
 async def generate_chatbot_response(request: ChatRequest, user_id: str):
     query = request.query
     chat_type = request.chat_type
-    return await generate_response(query, user_id, chat_type)
+    language = request.language
+    return await generate_response(query, user_id, chat_type, language)
 
 @router.post("/create-booking-payment")
 async def create_booking_payment(request: BookingRequest):

@@ -1,4 +1,5 @@
 import os
+from typing import Any
 from pinecone import Pinecone, ServerlessSpec
 from app.settings.config import settings
 
@@ -28,5 +29,3 @@ def get_index(index_name: str, dimension: int = 1536, metric: str = "cosine") ->
     except Exception as e:
         print(f"❌ Pinecone Error: {e}")
         return None
-
-from typing import Any

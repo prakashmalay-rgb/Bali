@@ -3,7 +3,7 @@ import axios from 'axios';
 
 const API_BASE_URL = window.location.hostname === 'localhost'
   ? 'http://localhost:8000'
-  : 'https://bali-v92r.onrender.com';
+  : (import.meta.env.VITE_API_URL || 'https://bali-v92r.onrender.com');
 
 export const chatAPI = {
   createPayment: async (userId, service) => {

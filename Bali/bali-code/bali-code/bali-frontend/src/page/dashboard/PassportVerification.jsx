@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { FiSearch, FiFileText, FiCheckCircle, FiClock, FiMaximize2, FiX } from 'react-icons/fi';
 
-const API_BASE_URL = 'https://bali-v92r.onrender.com';
+const API_BASE_URL = (import.meta.env.VITE_API_URL || 'https://bali-v92r.onrender.com');
 
 const PassportVerification = () => {
     const [passports, setPassports] = useState([]);

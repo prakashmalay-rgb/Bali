@@ -1,4 +1,4 @@
-const BASE_URL = 'https://bali-v92r.onrender.com';
+const BASE_URL = (import.meta.env.VITE_API_URL || 'https://bali-v92r.onrender.com');
 
 export const getSubMenu = async (mainMenu) => {
   try {

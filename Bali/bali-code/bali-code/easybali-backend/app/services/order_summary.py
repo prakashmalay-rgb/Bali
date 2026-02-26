@@ -59,7 +59,12 @@ async def initiate_chat_session(sender_id: str, service_name: str, person_count:
     return new_order
 
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 async def save_order_to_db(order: dict):
+    logger.info(f"Booking flow stage: Order {order.get('order_number')} created in MongoDB with status 'pending'")
     await order_collection.insert_one(order)
 
 

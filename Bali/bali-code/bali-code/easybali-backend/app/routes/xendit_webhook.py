@@ -167,17 +167,18 @@ async def handle_xendit_webhook(webhook_data: dict):
                 # ============ ENHANCED: Handle failed payments for both connections ============
                 order_data = await order_collection.find_one({"order_number": order_number})
                 if order_data:
+                    logger.info(f"Booking flow stage: Payment failed for order {order_number} - initiating recovery.")
                     await handle_payment_failure_or_expiry(
                         order_data, 
-                        f"❌ Payment failed for order {order_number}. Please try again or contact us for assistance.",
+                        f"❌ Payment failed for order {order_number}. Please simply type 'Pay' or 'Retry' to generate a new secure payment link.",
                         "payment_failed"
                     )
                 
-                logger.info(f"Payment failure handled for order {order_number}")
+                logger.info(f"Payment failure handled (Error Recovery Initialized) for order {order_number}")
             return True
 
         else:
-            logger.info(f"Webhook status '{webhook_data.get('status')}' - no action required")
+            logger.info(f"Booking flow stage: Webhook status '{webhook_data.get('status')}' - no action required")
             return True
 
     except Exception as e:

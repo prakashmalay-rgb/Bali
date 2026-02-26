@@ -14,6 +14,7 @@ from app.db.session import order_collection
 from app.models.order_summary import Order
 from app.settings.config import settings
 import logging
+import asyncio
 
 
 logger = logging.getLogger(__name__)
@@ -252,17 +253,34 @@ async def create_bank_disbursement(client: httpx.AsyncClient, amount: int, bank_
         headers = {
             "Authorization": f"Basic {token}",
             "Content-Type": "application/json",
-            # "X-IDEMPOTENCY-KEY": reference_id  # Optional but recommended
+            "X-IDEMPOTENCY-KEY": reference_id  # Ensures idempotency for retries
         }
 
-        # Send request
-        response = await client.post(
-            "https://api.xendit.co/disbursements",
-            json=disbursement_data,
-            headers=headers
-        )
-        response.raise_for_status()
-        result = response.json()
+        # Send request with max retries and timeout
+        max_retries = 3
+        timeout_setting = httpx.Timeout(15.0)  # Add timeout handled explicitly
+        for attempt in range(max_retries):
+            try:
+                response = await client.post(
+                    "https://api.xendit.co/disbursements",
+                    json=disbursement_data,
+                    headers=headers,
+                    timeout=timeout_setting
+                )
+                response.raise_for_status()
+                result = response.json()
+                logger.info(f"Booking flow stage: Disbursement complete for {reference_id} on attempt {attempt+1}")
+                break
+            except httpx.TimeoutException as te:
+                logger.warning(f"Booking flow stage: Timeout error creating disbursement {reference_id} on attempt {attempt+1}: {str(te)}")
+                if attempt == max_retries - 1:
+                    return {"success": False, "error": f"Timeout creating disbursement after {max_retries} retries"}
+                await asyncio.sleep(2 ** attempt)  # Exponential backoff
+            except httpx.HTTPError as e:
+                logger.error(f"Booking flow stage: HTTP Error creating disbursement {reference_id}: {str(e)}")
+                if attempt == max_retries - 1:
+                    return {"success": False, "error": str(e)}
+                await asyncio.sleep(2 ** attempt)
 
         return {
             "success": True,

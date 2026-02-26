@@ -209,7 +209,7 @@ async def get_bank_details_for_villa(provider_code: str):
 
 
 @router.get("/price_distribution")
-async def get_price_distribution_details(service_item: str):
+async def get_price_distribution_details(service_item: str, location_zone: str = None):
     try:
         price_df = await get_price_distribution()
 
@@ -240,12 +240,21 @@ async def get_price_distribution_details(service_item: str):
                         detail=f"Service '{service_item}' not found. Available services: {available_services.tolist()}"
                     )
         
+        # Determine correct pricing column based on zone
+        villa_price_col = "Villa Comm"
+        if location_zone and location_zone in price_row:
+            zone_val = str(price_row.get(location_zone, "")).strip()
+            if zone_val and zone_val != "nan":
+                villa_price_col = location_zone
+                
         # Extract and return the data
         price_details = {
             "service_item": service_item,
             "matched_service": price_row.get("Service Item", ""),
             "service_provider_price": price_row.get("Vendor Price", ""),
-            "villa_price": price_row.get("Villa Comm", ""),
+            "villa_price": price_row.get(villa_price_col, ""),
+            "applied_zone": villa_price_col,
+            "location_zone": location_zone
         }
         return price_details
         

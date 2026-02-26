@@ -428,3 +428,20 @@ async def get_villa_code_by_name(villa_name: str):
     except Exception as e:
         print(f"Error retrieving villa code: {e}")
         return None
+
+async def get_villa_location_by_code(villa_code: str):
+    if cache["villas_data"] is None:
+        raise ValueError("Villa data not loaded")
+    
+    try:
+        villas_df = cache["villas_data"]
+        matching_villa = villas_df[villas_df["Number"] == villa_code]
+        
+        if matching_villa.empty:
+            return None
+            
+        return matching_villa.iloc[0].get("Location")
+        
+    except Exception as e:
+        print(f"Error retrieving villa location: {e}")
+        return None

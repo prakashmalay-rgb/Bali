@@ -13,6 +13,7 @@ import datetime
 from app.db.session import order_collection
 from app.models.order_summary import Order
 from app.settings.config import settings
+from app.services.menu_services import get_villa_location_by_code
 import logging
 import asyncio
 
@@ -80,10 +81,12 @@ async def get_villa_bank_details(provider_code: str) -> dict:
         return None
 
 
-async def get_price_distribution(service_item: str) -> dict:
+async def get_price_distribution(service_item: str, location_zone: str = None) -> dict:
     """Fetch price distribution for service item"""
     try:
         params = {"service_item": service_item}
+        if location_zone:
+            params["location_zone"] = location_zone
         url = f"{settings.BASE_URL}/menu/price_distribution"
         
         print(f"🔍 Fetching price distribution for: '{service_item}'")
@@ -107,8 +110,11 @@ async def get_price_distribution(service_item: str) -> dict:
 async def create_xendit_payment_with_distribution(order: Order):
     """Create payment invoice and prepare distribution data"""
     try:
-        # Get price distribution
-        price_distribution = await get_price_distribution(order.service_name)
+        # Resolve location zone from villa_code for dynamic pricing
+        location_zone = await get_villa_location_by_code(order.villa_code)
+        
+        # Get price distribution using specific location zone
+        price_distribution = await get_price_distribution(order.service_name, location_zone)
         if not price_distribution:
             return {
                 'success': False,

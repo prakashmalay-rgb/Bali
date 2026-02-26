@@ -70,6 +70,28 @@ export const chatAPI = {
     }
   },
 
+  // Upload Audio for transcription (Whisper)
+  uploadAudio: async (audioBlob) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', audioBlob, 'audio.webm');
+
+      const response = await axios.post(
+        `${API_BASE_URL}/chatbot/upload-audio`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error uploading audio for transcription:', error);
+      throw error;
+    }
+  },
+
   // Get or create user ID
   getUserId: () => {
     let userId = localStorage.getItem('userId');

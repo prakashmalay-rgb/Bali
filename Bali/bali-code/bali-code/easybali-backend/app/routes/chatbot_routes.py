@@ -110,3 +110,28 @@ async def upload_passport_file(user_id: str = Form(...), file: UploadFile = File
         return {"response": f"Awesome! I've successfully received and securely stored your passport image: [View Document]({file_url})\n\nIs there anything else I can help you with today?"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+from app.services.openai_client import client
+
+@router.post("/upload-audio")
+async def upload_audio_file(file: UploadFile = File(...)):
+    try:
+        # Read the file bytes
+        file_bytes = await file.read()
+        
+        # Whisper requires a file-like object with a filename (including extension)
+        import io
+        audio_file = io.BytesIO(file_bytes)
+        audio_file.name = file.filename if file.filename else "audio.webm"
+        
+        # Call OpenAI Whisper transcription
+        transcript = await client.audio.transcriptions.create(
+            file=audio_file,
+            model="whisper-1",
+            response_format="text"
+        )
+        
+        return {"transcript": transcript}
+    except Exception as e:
+        print(f"Error in Whisper audio upload: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

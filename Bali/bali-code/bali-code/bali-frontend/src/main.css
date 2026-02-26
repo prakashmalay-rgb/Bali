@@ -165,7 +165,7 @@ select option:checked {
 }
 
 .card-bg {
-  background-image: url('./assets/images/card.png');
+  background-image: url('./assets/images/card.webp');
   object-fit: cover;
   background-size: cover;
   background-repeat: no-repeat;

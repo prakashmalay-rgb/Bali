@@ -133,4 +133,81 @@ async def get_order_by_number(order_number: str) -> Optional[dict]:
     except Exception as e:
         print(f"Error fetching order {order_number}: {e}")
         return None
-    
+
+
+# ──────────────────────────────────────────────────────────────
+# CONTAINERIZED: Booking Cancellation Flow
+# ──────────────────────────────────────────────────────────────
+async def cancel_order(order_number: str, reason: str = "User cancelled") -> dict:
+    """Cancel a booking if it hasn't been paid yet."""
+    try:
+        order_doc = await order_collection.find_one({"order_number": order_number})
+        if not order_doc:
+            return {"success": False, "error": f"Order {order_number} not found"}
+        
+        current_status = order_doc.get("status", "")
+        if current_status == "PAID":
+            return {"success": False, "error": "Cannot cancel a paid order. Contact support for refunds."}
+        if current_status == "cancelled":
+            return {"success": False, "error": "Order is already cancelled."}
+        
+        await order_collection.find_one_and_update(
+            {"order_number": order_number},
+            {"$set": {
+                "status": "cancelled",
+                "cancellation_reason": reason,
+                "cancelled_at": datetime.now(),
+                "updated_at": datetime.now()
+            }},
+            return_document=ReturnDocument.AFTER
+        )
+        logger.info(f"Booking flow stage: Order {order_number} cancelled. Reason: {reason}")
+        return {"success": True, "message": f"Order {order_number} has been cancelled."}
+    except Exception as e:
+        logger.error(f"Error cancelling order {order_number}: {e}")
+        return {"success": False, "error": str(e)}
+
+
+# ──────────────────────────────────────────────────────────────
+# CONTAINERIZED: Booking History Endpoint
+# ──────────────────────────────────────────────────────────────
+async def get_booking_history(sender_id: str, page: int = 1, limit: int = 20) -> dict:
+    """Get paginated booking history for a user."""
+    try:
+        skip = (page - 1) * limit
+        total = await order_collection.count_documents({"sender_id": sender_id})
+        
+        cursor = order_collection.find({"sender_id": sender_id}).sort("created_at", -1).skip(skip).limit(limit)
+        orders = await cursor.to_list(length=limit)
+        
+        history = []
+        for order in orders:
+            order_date = order.get("date")
+            if order_date and isinstance(order_date, datetime):
+                order_date = order_date.strftime("%d-%m-%Y")
+            elif not isinstance(order_date, str):
+                order_date = "N/A"
+            
+            history.append({
+                "order_number": order.get("order_number"),
+                "service_name": order.get("service_name"),
+                "date": order_date,
+                "time": order.get("time", "N/A"),
+                "price": order.get("price", "N/A"),
+                "status": order.get("status", "pending"),
+                "villa_code": order.get("villa_code", "N/A"),
+                "created_at": order.get("created_at").isoformat() if order.get("created_at") else None,
+                "cancellation_reason": order.get("cancellation_reason")
+            })
+        
+        return {
+            "success": True,
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "bookings": history
+        }
+    except Exception as e:
+        logger.error(f"Error fetching booking history for {sender_id}: {e}")
+        return {"success": False, "error": str(e), "bookings": []}
+

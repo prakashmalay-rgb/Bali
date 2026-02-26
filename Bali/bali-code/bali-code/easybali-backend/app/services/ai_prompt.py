@@ -76,17 +76,23 @@ class ConciergeAI:
             if index is None: return ""
 
             embed = await client.embeddings.create(input=query, model="text-embedding-ada-002")
-            res = index.query(vector=embed.data[0].embedding, top_k=3, include_metadata=True)
+            res = index.query(vector=embed.data[0].embedding, top_k=5, include_metadata=True)
             
-            matches = [m["metadata"].get("text", "") for m in res.get("matches", []) if m.get("score", 0) > 0.75]
+            all_matches = res.get("matches", [])
+            high_confidence = [m for m in all_matches if m.get("score", 0) > 0.75]
+            matches = [m["metadata"].get("text", "") for m in high_confidence]
             
-            # Monitor RAG Retrieval Accuracy logs
-            if matches:
-                logger.info(f"RAG Retrieval SUCCESS [{index_name}]: Found {len(matches)} high-confidence matches.")
-                return "\n\n".join(matches)
-            else:
-                logger.warning(f"RAG Retrieval MISS [{index_name}]: No matches above 75% confidence. Falling back to LLM reasoning.")
-                return ""
+            # ── RAG Retrieval Accuracy Monitoring ──
+            all_scores = [round(m.get("score", 0), 4) for m in all_matches]
+            avg_score = round(sum(all_scores) / len(all_scores), 4) if all_scores else 0
+            logger.info(
+                f"RAG Monitor [{index_name}] | query='{query[:80]}' | "
+                f"total_hits={len(all_matches)} | above_threshold={len(high_confidence)} | "
+                f"scores={all_scores} | avg_score={avg_score} | "
+                f"verdict={'HIT' if matches else 'MISS → LLM fallback'}"
+            )
+            
+            return "\n\n".join(matches) if matches else ""
                 
         except Exception as e:
             logger.error(f"RAG Error: {e}")

@@ -93,6 +93,31 @@ async def create_booking_payment(request: BookingRequest):
         print(f"Error in create_booking_payment: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ──────────────────────────────────────────────────────────────
+# CONTAINERIZED: Booking Cancellation
+# ──────────────────────────────────────────────────────────────
+class CancelRequest(BaseModel):
+    order_number: str
+    reason: Optional[str] = "User cancelled"
+
+@router.post("/cancel-booking")
+async def cancel_booking(request: CancelRequest):
+    from app.services.order_summary import cancel_order
+    result = await cancel_order(request.order_number, request.reason)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error"))
+    return result
+
+
+# ──────────────────────────────────────────────────────────────
+# CONTAINERIZED: Booking History
+# ──────────────────────────────────────────────────────────────
+@router.get("/booking-history/{user_id}")
+async def booking_history(user_id: str, page: int = 1, limit: int = 20):
+    from app.services.order_summary import get_booking_history
+    return await get_booking_history(user_id, page, limit)
+
 @router.post("/upload-passport")
 async def upload_passport_file(user_id: str = Form(...), file: UploadFile = File(...)):
     try:

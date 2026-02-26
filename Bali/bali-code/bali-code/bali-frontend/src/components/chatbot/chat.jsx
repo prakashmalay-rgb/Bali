@@ -878,7 +878,7 @@ const Chat = () => {
   ];
 
   return (
-    <div className="chat relative flex gap-5 p-2 md:p-2 min-h-screen">
+    <div className="chat relative flex gap-5 p-2 md:p-2 min-h-screen" role="main" aria-label="EASYBali Chatbot">
       <img
         src={topLeftPng}
         alt="Top Left Icon"
@@ -896,6 +896,8 @@ const Chat = () => {
         />
       )}
       <div
+        role="navigation"
+        aria-label="Service menu"
         className={`asidebar flex flex-col gap-10 items-center w-[320px] bg-[#DEDEDE] rounded-[30px] p-5 transition-transform duration-300 ease-in-out
         ${isMobileMenuOpen ? "translate-x-0" : "translate-x-full"}
         md:translate-x-0 md:static fixed top-2 right-2 bottom-2 z-50 md:z-auto
@@ -911,6 +913,7 @@ const Chat = () => {
           <button
             className="md:hidden p-2"
             onClick={() => setIsMobileMenuOpen(false)}
+            aria-label="Close menu"
           >
             <svg
               width="24"
@@ -925,10 +928,12 @@ const Chat = () => {
             </svg>
           </button>
         </div>
-        <div className="flex flex-col w-full">
+        <div className="flex flex-col w-full" role="menubar" aria-label="Chat services">
           {menuItems.map((item) => (
             <button
               key={item.id}
+              role="menuitem"
+              aria-current={activeTab === item.id ? "page" : undefined}
               onClick={() => handleMenuClick(item.id)}
               className={`text-[16px] flex items-center justify-start gap-3 font-medium w-full px-4 py-5 rounded-[50px] transition hover:bg-[#FF8000] hover:text-white group shadow-none ${loadingItem === item.id
                 ? "opacity-50 cursor-not-allowed"
@@ -954,10 +959,12 @@ const Chat = () => {
           ))}
         </div>
         <div className="flex flex-col w-full px-4 mb-4">
-          <label className="text-[12px] font-bold text-gray-500 mb-2 uppercase tracking-wider">{t("location_zone") || "Location Zone"}</label>
+          <label htmlFor="location-zone-select" className="text-[12px] font-bold text-gray-500 mb-2 uppercase tracking-wider">{t("location_zone") || "Location Zone"}</label>
           <select
+            id="location-zone-select"
             value={locationZone}
             onChange={(e) => setLocationZone(e.target.value)}
+            aria-label="Select location zone"
             className="w-full bg-white border border-gray-300 rounded-[20px] px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-[#FF8000]"
           >
             <option value="Seminyak">Seminyak</option>
@@ -974,6 +981,7 @@ const Chat = () => {
             <button
               className="md:hidden p-2"
               onClick={() => setIsMobileMenuOpen(true)}
+              aria-label="Open menu"
             >
               <svg
                 width="24"
@@ -993,8 +1001,12 @@ const Chat = () => {
             </h5>
           </div>
           <div
-            className="flex justify-center items-center size-12 md:size-16 rounded-full border-[1px] border-solid border-black cursor-pointer hover:bg-black hover:text-white transition-all"
+            role="button"
+            tabIndex={0}
+            aria-label={`Switch language, current: ${language}`}
+            className="flex justify-center items-center size-12 md:size-16 rounded-full border-[1px] border-solid border-black cursor-pointer hover:bg-black hover:text-white transition-all focus:outline-none focus:ring-2 focus:ring-orange-500"
             onClick={toggleLanguage}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleLanguage(); }}
           >
             <h6 className="font-semibold text-sm md:text-base">{language}</h6>
           </div>

@@ -1,6 +1,5 @@
 import { createRoot } from "react-dom/client";
 import { ErrorBoundary } from "react-error-boundary";
-import { HelmetProvider } from "react-helmet-async";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -17,24 +16,21 @@ root.render(
   <ErrorBoundary
     FallbackComponent={ErrorFallback}
     onReset={() => {
-      // Logic to reset state if needed
       window.location.reload();
     }}
   >
-    <HelmetProvider>
-      <AppLayout />
-      <ToastContainer
-        position="bottom-right"
-        autoClose={4000}
-        hideProgressBar={false}
-        newestOnTop
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        theme="light"
-      />
-    </HelmetProvider>
+    <AppLayout />
+    <ToastContainer
+      position="bottom-right"
+      autoClose={4000}
+      hideProgressBar={false}
+      newestOnTop
+      closeOnClick
+      rtl={false}
+      pauseOnFocusLoss
+      draggable
+      pauseOnHover
+      theme="light"
+    />
   </ErrorBoundary>
 );

@@ -1,8 +1,4 @@
 {
-  "scripts": {
-    "build": "npm run build --prefix Bali/bali-code/bali-code/bali-frontend",
-    "install": "npm install --prefix Bali/bali-code/bali-code/bali-frontend"
-  },
   "dependencies": {
     "mammoth": "^1.11.0",
     "mongodb": "^7.1.0",

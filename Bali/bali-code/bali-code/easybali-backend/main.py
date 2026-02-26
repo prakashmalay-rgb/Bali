@@ -1,117 +1,141 @@
-from fastapi import FastAPI, Depends, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import logging
 
-try:
-    from app.routes import (
-        whatsapp_routes, xendit_webhook, chatbot_routes, currency_route, event_calender, 
-        language_lesson, local_cuisine, main_menu_routes, plan_my_trip, things_to_do_in_Bali, 
-        villa_links, websockett, what_to_do
-    )
-except ImportError as e:
-    logging.warning(f"Could not import some routes: {e}")
+# ── Core services ──────────────────────────────────────────────────────────────
+from app.services.menu_services import start_cache_refresh, stop_cache_refresh
+from app.services.openai_client import client
+from app.settings.config import settings
 
-# Configure basic logging
+# ── Routers ─────────────────────────────────────────────────────────────────────
+from app.routes.chatbot_routes import router as chatbot_router
+from app.routes.whatsapp_routes import router as whatsapp_router
+from app.routes.currency_route import router as currency_router
+from app.routes.event_calender import router as event_calender_router
+from app.routes.language_lesson import router as language_lesson_router
+from app.routes.local_cuisine import router as local_cuisine_router
+from app.routes.main_menu_routes import router as main_menu_router
+from app.routes.plan_my_trip import router as plan_my_trip_router
+from app.routes.things_to_do_in_Bali import router as things_bali_router
+from app.routes.villa_links import router as villa_links_router
+from app.routes.websockett import router as websocket_router
+from app.routes.what_to_do import router as what_to_do_router
+from app.routes.onboarding import router as onboarding_router
+from app.routes.passport_routes import router as passport_router
+from app.routes.issue_routes import router as issue_router
+from app.routes.admin_routes import router as admin_router
+from app.routes.dashboard_routes import router as dashboard_router
+from app.routes.admin_users import router as admin_users_router
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="EASY Bali Backend",
-    description="API for EASY Bali Whatsapp Bot, Host Dashboard, and Xendit Integration",
-    version="1.0.0"
+    description="API for EASY Bali Chatbot, Host Dashboard, WhatsApp AI, and Xendit Integration",
+    version="2.0.0"
 )
 
-# Set up CORS for the frontend dashboard
-origins = [
-    "http://localhost:3000",
-    "http://localhost:5173", # Vite dev server
-    "https://www.easy-bali.com",
-    "https://easy-bali.onrender.com",
-    "https://bali-v92r.onrender.com",
-    "https://bali-3o33wubjp-prakashmalay-4140s-projects.vercel.app",
-    "https://bali-zeta.vercel.app"
-]
-
+# ── CORS ──────────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "https://www.easy-bali.com",
+        "https://easy-bali.onrender.com",
+        "https://bali-v92r.onrender.com",
+        "https://bali-zeta.vercel.app",
+        "*"  # Broad CORS fallback for staging
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Root/Healthcheck
+# ── Security Headers ──────────────────────────────────────────────────────────
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    return response
+
+# ── Register All Routers ──────────────────────────────────────────────────────
+app.include_router(chatbot_router)
+app.include_router(whatsapp_router)
+app.include_router(currency_router)
+app.include_router(event_calender_router)
+app.include_router(language_lesson_router)
+app.include_router(local_cuisine_router)
+app.include_router(main_menu_router)
+app.include_router(plan_my_trip_router)
+app.include_router(things_bali_router)
+app.include_router(villa_links_router)
+app.include_router(websocket_router)
+app.include_router(what_to_do_router)
+app.include_router(onboarding_router)
+app.include_router(passport_router)
+app.include_router(issue_router)
+app.include_router(admin_router)
+app.include_router(dashboard_router)
+app.include_router(admin_users_router)
+
+# ── Optionally register xendit webhook if it exists ─────────────────────────
+try:
+    from app.routes.xendit_webhook import router as xendit_router
+    app.include_router(xendit_router)
+except ImportError:
+    logger.warning("xendit_webhook router not found, skipping.")
+
+# ── Startup / Shutdown ────────────────────────────────────────────────────────
+@app.on_event("startup")
+async def startup_event():
+    logger.info("Starting cache refresh service...")
+    start_cache_refresh()
+
+    import asyncio
+    # Start WhatsApp message queue
+    try:
+        from app.services.whatsapp_queue import whatsapp_queue
+        asyncio.create_task(whatsapp_queue.process_queue())
+        logger.info("🚀 WhatsApp message queue processor started!")
+    except Exception as e:
+        logger.warning(f"WhatsApp queue not started: {e}")
+
+    # Start automation butler
+    try:
+        from app.services.automation_butler import process_automations
+        asyncio.create_task(process_automations())
+        logger.info("🤖 Automation Butler started!")
+    except Exception as e:
+        logger.warning(f"Automation butler not started: {e}")
+
+    # OpenAI system check
+    try:
+        await client.chat.completions.create(
+            model=settings.OPENAI_MODEL_NAME,
+            messages=[{"role": "system", "content": "System check"}]
+        )
+        logger.info("✅ OpenAI check successful!")
+    except Exception as e:
+        logger.error(f"❌ OpenAI check failed: {e}")
+
+@app.on_event("shutdown")
+def shutdown_event():
+    logger.info("Stopping cache refresh service...")
+    stop_cache_refresh()
+
+# ── Root / Healthcheck ─────────────────────────────────────────────────────────
 @app.api_route("/", methods=["GET", "HEAD"], tags=["Health"])
 async def root():
     return {
         "status": "online",
-        "service": "EASY Bali API",
-        "message": "Production-grade backend initialized successfully.",
+        "service": "EASY Bali API v2",
+        "message": "All systems operational."
     }
-
-# Register Routers safely
-try:
-    from app.services.menu_services import start_cache_refresh, stop_cache_refresh
-    from app.services.openai_client import client
-    from app.settings.config import settings
-    from app.services.automation_butler import process_automations
-
-    @app.on_event("startup")
-    async def startup_event():
-        logger.info("Starting cache refresh service...")
-        start_cache_refresh()
-        
-        # Start WhatsApp queue processor
-        from app.services.whatsapp_queue import whatsapp_queue
-        import asyncio
-        asyncio.create_task(whatsapp_queue.process_queue())
-        logger.info("🚀 WhatsApp message queue processor started!")
-        
-        # Start automation task
-        asyncio.create_task(process_automations())
-        logger.info("🤖 Automation Butler started!")
-        
-        # System check for OpenAI
-        try:
-            logger.info("Running OpenAI system check...")
-            await client.chat.completions.create(
-                model=settings.OPENAI_MODEL_NAME,
-                messages=[{"role": "system", "content": "System check"}]
-            )
-            logger.info("✅ OpenAI check successful!")
-        except Exception as e:
-            logger.error(f"❌ OpenAI check failed: {e}")
-
-    @app.on_event("shutdown")
-    def shutdown_event():
-        logger.info("Stopping cache refresh service...")
-        stop_cache_refresh()
-
-    app.include_router(whatsapp_routes.router)
-    app.include_router(chatbot_routes.router)
-    app.include_router(currency_route.router)
-    app.include_router(event_calender.router)
-    app.include_router(language_lesson.router)
-    app.include_router(local_cuisine.router)
-    app.include_router(main_menu_routes.router)
-    app.include_router(plan_my_trip.router)
-    app.include_router(things_to_do_in_Bali.router)
-    app.include_router(villa_links.router)
-    app.include_router(websockett.router)
-    app.include_router(what_to_do.router)
-    from app.routes.onboarding import router as onboarding_router
-    from app.routes.passport_routes import router as passport_router
-    from app.routes.issue_routes import router as issue_router
-    app.include_router(onboarding_router)
-    app.include_router(passport_router)
-    app.include_router(issue_router)
-    
-    from app.routes import dashboard_routes, admin_routes
-    app.include_router(dashboard_routes.router)
-    app.include_router(admin_routes.router)
-except Exception as e:
-    logger.error(f"Skipping some router registrations due to errors: {e}")
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

@@ -91,5 +91,6 @@ websockets==13.1
 xendit-python==7.0.0
 zope.interface==7.2
 PyJWT==2.10.1
+python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.1.2

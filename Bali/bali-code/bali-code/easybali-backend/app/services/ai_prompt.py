@@ -62,13 +62,30 @@ class ConciergeAI:
 
     async def get_rag_context(self, query: str, chat_type: str = "general") -> str:
         try:
-            index_name = "things-to-do-in-bali" if chat_type == "things-to-do-in-bali" else self.service_index
+            # Query specific indexes, falling back to villa-faqs for general questions
+            if chat_type == "things-to-do-in-bali":
+                index_name = "things-to-do-in-bali"
+            elif chat_type == "local-cuisine":
+                index_name = "local-cuisine"
+            else:
+                index_name = "villa-faqs" # Primary fallback for general queries/house rules
+                
             index = get_index(index_name)
             if index is None: return ""
 
             embed = await client.embeddings.create(input=query, model="text-embedding-ada-002")
             res = index.query(vector=embed.data[0].embedding, top_k=3, include_metadata=True)
-            return "\n\n".join([m["metadata"].get("text", "") for m in res.get("matches", [])])
+            
+            matches = [m["metadata"].get("text", "") for m in res.get("matches", []) if m.get("score", 0) > 0.75]
+            
+            # Monitor RAG Retrieval Accuracy logs
+            if matches:
+                logger.info(f"RAG Retrieval SUCCESS [{index_name}]: Found {len(matches)} high-confidence matches.")
+                return "\n\n".join(matches)
+            else:
+                logger.warning(f"RAG Retrieval MISS [{index_name}]: No matches above 75% confidence. Falling back to LLM reasoning.")
+                return ""
+                
         except Exception as e:
             logger.error(f"RAG Error: {e}")
             return ""
@@ -118,14 +135,15 @@ class ConciergeAI:
                 INTERNAL DB (PRIORITY): 
                 {sheet_ctx if sheet_ctx else "No internal sheet data."}
                 
-                EXTERNAL KNOWLEDGE: 
-                {rag_ctx if rag_ctx else "Use general knowledge."}
+                EXTERNAL KNOWLEDGE (RAG VILLA FAQs): 
+                {rag_ctx if rag_ctx else "No specific context provided. You must fall back to your own LLM reasoning and internal general knowledge. Do not state that you lack context or are an AI."}
                 
                 RULES:
                 1. Language: {language}
                 2. Local First: Use INTERNAL DB for any service/price question.
                 3. Voice Friendly: Keep responses under 3 sentences for better text-to-speech.
                 4. Rules of Villa: {rules}
+                5. LLM Fallback: If EXTERNAL KNOWLEDGE is empty, synthesize the best possible logical answer based on standard hospitality reasoning without hesitation.
                 
                 CONVERSATION HISTORY:
                 {formatted_history}

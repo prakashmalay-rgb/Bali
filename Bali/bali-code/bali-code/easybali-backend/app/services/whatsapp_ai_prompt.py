@@ -70,7 +70,7 @@ def _clean_ai_response(text: str) -> str:
     return text
 
 
-async def whatsapp_response(query: str, user_id: str) -> Dict[str, Any]:
+async def whatsapp_response(query: str, user_id: str, villa_code: str = "WEB_VILLA_01") -> Dict[str, Any]:
     try:
         service_check = await ai_menu_generator.intelligent_service_check(query)
     
@@ -116,15 +116,23 @@ DETECTED INTENT:
         # Get RAG context
         context = ""
         try:
-            index = get_index("ai-data")
+            # Primary villa-specific index
+            index_name = "villa-faqs"
+            index = get_index(index_name)
+            
             embed = await client.embeddings.create(
                 input=query,
                 model="text-embedding-ada-002"
             )
+            
+            # Filter matches by villa_code (Isolation Principle)
+            filter_dict = {"villa_code": villa_code}
+            
             results = index.query(
                 vector=embed.data[0].embedding,
                 top_k=5,
-                include_metadata=True
+                include_metadata=True,
+                filter=filter_dict
             )
             matches = results.get("matches", [])
             if matches:
@@ -168,10 +176,10 @@ DETECTED INTENT:
             all_examples = specific_examples + general_examples
             examples_block = "\n".join(f"- {ex}" for ex in all_examples[:3])
 
-            prompt = f"""You are **EASYBali**, a helpful AI concierge for luxury villa guests in Bali.
-
-KNOWLEDGE BASE CONTEXT (PRIMARY SOURCE):
-{context if context else "No direct data found in spreadsheet. Use general EASYBali knowledge."}
+            prompt = f"""You are **EASYBali**, a helpful AI concierge for luxury villa guests at villa: {villa_code}.
+ 
+ KNOWLEDGE BASE CONTEXT (PRIMARY SOURCE for {villa_code}):
+ {context if context else f"No direct data found for this villa. Use general EASYBali knowledge but keep it relevant to {villa_code} guests."}
 
 Recent conversation:
 {conversation[-5:]}
@@ -201,9 +209,9 @@ Now reply briefly:"""
             requested_service_name = service_check.get("requested_service", "that service")
             
             prompt = f"""{EASYBALI_CORE_IDENTITY}
-
-KNOWLEDGE BASE CONTEXT (PRIMARY SOURCE):
-{context if context else "Note: No specific spreadsheet data found for this query."}
+ 
+ KNOWLEDGE BASE CONTEXT (PRIMARY SOURCE for {villa_code}):
+ {context if context else "Note: No specific spreadsheet data found for this query."}
 
 CONVERSATION HISTORY:
 {conversation_context}
@@ -241,9 +249,9 @@ YOUR RESPONSE:"""
             conversation_context = _format_conversation_history(conversation)
             
             prompt = f"""{EASYBALI_CORE_IDENTITY}
-
-KNOWLEDGE BASE CONTEXT (MANDATORY PRIMARY SOURCE):
-{context if context else "Note: No specific spreadsheet data found for this query. Use internal knowledge but stay aligned with EASYBali standards."}
+ 
+ KNOWLEDGE BASE CONTEXT (MANDATORY PRIMARY SOURCE for {villa_code}):
+ {context if context else f"Note: No specific spreadsheet data found for {villa_code}. Use internal knowledge but stay aligned with EASYBali standards for this villa."}
 
 CONVERSATION HISTORY:
 {conversation_context}

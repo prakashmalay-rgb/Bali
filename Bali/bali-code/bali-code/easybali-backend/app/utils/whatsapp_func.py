@@ -1854,7 +1854,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
 
             else:
                 if message_text:
-                    ai_result = await whatsapp_response(message_text, sender_id)
+                    ai_result = await whatsapp_response(message_text, sender_id, user_villa_code or "WEB_VILLA_01")
 
                     print(ai_result)
                     

@@ -11,8 +11,24 @@ const DashboardMain = () => {
     });
 
     const [recentActivity, setRecentActivity] = useState([]);
+    const [user, setUser] = useState(null);
 
     useEffect(() => {
+        const token = localStorage.getItem('easybali_token');
+        if (token) {
+            try {
+                const payloadStr = atob(token.split('.')[1]);
+                const payload = JSON.parse(payloadStr);
+                setUser({
+                    email: payload.email,
+                    role: payload.role || 'staff',
+                    villa_code: payload.villa_code
+                });
+            } catch (err) {
+                console.error("Failed to parse token", err);
+            }
+        }
+
         const fetchDashboardStats = async () => {
             try {
                 const baseUrl = (import.meta.env.VITE_API_URL || 'https://bali-v92r.onrender.com');
@@ -69,7 +85,9 @@ const DashboardMain = () => {
         <div className="space-y-8 fade-in">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-neutral tracking-tight">Welcome back, Admin 👋</h1>
+                    <h1 className="text-3xl font-bold text-neutral tracking-tight">
+                        Welcome back, {user?.email ? user.email.split('@')[0] : 'Admin'} 👋
+                    </h1>
                     <p className="text-lightneutral mt-1">Here is what is happening across your villas today.</p>
                 </div>
                 <button className="bg-primary hover:bg-[#0B97EE] text-white px-6 py-2.5 rounded-xl font-semibold shadow-blue-shadow transition-all transform hover:scale-[1.02]">

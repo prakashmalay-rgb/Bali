@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
     FiHome,
@@ -12,8 +12,26 @@ import {
 
 const DashboardLayout = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [user, setUser] = useState(null);
     const navigate = useNavigate();
     const location = useLocation();
+
+    useEffect(() => {
+        const token = localStorage.getItem('easybali_token');
+        if (token) {
+            try {
+                const payloadStr = atob(token.split('.')[1]);
+                const payload = JSON.parse(payloadStr);
+                setUser({
+                    email: payload.email,
+                    role: payload.role || 'staff',
+                    villa_code: payload.villa_code
+                });
+            } catch (err) {
+                console.error("Failed to parse token", err);
+            }
+        }
+    }, []);
 
     const handleLogout = () => {
         // Clear tokens
@@ -21,12 +39,16 @@ const DashboardLayout = () => {
         navigate('/admin/login');
     };
 
-    const navItems = [
-        { path: '/dashboard', icon: <FiHome className="text-xl" />, label: 'Overview' },
-        { path: '/dashboard/guests', icon: <FiUser className="text-xl" />, label: 'Guest Activity' },
-        { path: '/dashboard/chats', icon: <FiMessageSquare className="text-xl" />, label: 'Concierge Chats' },
-        { path: '/dashboard/passports', icon: <FiFileText className="text-xl" />, label: 'Passports' },
+    let navItems = [
+        { path: '/dashboard', icon: <FiHome className="text-xl" />, label: 'Overview', roles: ['admin', 'staff', 'read_only'] },
+        { path: '/dashboard/guests', icon: <FiUser className="text-xl" />, label: 'Guest Activity', roles: ['admin', 'staff', 'read_only'] },
+        { path: '/dashboard/chats', icon: <FiMessageSquare className="text-xl" />, label: 'Concierge Chats', roles: ['admin', 'staff'] },
+        { path: '/dashboard/passports', icon: <FiFileText className="text-xl" />, label: 'Passports', roles: ['admin'] },
     ];
+
+    if (user) {
+        navItems = navItems.filter(item => item.roles.includes(user.role));
+    }
 
     return (
         <div className="flex h-screen bg-[#F7F8F9] font-sans overflow-hidden">
@@ -105,12 +127,15 @@ const DashboardLayout = () => {
 
                     <div className="flex-1 flex justify-end items-center gap-6">
                         <div className="flex items-center gap-3 bg-white py-2 px-4 rounded-full shadow-sm border border-gray-100">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-primary to-[#0B97EE] flex items-center justify-center text-white font-bold text-sm">
-                                VM
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-primary to-[#0B97EE] flex items-center justify-center text-white font-bold text-sm uppercase">
+                                {user?.email ? user.email.charAt(0) : 'U'}
                             </div>
                             <div className="hidden md:block">
-                                <p className="text-sm font-bold text-neutral">Villa Manager</p>
-                                <p className="text-xs text-lightneutral">Super Admin</p>
+                                <p className="text-sm font-bold text-neutral truncate max-w-[150px]">{user?.email || 'User'}</p>
+                                <p className="text-xs text-lightneutral capitalize">
+                                    {user ? user.role.replace('_', ' ') : 'Role'}
+                                    {user?.villa_code ? ` • ${user.villa_code}` : ''}
+                                </p>
                             </div>
                         </div>
                     </div>

@@ -55,6 +55,7 @@ try:
     from app.services.menu_services import start_cache_refresh, stop_cache_refresh
     from app.services.openai_client import client
     from app.settings.config import settings
+    from app.services.automation_butler import process_automations
 
     @app.on_event("startup")
     async def startup_event():
@@ -66,6 +67,10 @@ try:
         import asyncio
         asyncio.create_task(whatsapp_queue.process_queue())
         logger.info("🚀 WhatsApp message queue processor started!")
+        
+        # Start automation task
+        asyncio.create_task(process_automations())
+        logger.info("🤖 Automation Butler started!")
         
         # System check for OpenAI
         try:

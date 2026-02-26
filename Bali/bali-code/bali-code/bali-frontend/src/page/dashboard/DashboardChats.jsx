@@ -55,10 +55,10 @@ const DashboardChats = () => {
             </div>
 
             {/* Chat Layout Container */}
-            <div className="flex-1 flex gap-4 overflow-hidden">
+            <div className="flex-1 flex flex-col md:flex-row gap-4 overflow-hidden relative">
 
                 {/* Left Sidebar: Session List */}
-                <div className="w-1/3 bg-white/60 backdrop-blur-xl border border-white rounded-[2rem] shadow-sm flex flex-col h-full overflow-hidden shrink-0">
+                <div className={`${selectedSession ? 'hidden md:flex' : 'flex'} md:w-1/3 w-full bg-white/60 backdrop-blur-xl border border-white rounded-[2rem] shadow-sm flex flex-col h-full overflow-hidden shrink-0`}>
                     <div className="p-4 border-b border-gray-100/50">
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-lightneutral">
@@ -117,12 +117,18 @@ const DashboardChats = () => {
                 </div>
 
                 {/* Right Area: Chat Transcript */}
-                <div className="flex-1 bg-white/60 backdrop-blur-xl border border-white rounded-[2rem] shadow-sm flex flex-col h-full overflow-hidden relative">
+                <div className={`${!selectedSession ? 'hidden md:flex' : 'flex'} flex-1 w-full bg-white/60 backdrop-blur-xl border border-white rounded-[2rem] shadow-sm flex flex-col h-full overflow-hidden relative`}>
                     {selectedSession ? (
                         <>
                             {/* Selected Chat Header */}
                             <div className="p-5 border-b border-gray-100/50 flex justify-between items-center bg-white/50">
                                 <div className="flex items-center gap-3">
+                                    <button
+                                        className="md:hidden p-2 -ml-2 text-darkgrey hover:bg-black/5 rounded-xl"
+                                        onClick={() => setSelectedSession(null)}
+                                    >
+                                        <FiUser className="w-5 h-5" />
+                                    </button>
                                     <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
                                         <FiUser className="w-5 h-5" />
                                     </div>
@@ -145,8 +151,8 @@ const DashboardChats = () => {
                                     return (
                                         <div key={index} className={`flex ${isAI ? 'justify-start' : 'justify-end'}`}>
                                             <div className={`max-w-[70%] rounded-2xl p-4 shadow-sm ${isAI
-                                                    ? 'bg-white border border-gray-100 text-darkgrey rounded-tl-sm'
-                                                    : 'bg-primary text-white rounded-tr-sm'
+                                                ? 'bg-white border border-gray-100 text-darkgrey rounded-tl-sm'
+                                                : 'bg-primary text-white rounded-tr-sm'
                                                 }`}>
                                                 <div className="flex items-center gap-2 mb-1.5 opacity-80">
                                                     {isAI ? (

@@ -8,6 +8,7 @@ from app.models.order_summary import Order, PaymentInfo
 from app.services.payment_service import create_xendit_payment_with_distribution, update_order_with_payment_info
 from app.services.order_summary import get_next_order_id, save_order_to_db
 from app.services.menu_services import cache
+from app.services.promo_service import validate_promo_code, increment_promo_usage
 from datetime import datetime
 from pydantic import BaseModel
 from typing import Optional
@@ -21,13 +22,15 @@ class BookingRequest(BaseModel):
     price: str
     user_id: str
     location_zone: Optional[str] = None
+    promo_code: Optional[str] = None
 
 @router.post("/generate-response", response_model=ChatbotResponse)
 async def generate_chatbot_response(request: ChatRequest, user_id: str):
     query = request.query
     chat_type = request.chat_type
     language = request.language
-    return await generate_response(query, user_id, chat_type, language)
+    villa_code = request.villa_code if hasattr(request, "villa_code") else "WEB_VILLA_01"
+    return await generate_response(query, user_id, chat_type, language, villa_code)
 
 @router.post("/create-booking-payment")
 async def create_booking_payment(request: BookingRequest):
@@ -53,6 +56,18 @@ async def create_booking_payment(request: BookingRequest):
         # Use location override if provided, otherwise default
         villa_code = request.location_zone if request.location_zone else "WEB_VILLA_01" 
         
+        # 2.5 Handle Promo Code
+        final_price_val = clean_price_string(request.price)
+        discount_amount = 0.0
+        promo_msg = ""
+        if request.promo_code:
+            from app.services.payment_service import clean_price_string
+            is_valid, final_amount, promo_msg = await validate_promo_code(request.promo_code, float(final_price_val))
+            if is_valid:
+                discount_amount = float(final_price_val) - final_amount
+                final_price_val = int(final_amount)
+                await increment_promo_usage(request.promo_code)
+
         # 3. Create Order
         order_number = await get_next_order_id()
         current_time = datetime.now()
@@ -61,7 +76,10 @@ async def create_booking_payment(request: BookingRequest):
             sender_id=request.user_id,
             order_number=order_number,
             service_name=service_name,
-            price=request.price,
+            price=str(final_price_val),
+            original_price=request.price,
+            promo_code=request.promo_code if discount_amount > 0 else None,
+            discount_amount=discount_amount,
             confirmation=True,
             status="pending",
             service_provider_code=sp_code,
@@ -81,8 +99,12 @@ async def create_booking_payment(request: BookingRequest):
             await update_order_with_payment_info(order_number, payment_result)
             
             payment_url = payment_result.get("payment_url")
+            success_msg = f"Successfully generated your payment link for **{service_name}** at **{villa_code}**!"
+            if discount_amount > 0:
+                success_msg += f"\n💰 **Promo Applied**: {promo_msg}"
+            
             return {
-                "response": f"Successfully generated your payment link for **{service_name}** at **{villa_code}**!\n\n[💳 Click here to pay via Xendit]({payment_url})\n\nYou will receive a confirmation once the payment is completed."
+                "response": f"{success_msg}\n\n[💳 Click here to pay via Xendit]({payment_url})\n\nYou will receive a confirmation once the payment is completed."
             }
         else:
             return {

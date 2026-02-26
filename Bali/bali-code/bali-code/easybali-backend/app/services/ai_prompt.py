@@ -62,7 +62,7 @@ class ConciergeAI:
     def __init__(self, service_index: str = "ai-data"):
         self.service_index = service_index
 
-    async def get_rag_context(self, query: str, chat_type: str = "general") -> str:
+    async def get_rag_context(self, query: str, chat_type: str = "general", villa_code: str = "WEB_VILLA_01") -> str:
         try:
             # Query specific indexes, falling back to villa-faqs for general questions
             if chat_type == "things-to-do-in-bali":
@@ -76,7 +76,16 @@ class ConciergeAI:
             if index is None: return ""
 
             embed = await client.embeddings.create(input=query, model="text-embedding-ada-002")
-            res = index.query(vector=embed.data[0].embedding, top_k=5, include_metadata=True)
+            
+            # Filter matches by villa_code if provided (Isolation Principle)
+            filter_dict = {"villa_code": villa_code} if index_name == "villa-faqs" else None
+            
+            res = index.query(
+                vector=embed.data[0].embedding, 
+                top_k=5, 
+                include_metadata=True,
+                filter=filter_dict
+            )
             
             all_matches = res.get("matches", [])
             high_confidence = [m for m in all_matches if m.get("score", 0) > 0.75]
@@ -110,7 +119,7 @@ class ConciergeAI:
         except: pass
         return context
 
-    async def process_query(self, query: str, user_id: str, chat_type: str, language: str) -> Dict[str, Any]:
+    async def process_query(self, query: str, user_id: str, chat_type: str, language: str, villa_code: str = "WEB_VILLA_01") -> Dict[str, Any]:
         """Process user query with local-first priority and RAG fallback."""
         try:
             # Handle Greetings for specific types
@@ -132,7 +141,7 @@ class ConciergeAI:
 
             # General Logic - Fetch Context
             sheet_ctx = self.get_sheet_context()
-            rag_ctx = await self.get_rag_context(query, chat_type)
+            rag_ctx = await self.get_rag_context(query, chat_type, villa_code)
             
             history = get_conversation_history(user_id)
             conv = trim_history(history + [{"role": "user", "content": query}])
@@ -140,21 +149,24 @@ class ConciergeAI:
             # Format history for prompt
             formatted_history = "\n".join([f"{m['role'].capitalize()}: {m['content']}" for m in conv])
             
-            system = f"""
+            prompt = f"""
+                SYSTEM:
+                You are currently assisting a guest at villa: {villa_code}.
+                
                 PERSONA: {PERSONAS.get(chat_type, PERSONAS['general'])}
                 
                 INTERNAL DB (PRIORITY): 
                 {sheet_ctx if sheet_ctx else "No internal sheet data."}
                 
-                EXTERNAL KNOWLEDGE (RAG VILLA FAQs): 
-                {rag_ctx if rag_ctx else "No specific context provided. You must fall back to your own LLM reasoning and internal general knowledge. Do not state that you lack context or are an AI."}
+                EXTERNAL KNOWLEDGE (RAG VILLA FAQs for {villa_code}): 
+                {rag_ctx if rag_ctx else "No specific context provided. You must fall back to your own LLM reasoning and internal general knowledge for this specific villa. Do not state that you lack context or are an AI."}
                 
                 RULES:
                 1. Language: {language}
                 2. Local First: Use INTERNAL DB for any service/price question.
-                3. Voice Friendly: Keep responses under 3 sentences for better text-to-speech.
+                3. Accuracy: If unsure, prioritize mentioning what we HAVE (internal db) over speculating.
                 4. Rules of Villa: {rules}
-                5. LLM Fallback: If EXTERNAL KNOWLEDGE is empty, synthesize the best possible logical answer based on standard hospitality reasoning without hesitation.
+                5. LLM Fallback: If EXTERNAL KNOWLEDGE is empty, synthesize the best possible logical answer based on standard hospitality reasoning without hesitation for {villa_code}.
                 
                 CONVERSATION HISTORY:
                 {formatted_history}
@@ -163,7 +175,7 @@ class ConciergeAI:
             try:
                 comp = await client.chat.completions.create(
                     model=settings.OPENAI_MODEL_NAME,
-                    messages=[{"role": "system", "content": system}, {"role": "user", "content": query}],
+                    messages=[{"role": "system", "content": prompt}, {"role": "user", "content": query}],
                     temperature=0.7,
                     max_tokens=500
                 )
@@ -216,6 +228,6 @@ class ConciergeAI:
         return None
 
 concierge_ai = ConciergeAI()
-async def generate_response(query:str, user_id:str, chat_type:str="general", language:str="EN"):
-    return await concierge_ai.process_query(query, user_id, chat_type, language)
+async def generate_response(query:str, user_id:str, chat_type:str="general", language:str="EN", villa_code:str="WEB_VILLA_01"):
+    return await concierge_ai.process_query(query, user_id, chat_type, language, villa_code)
 

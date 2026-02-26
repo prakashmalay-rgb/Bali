@@ -22,6 +22,9 @@ class Order(BaseModel):
     payment: PaymentInfo = PaymentInfo()
     service_provider_code:Optional[str] = None
     villa_code:str = None
+    promo_code: Optional[str] = None
+    discount_amount: float = 0.0
+    original_price: Optional[str] = None
     created_at: datetime.datetime = datetime.datetime.now()
     updated_at: datetime.datetime = datetime.datetime.now()
 

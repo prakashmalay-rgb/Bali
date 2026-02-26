@@ -134,9 +134,20 @@ async def create_xendit_payment_with_distribution(order: Order):
         external_id = f"booking_{order.order_number}_{int(datetime.datetime.now().timestamp())}"
         
         try:
-            price_clean = clean_price_string(order.price)
-            service_provider_price = clean_price_string(price_distribution['service_provider_price'])
-            villa_price = clean_price_string(price_distribution['villa_price'])
+            total_price_clean = clean_price_string(order.price)
+            sp_price_orig = clean_price_string(price_distribution['service_provider_price'])
+            villa_price_orig = clean_price_string(price_distribution['villa_price'])
+            
+            # Pro-rate distribution if there's a discount
+            orig_total = sp_price_orig + villa_price_orig
+            if total_price_clean < orig_total and orig_total > 0:
+                ratio = total_price_clean / orig_total
+                service_provider_price = int(sp_price_orig * ratio)
+                villa_price = total_price_clean - service_provider_price # Villa takes the remainder/remainder of discount
+            else:
+                service_provider_price = sp_price_orig
+                villa_price = villa_price_orig
+                
         except ValueError as e:
             print(f"Price cleaning error: {e}")
             return {
@@ -151,7 +162,7 @@ async def create_xendit_payment_with_distribution(order: Order):
         # Create invoice request
         create_invoice_request = CreateInvoiceRequest(
             external_id=external_id,
-            amount=float(price_clean),
+            amount=float(total_price_clean),
             currency='IDR',
             invoice_duration=86400.0,  # 24 hours in seconds
             description=f"Payment for {order.service_name} on {order.date.strftime('%d-%m-%Y')} at {order.time}",
@@ -172,7 +183,7 @@ async def create_xendit_payment_with_distribution(order: Order):
                 InvoiceItem(
                     name=order.service_name,
                     quantity=1.0,
-                    price=float(price_clean),
+                    price=float(total_price_clean),
                 )
             ]
         )

@@ -15,6 +15,7 @@ from app.routes.villa_links import router as villa_links_router
 from app.routes.passport_routes import router as passport_router
 from app.routes.issue_routes import router as issue_router
 from app.routes.onboarding import router as onboarding_router
+from app.routes.admin_users import router as admin_users_router
 from fastapi.middleware.cors import CORSMiddleware
 from app.services.menu_services import start_cache_refresh, stop_cache_refresh
 from app.services.openai_client import client
@@ -65,6 +66,7 @@ app.include_router(language_lesson)
 app.include_router(currency_converter)
 app.include_router(villa_links_router)
 app.include_router(onboarding_router)
+app.include_router(admin_users_router)
 app.include_router(passport_router)
 app.include_router(issue_router)
 

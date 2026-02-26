@@ -1,5 +1,4 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
+import { createRoot } from "react-dom/client";
 import { ErrorBoundary } from "react-error-boundary";
 import { HelmetProvider } from "react-helmet-async";
 import { ToastContainer } from "react-toastify";
@@ -7,11 +6,14 @@ import "react-toastify/dist/ReactToastify.css";
 
 import "./style/main.scss";
 import "./main.css";
-import "sweetalert2/src/sweetalert2.scss";
+import "sweetalert2/dist/sweetalert2.min.css";
 import AppLayout from "./App.jsx";
 import ErrorFallback from "./components/ErrorFallback";
 
-ReactDOM.createRoot(document.getElementById("root")).render(
+const container = document.getElementById("root");
+const root = createRoot(container);
+
+root.render(
   <ErrorBoundary
     FallbackComponent={ErrorFallback}
     onReset={() => {

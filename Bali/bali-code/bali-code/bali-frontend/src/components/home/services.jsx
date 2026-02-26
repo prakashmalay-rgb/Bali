@@ -26,11 +26,7 @@ const Services = () => {
   };
 
   const handlelocalGuideClick = () => {
-    navigate('/categories', {
-      state: {
-        mainMenu: 'Local Guide'
-      }
-    });
+    initializeChatService('local-cuisine', 'local_guide');
   };
 
   const handleRecommendationsClick = () => {

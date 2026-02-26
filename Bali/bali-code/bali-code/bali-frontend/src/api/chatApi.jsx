@@ -26,6 +26,7 @@ export const chatAPI = {
       'currency-converter': 'currency-converter/chat',
       'plan-my-trip': 'plan-my-trip/chat',
       'voice-translator': 'language_lesson/chat',
+      'local-cuisine': 'local-cuisine/chat',
       'passport-submission': 'chatbot/generate-response',
       'general': 'chatbot/generate-response',
       'things-to-do-in-bali': "things-to-do-in-bali/chat"

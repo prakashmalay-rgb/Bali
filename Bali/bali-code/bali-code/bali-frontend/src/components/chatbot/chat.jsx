@@ -122,7 +122,7 @@ const Chat = () => {
   };
 
   const handleMenuClick = (itemId) => {
-    if (itemId === activeTab && chatType && !['order_services', 'local_guide', 'recommendations', 'discounts_promotions'].includes(itemId)) return;
+    if (itemId === activeTab && chatType && !['order_services', 'recommendations', 'discounts_promotions'].includes(itemId)) return;
 
     const idToEnglish = {
       'order_services': 'Order Services',
@@ -136,7 +136,7 @@ const Chat = () => {
       'passport_submission': 'Passport Submission'
     };
 
-    const categoryMenus = ['order_services', 'local_guide', 'recommendations', 'discounts_promotions'];
+    const categoryMenus = ['order_services', 'recommendations', 'discounts_promotions'];
     if (categoryMenus.includes(itemId)) {
       navigate('/categories', {
         state: {
@@ -151,7 +151,8 @@ const Chat = () => {
       'what_to_do': 'what-to-do',
       'plan_my_trip': 'plan-my-trip',
       'voice_translator': 'voice-translator',
-      'passport_submission': 'passport-submission'
+      'passport_submission': 'passport-submission',
+      'local_guide': 'local-cuisine'
     };
 
     const newChatType = chatMap[itemId];
@@ -246,7 +247,7 @@ const Chat = () => {
 
   // ✅ Auto-send initial message for API-based chats
   useEffect(() => {
-    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'passport-submission'];
+    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'passport-submission', 'local-cuisine'];
 
     if (
       chatType &&
@@ -269,7 +270,7 @@ const Chat = () => {
 
   // ✅ Save messages to localStorage for API-based chats
   useEffect(() => {
-    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'passport-submission'];
+    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'passport-submission', 'local-cuisine'];
     if (apiBasedChats.includes(chatType) && userId && messages.length > 0) {
       chatAPI.saveChatHistory(userId, chatType, messages);
       console.log("💾 Saved messages to localStorage");
@@ -287,7 +288,7 @@ const Chat = () => {
   // ✅ FIXED: WebSocket connection logic
   useEffect(() => {
     const sessionId = location.state?.sessionId;
-    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'passport-submission'];
+    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'passport-submission', 'local-cuisine'];
 
     // Wait for chatType to be set
     if (!chatType) {
@@ -544,7 +545,7 @@ const Chat = () => {
 
     setMessages((prev) => [...prev, newUserMessage]);
 
-    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'passport-submission'];
+    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'passport-submission', 'local-cuisine'];
 
     if (apiBasedChats.includes(chatType) && userId) {
       // API-based chat

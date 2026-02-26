@@ -117,70 +117,76 @@ class ConciergeAI:
         return context
 
     async def process_query(self, query: str, user_id: str, chat_type: str, language: str, villa_code: str = "WEB_VILLA_01") -> Dict[str, Any]:
-        """Process user query with local-first priority and RAG fallback."""
+        """
+        Process user query based on chat_type.
+        Each chat type has an isolated path to prevent regression.
+        Service booking detection ONLY runs for order-service modes.
+        """
         try:
-            # Handle Greetings for specific types
-            if chat_type == "passport-submission" and query.lower() in ["hi", "hello", "hi there"]:
-                return self._passport_hi(user_id, language)
-            
-            if chat_type == "voice-translator" and query.lower() in ["hi", "hello", "hi there", "start"]:
-                return self._voice_translator_hi(user_id, language)
+            history = get_conversation_history(user_id)
+            conv = trim_history(history + [{"role": "user", "content": query}])
+            formatted_history = "\n".join([f"{m['role'].capitalize()}: {m['content']}" for m in conv])
 
-            # Service / Booking Check
+            # ─── PASSPORT SUBMISSION ───────────────────────────────────────────────
+            if chat_type == "passport-submission":
+                if query.lower() in ["hi", "hello", "hi there"]:
+                    return self._passport_hi(user_id, language)
+                # Let general AI handle follow-up, but keep persona focused
+                resp = await self._call_openai(query, PERSONAS["passport-submission"], "", "", language, formatted_history, villa_code)
+                save_message(user_id, "user", query)
+                save_message(user_id, "assistant", resp)
+                return {"response": resp}
+
+            # ─── VOICE TRANSLATOR ──────────────────────────────────────────────────
+            if chat_type == "voice-translator":
+                if query.lower() in ["hi", "hello", "hi there", "start"]:
+                    return self._voice_translator_hi(user_id, language)
+                resp = await self._call_openai(query, PERSONAS["voice-translator"], "", "", language, formatted_history, villa_code)
+                save_message(user_id, "user", query)
+                save_message(user_id, "assistant", resp)
+                return {"response": resp}
+
+            # ─── CURRENCY CONVERTER ────────────────────────────────────────────────
+            if chat_type == "currency-converter":
+                resp = await self._call_openai(query, PERSONAS["currency-converter"], "", "", language, formatted_history, villa_code)
+                save_message(user_id, "user", query)
+                save_message(user_id, "assistant", resp)
+                return {"response": resp}
+
+            # ─── PLAN MY TRIP ──────────────────────────────────────────────────────
+            if chat_type == "plan-my-trip":
+                rag_ctx = await self.get_rag_context(query, chat_type, villa_code)
+                resp = await self._call_openai(query, PERSONAS["plan-my-trip"], "", rag_ctx, language, formatted_history, villa_code)
+                save_message(user_id, "user", query)
+                save_message(user_id, "assistant", resp)
+                return {"response": resp}
+
+            # ─── WHAT TO DO / LOCAL GUIDE (Local Cuisine) ─────────────────────────
+            if chat_type in ["what-to-do", "local-cuisine", "things-to-do-in-bali"]:
+                sheet_ctx = self.get_sheet_context()
+                rag_ctx = await self.get_rag_context(query, chat_type, villa_code)
+                persona = PERSONAS.get(chat_type, PERSONAS["what-to-do"])
+                resp = await self._call_openai(query, persona, sheet_ctx, rag_ctx, language, formatted_history, villa_code)
+                save_message(user_id, "user", query)
+                save_message(user_id, "assistant", resp)
+                return {"response": resp}
+
+            # ─── ORDER SERVICES / GENERAL (service booking intercept active) ───────
+            # Service / Booking Check ONLY runs here
             try:
                 service_check = await ai_menu_generator.intelligent_service_check(query)
                 if service_check.get("is_service_request") and service_check.get("we_offer_it"):
                     menu = await self._handle_booking(query, user_id, language, service_check)
-                    if menu: return menu
+                    if menu:
+                        return menu
             except Exception as e:
                 logger.error(f"Service Check Error: {e}")
-                # Continue to general AI if service check fails
 
-            # General Logic - Fetch Context
+            # General fallback with RAG
             sheet_ctx = self.get_sheet_context()
             rag_ctx = await self.get_rag_context(query, chat_type, villa_code)
-            
-            history = get_conversation_history(user_id)
-            conv = trim_history(history + [{"role": "user", "content": query}])
-            
-            # Format history for prompt
-            formatted_history = "\n".join([f"{m['role'].capitalize()}: {m['content']}" for m in conv])
-            
-            prompt = f"""
-                SYSTEM:
-                You are currently assisting a guest at villa: {villa_code}.
-                
-                PERSONA: {PERSONAS.get(chat_type, PERSONAS['general'])}
-                
-                INTERNAL DB (PRIORITY): 
-                {sheet_ctx if sheet_ctx else "No internal sheet data."}
-                
-                EXTERNAL KNOWLEDGE (RAG VILLA FAQs for {villa_code}): 
-                {rag_ctx if rag_ctx else "No specific context provided. You must fall back to your own LLM reasoning and internal general knowledge for this specific villa. Do not state that you lack context or are an AI."}
-                
-                RULES:
-                1. Language: {language}
-                2. Local First: Use INTERNAL DB for any service/price question.
-                3. Accuracy: If unsure, prioritize mentioning what we HAVE (internal db) over speculating.
-                4. Rules of Villa: {rules}
-                5. LLM Fallback: If EXTERNAL KNOWLEDGE is empty, synthesize the best possible logical answer based on standard hospitality reasoning without hesitation for {villa_code}.
-                
-                CONVERSATION HISTORY:
-                {formatted_history}
-            """
-
-            try:
-                comp = await client.chat.completions.create(
-                    model=settings.OPENAI_MODEL_NAME,
-                    messages=[{"role": "system", "content": prompt}, {"role": "user", "content": query}],
-                    temperature=0.7,
-                    max_tokens=500
-                )
-                resp = comp.choices[0].message.content or "I'm here to help! How can I assist you today?"
-            except Exception as ai_err:
-                logger.error(f"OpenAI Completion Error: {ai_err}")
-                resp = "I'm sorry, I'm having a bit of trouble connecting to my brain. How can I help you today? (Fallback)"
-
+            persona = PERSONAS.get(chat_type, PERSONAS["general"])
+            resp = await self._call_openai(query, persona, sheet_ctx, rag_ctx, language, formatted_history, villa_code)
             save_message(user_id, "user", query)
             save_message(user_id, "assistant", resp)
             return {"response": resp}
@@ -191,6 +197,39 @@ class ConciergeAI:
             if language == "ID":
                 fallback_text = "Halo! Saya pramutamu EASYBali Anda. Saat ini saya sedang mengalami sedikit masalah teknis, tetapi saya tetap di sini untuk membantu masa inap vila Anda. Apa yang bisa saya bantu?"
             return {"response": fallback_text}
+
+    async def _call_openai(self, query: str, persona: str, sheet_ctx: str, rag_ctx: str, language: str, history: str, villa_code: str) -> str:
+        """Centralised OpenAI call with a structured prompt."""
+        prompt = f"""SYSTEM:
+You are assisting a guest at villa: {villa_code}.
+
+PERSONA:
+{persona}
+
+{"INTERNAL DB (use this first for prices/services):" + chr(10) + sheet_ctx if sheet_ctx else ""}
+
+{"KNOWLEDGE BASE:" + chr(10) + rag_ctx if rag_ctx else ""}
+
+RULES:
+- Respond in language: {language}
+- Be concise, helpful, and professional.
+- Never say "Not Found" or expose technical errors to the user.
+- If you have no specific data, use your best general knowledge.
+- Do NOT ask for information you already have.
+
+CONVERSATION HISTORY:
+{history}"""
+        try:
+            comp = await client.chat.completions.create(
+                model=settings.OPENAI_MODEL_NAME,
+                messages=[{"role": "system", "content": prompt}, {"role": "user", "content": query}],
+                temperature=0.7,
+                max_tokens=600
+            )
+            return comp.choices[0].message.content or "I'm here to help! How can I assist?"
+        except Exception as e:
+            logger.error(f"OpenAI call error: {e}")
+            return "I'm having a moment of difficulty. I'm still here — please go ahead and ask me anything!"
 
     def _voice_translator_hi(self, user_id, lang):
         txt = "Halo! Saya mentor bahasa Anda. Mau belajar kata-kata keren dalam Bahasa Bali atau Indonesia hari ini? 🌴" if lang == "ID" else "Hi there! I'm your Language Mentor. Want to learn some cool Balinese or Indonesian phrases today? 🌴"

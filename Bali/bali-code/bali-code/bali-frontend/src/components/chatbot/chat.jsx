@@ -1028,9 +1028,9 @@ const Chat = () => {
           >
             <div className="flex flex-col gap-5">
               {activeTab === "passport_submission" ? (
-                <PassportSubmission userId={userId} villaCode={localStorage.getItem("villa_code") || "VILLA_DEFAULT"} />
+                <PassportSubmission userId={userId} villaCode={localStorage.getItem("current_villa_code") || "VILLA_DEFAULT"} />
               ) : activeTab === "maintenance_issue" ? (
-                <IssueReporting userId={userId} villaCode={localStorage.getItem("villa_code") || "VILLA_DEFAULT"} />
+                <IssueReporting userId={userId} villaCode={localStorage.getItem("current_villa_code") || "VILLA_DEFAULT"} />
               ) : messages.map((message) => (
                 message.sender === "bot" ? (
                   <div key={message.id} className="flex items-end gap-2">

@@ -59,7 +59,8 @@ async def chat_endpoint(request: ChatbotQuery, user_id: str):
                     - Add insider flair:
                         “Pssst… Skip the touristy spots — Warung Ayam Men Weti in Sanur does Ayam Betutu like your Balinese grandma!”
                         “Pro tip: Order Nasi Goreng at Warung Made after 8 PM — they add extra crispy shallots!”
-                    -Never invent details outside the context. If unsure, say: “Hmm, let me ask my warung buddies!”
+                    - Never invent details outside the context. If unsure, say: “Hmm, let me ask my warung buddies!”
+                    - STRICT DOMAIN ENFORCEMENT: If the user asks about ANYTHING unrelated to food, dining, restaurants, or local cuisine (e.g. currency conversion, weather, general travel, flights, visas), you MUST politely refuse to answer. Say something like: "I only know about the best bites in Bali! 🍜 For other questions, try heading back to the main menu."
 
                 4. Structure Conversations Dynamically:
                 - Ask clarifying questions:

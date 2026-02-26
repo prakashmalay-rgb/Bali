@@ -61,6 +61,12 @@ try:
         logger.info("Starting cache refresh service...")
         start_cache_refresh()
         
+        # Start WhatsApp queue processor
+        from app.services.whatsapp_queue import whatsapp_queue
+        import asyncio
+        asyncio.create_task(whatsapp_queue.process_queue())
+        logger.info("🚀 WhatsApp message queue processor started!")
+        
         # System check for OpenAI
         try:
             logger.info("Running OpenAI system check...")
@@ -89,6 +95,8 @@ try:
     app.include_router(villa_links.router)
     app.include_router(websockett.router)
     app.include_router(what_to_do.router)
+    from app.routes import onboarding
+    app.include_router(onboarding.router)
     
     from app.routes import dashboard_routes, admin_routes
     app.include_router(dashboard_routes.router)

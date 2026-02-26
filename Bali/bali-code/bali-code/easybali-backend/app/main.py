@@ -61,6 +61,8 @@ app.include_router(web_order_flow)
 app.include_router(language_lesson)
 app.include_router(currency_converter)
 app.include_router(villa_links_router)
+from app.routes.onboarding import router as onboarding_router
+app.include_router(onboarding_router)
 
 @app.on_event("startup")
 def on_startup():

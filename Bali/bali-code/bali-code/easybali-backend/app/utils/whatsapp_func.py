@@ -1345,8 +1345,9 @@ async def send_whatsapp_image_with_caption(recipient_id: str, image_url: str, ca
 
 
 async def process_message(sender_id: str, message_payload: dict, message_id:str):
+    start_time = datetime.datetime.now()
     try:
-
+        logger.info(f"📩 Processing message {message_id} from {sender_id}")
         await send_typing_indicator(sender_id, message_id)
 
         message_text = None
@@ -1666,10 +1667,11 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                         )
                         return
                 else:
-                    # Session expired or invalid
+                    # Villa name not found in database mapping
                     await send_whatsapp_message(
                         sender_id,
-                        "❌ Your access link has expired. Please use the villa link again to continue."
+                        f"❌ *Villa '{villa_name}' not recognized.*\n\n"
+                        "Please ensure you are using the correct link provided in your villa, or contact support if the issue persists."
                     )
                     return
                     
@@ -1876,6 +1878,21 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
         print(f"Error processing message from {sender_id}: {str(e)}")
         import traceback
         traceback.print_exc()
+    finally:
+        end_time = datetime.datetime.now()
+        latency = (end_time - start_time).total_seconds()
+        logger.info(f"⏱️ Finished processing message {message_id}. Latency: {latency:.2f}s")
+        # Log latency to DB for monitoring
+        try:
+            from app.db.session import db
+            await db["analytics_latency"].insert_one({
+                "message_id": message_id,
+                "sender_id": sender_id,
+                "latency_seconds": latency,
+                "timestamp": datetime.datetime.utcnow()
+            })
+        except:
+            pass
 
 
 

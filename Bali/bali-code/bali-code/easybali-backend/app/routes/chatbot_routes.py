@@ -20,6 +20,7 @@ class BookingRequest(BaseModel):
     title: str
     price: str
     user_id: str
+    location_zone: Optional[str] = None
 
 @router.post("/generate-response", response_model=ChatbotResponse)
 async def generate_chatbot_response(request: ChatRequest, user_id: str):
@@ -49,8 +50,8 @@ async def create_booking_payment(request: BookingRequest):
         
         # 2. Extract provider details
         sp_code = row.get("Service Provider Number") or "DEFAULT_SP"
-        # For web, we might need a default villa code if not found
-        villa_code = "WEB_VILLA_01" 
+        # Use location override if provided, otherwise default
+        villa_code = request.location_zone if request.location_zone else "WEB_VILLA_01" 
         
         # 3. Create Order
         order_number = await get_next_order_id()

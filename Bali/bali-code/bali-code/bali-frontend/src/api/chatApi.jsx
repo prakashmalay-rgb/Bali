@@ -6,11 +6,11 @@ const API_BASE_URL = window.location.hostname === 'localhost'
   : (import.meta.env.VITE_API_URL || 'https://bali-v92r.onrender.com');
 
 export const chatAPI = {
-  createPayment: async (userId, service) => {
+  createPayment: async (userId, service, locationZone) => {
     try {
       const response = await axios.post(
         `${API_BASE_URL}/chatbot/create-booking-payment`,
-        { ...service, user_id: userId }
+        { ...service, user_id: userId, location_zone: locationZone }
       );
       return response.data;
     } catch (error) {

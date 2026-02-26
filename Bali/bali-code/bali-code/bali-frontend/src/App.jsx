@@ -23,6 +23,9 @@ import DashboardChats from "./page/dashboard/DashboardChats";
 import PassportVerification from "./page/dashboard/PassportVerification";
 import { Navigate } from "react-router-dom";
 import { LanguageProvider } from "./context/LanguageContext";
+import PageTransition from "./components/layout/PageTransition";
+import { AnimatePresence } from "framer-motion";
+import { useLocation } from "react-router-dom";
 
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem("easybali_token");
@@ -30,6 +33,17 @@ const ProtectedRoute = ({ children }) => {
     return <Navigate to="/admin/login" replace />;
   }
   return children;
+};
+
+const AnimatedLayout = () => {
+  const location = useLocation();
+  return (
+    <AnimatePresence mode="wait">
+      <PageTransition key={location.pathname}>
+        <Outlet />
+      </PageTransition>
+    </AnimatePresence>
+  );
 };
 
 const AppLayout = () => {
@@ -42,44 +56,49 @@ const AppLayout = () => {
 
 const appRouter = createBrowserRouter([
   {
-    path: "*",
-    element: <NotFound />,
-  },
-  {
-    path: "/",
-    element: <Home />,
-  },
-  {
-    path: "/admin/login",
-    element: <DashboardLogin />
-  },
-  {
-    path: "/categories",
-    element: <TripServices />
-  },
-  {
-    path: "/subcategories",
-    element: <SubCategories />
-  },
-  {
-    path: "/serviceitems",
-    element: <ServiceItems />
-  },
-  {
-    path: "/privacy-policy",
-    element: <PrivacyPolicy />
-  },
-  {
-    path: "/terms-and-conditions",
-    element: <TermsConditons />
-  },
-  {
-    path: "/contact-us",
-    element: <ContactUs />
-  },
-  {
-    path: "/chatbot",
-    element: <Chat />,
+    element: <AnimatedLayout />,
+    children: [
+      {
+        path: "*",
+        element: <NotFound />,
+      },
+      {
+        path: "/",
+        element: <Home />,
+      },
+      {
+        path: "/admin/login",
+        element: <DashboardLogin />
+      },
+      {
+        path: "/categories",
+        element: <TripServices />
+      },
+      {
+        path: "/subcategories",
+        element: <SubCategories />
+      },
+      {
+        path: "/serviceitems",
+        element: <ServiceItems />
+      },
+      {
+        path: "/privacy-policy",
+        element: <PrivacyPolicy />
+      },
+      {
+        path: "/terms-and-conditions",
+        element: <TermsConditons />
+      },
+      {
+        path: "/contact-us",
+        element: <ContactUs />
+      },
+      {
+        path: "/chatbot",
+        element: <Chat />,
+      },
+    ]
   },
   // Dashboard Routes
   {

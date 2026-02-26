@@ -7,4 +7,6 @@ myenv
 main.py
 generate_keys.py
 public.pem
+private.pem
+*.json
 base64_images.txt

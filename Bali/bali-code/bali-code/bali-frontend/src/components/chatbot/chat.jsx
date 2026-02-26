@@ -24,6 +24,11 @@ const Chat = () => {
   const [chatType, setChatType] = useState(null);
   const [userId, setUserId] = useState(null);
   const [apiLoading, setApiLoading] = useState(false);
+  const [locationZone, setLocationZone] = useState(localStorage.getItem("location_zone") || "Seminyak");
+
+  useEffect(() => {
+    localStorage.setItem("location_zone", locationZone);
+  }, [locationZone]);
 
   const { isListening, toggleListening } = useVoiceToText(
     (transcript) => setInputMessage(transcript),
@@ -630,7 +635,7 @@ const Chat = () => {
       setMessages(prev => [...prev, userMsg]);
 
       // Call API to generate Xendit link
-      const response = await chatAPI.createPayment(userId, service);
+      const response = await chatAPI.createPayment(userId, service, locationZone);
 
       const botMsg = {
         id: Date.now() + 1,
@@ -948,6 +953,20 @@ const Chat = () => {
             </button>
           ))}
         </div>
+        <div className="flex flex-col w-full px-4 mb-4">
+          <label className="text-[12px] font-bold text-gray-500 mb-2 uppercase tracking-wider">{t("location_zone") || "Location Zone"}</label>
+          <select
+            value={locationZone}
+            onChange={(e) => setLocationZone(e.target.value)}
+            className="w-full bg-white border border-gray-300 rounded-[20px] px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-[#FF8000]"
+          >
+            <option value="Seminyak">Seminyak</option>
+            <option value="Ubud">Ubud</option>
+            <option value="Canggu">Canggu</option>
+            <option value="Zone 1">Zone 1</option>
+            <option value="Zone 2">Zone 2</option>
+          </select>
+        </div>
       </div>
       <div className="right w-full flex flex-col justify-between relative z-10">
         <div className="header shadow-md flex justify-between items-center w-full h-[84px] lg:h-[97px] p-5 rounded-[50px] bg-white mb-5">
@@ -981,7 +1000,12 @@ const Chat = () => {
           </div>
         </div>
         <div className="flex flex-col h-[calc(100vh-245px)] overflow-hidden gap-10">
-          <div className="messages-container flex-1 overflow-y-auto px-5 z-10">
+          <div
+            className="messages-container flex-1 overflow-y-auto px-5 z-10"
+            role="log"
+            aria-live="polite"
+            aria-label="Chat messages"
+          >
             <div className="flex flex-col gap-5">
               {messages.map((message) => (
                 message.sender === "bot" ? (
@@ -1017,15 +1041,15 @@ const Chat = () => {
                 )
               ))}
               {apiLoading && (
-                <div className="flex items-end gap-2">
-                  <div className="w-10 h-10 rounded-full bg-[#FF8000] flex items-center justify-center flex-shrink-0">
+                <div className="flex items-end gap-2" role="status" aria-label="AI responding">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#FF8000] flex items-center justify-center flex-shrink-0" aria-hidden="true">
                     <img
                       src="/assets/ai-chat-icon.png"
                       alt=""
-                      className="w-10 h-10"
+                      className="w-6 h-6 sm:w-10 sm:h-10"
                     />
                   </div>
-                  <div className="flex flex-col bg-[#FF8000] px-7 py-4 rounded-[25px] rounded-bl-none">
+                  <div className="flex flex-col bg-[#FF8000] px-5 sm:px-7 py-3 sm:py-4 rounded-[25px] rounded-bl-none">
                     <div className="flex gap-2">
                       <div className="w-2 h-2 bg-white rounded-full animate-bounce"></div>
                       <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
@@ -1063,22 +1087,34 @@ const Chat = () => {
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={handleKeyPress}
               disabled={apiLoading}
+              aria-label="Type your message"
               className="w-[90%] py-4 sm:py-6 rounded-[50px] text-[#333] text-[16px] sm:text-[18px] placeholder:text-[#8e8e8e] disabled:opacity-50 outline-none"
             />
             <div className="flex items-center gap-4">
-              <img
-                src="/assets/mic.svg"
-                alt="Voice Search"
+              <button
+                aria-label={isListening ? "Stop voice search" : "Start voice search"}
                 onClick={toggleListening}
-                className={`cursor-pointer transition-all duration-300 ${isListening ? 'scale-150 mic-glow filter invert sepia(100%) saturate(10000%) hue-rotate(0deg) brightness(100%) contrast(100%)' : ''}`}
-              />
-              <img
-                src="/assets/chat-btn.svg"
-                alt=""
+                className={`focus:outline-none focus:ring-2 focus:ring-orange-500 rounded-full p-2 transition-all duration-300 ${isListening ? 'scale-125 mic-glow' : ''}`}
+              >
+                <img
+                  src="/assets/mic.svg"
+                  alt=""
+                  aria-hidden="true"
+                  className={isListening ? 'filter invert sepia(100%) saturate(10000%) hue-rotate(0deg) brightness(100%) contrast(100%)' : ''}
+                />
+              </button>
+              <button
+                aria-label="Send message"
                 onClick={handleSendClick}
-                className={`w-[35px] h-[35px] sm:w-[50px] sm:h-[50px] ${apiLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-                  }`}
-              />
+                disabled={apiLoading}
+                className={`w-[35px] h-[35px] sm:w-[50px] sm:h-[50px] focus:outline-none focus:ring-2 focus:ring-orange-500 rounded-full flex items-center justify-center ${apiLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+              >
+                <img
+                  src="/assets/chat-btn.svg"
+                  alt=""
+                  aria-hidden="true"
+                />
+              </button>
             </div>
           </div>
         </div>

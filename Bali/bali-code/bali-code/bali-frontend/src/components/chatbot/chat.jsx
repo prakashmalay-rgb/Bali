@@ -161,7 +161,9 @@ const Chat = () => {
       'voice_translator': 'voice-translator',
       'passport_submission': 'passport-submission',
       'maintenance_issue': 'maintenance-issue',
-      'local_guide': 'local-cuisine'
+      'local_guide': 'local-cuisine',
+      'recommendations': 'general',
+      'discounts_promotions': 'general'
     };
 
     const newChatType = chatMap[itemId];
@@ -256,7 +258,7 @@ const Chat = () => {
 
   // ✅ Auto-send initial message for API-based chats
   useEffect(() => {
-    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'local-cuisine'];
+    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'local-cuisine', 'passport-submission', 'maintenance-issue'];
 
     if (
       chatType &&
@@ -279,7 +281,7 @@ const Chat = () => {
 
   // ✅ Save messages to localStorage for API-based chats
   useEffect(() => {
-    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'local-cuisine'];
+    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'local-cuisine', 'passport-submission', 'maintenance-issue'];
     if (apiBasedChats.includes(chatType) && userId && messages.length > 0) {
       chatAPI.saveChatHistory(userId, chatType, messages);
       console.log("💾 Saved messages to localStorage");
@@ -297,7 +299,7 @@ const Chat = () => {
   // ✅ FIXED: WebSocket connection logic
   useEffect(() => {
     const sessionId = location.state?.sessionId;
-    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'local-cuisine'];
+    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'local-cuisine', 'passport-submission', 'maintenance-issue'];
 
     // Wait for chatType to be set
     if (!chatType) {
@@ -552,9 +554,10 @@ const Chat = () => {
       timestamp: getCurrentTime(),
     };
 
+    // Add the user message directly to UI
     setMessages((prev) => [...prev, newUserMessage]);
 
-    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'passport-submission', 'local-cuisine'];
+    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'passport-submission', 'maintenance-issue', 'local-cuisine'];
 
     if (apiBasedChats.includes(chatType) && userId) {
       // API-based chat

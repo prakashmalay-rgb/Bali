@@ -21,23 +21,17 @@ export const chatAPI = {
   // Send message to specific chat endpoint
   sendMessage: async (chatType, userId, query) => {
     const language = localStorage.getItem('language') || 'EN';
-    const endpoints = {
-      'what-to-do': 'what-to-do/chat',
-      'currency-converter': 'currency-converter/chat',
-      'plan-my-trip': 'plan-my-trip/chat',
-      'voice-translator': 'language_lesson/chat',
-      'local-cuisine': 'local-cuisine/chat',
-      'passport-submission': 'chatbot/generate-response',
-      'general': 'chatbot/generate-response',
-      'things-to-do-in-bali': "things-to-do-in-bali/chat"
-    };
-
-    const endpoint = endpoints[chatType] || endpoints.general;
+    let villaCode = localStorage.getItem('current_villa_code') || 'WEB_VILLA_01';
 
     try {
       const response = await axios.post(
-        `${API_BASE_URL}/${endpoint}`,
-        { query, chat_type: chatType, language: language },
+        `${API_BASE_URL}/chatbot/generate-response`,
+        {
+          query,
+          chat_type: chatType,
+          language: language,
+          villa_code: villaCode
+        },
         { params: { user_id: userId } }
       );
       return response.data;

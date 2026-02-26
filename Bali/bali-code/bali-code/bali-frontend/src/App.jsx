@@ -15,6 +15,7 @@ import PrivacyPolicy from "./components/termspages/privacy-policy/PrivacyPolicy"
 import TermsConditons from "./components/termspages/terms-conditions/TermsConditons";
 import ContactUs from "./components/termspages/privacy-policy/contact-us/ContactUs";
 import GuestActivity from "./page/dashboard/GuestActivity";
+import Welcome from "./page/welcome";
 
 import DashboardLayout from "./page/dashboard/DashboardLayout";
 import DashboardMain from "./page/dashboard/DashboardMain";
@@ -69,6 +70,10 @@ const appRouter = createBrowserRouter([
       {
         path: "/admin/login",
         element: <DashboardLogin />
+      },
+      {
+        path: "/welcome",
+        element: <Welcome />
       },
       {
         path: "/categories",

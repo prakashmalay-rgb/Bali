@@ -12,6 +12,9 @@ from app.routes.language_lesson import router as language_lesson
 from app.routes.websockett import router as web_order_flow
 from app.routes.currency_route import router as currency_converter
 from app.routes.villa_links import router as villa_links_router
+from app.routes.passport_routes import router as passport_router
+from app.routes.issue_routes import router as issue_router
+from app.routes.onboarding import router as onboarding_router
 from fastapi.middleware.cors import CORSMiddleware
 from app.services.menu_services import start_cache_refresh, stop_cache_refresh
 from app.services.openai_client import client
@@ -61,8 +64,9 @@ app.include_router(web_order_flow)
 app.include_router(language_lesson)
 app.include_router(currency_converter)
 app.include_router(villa_links_router)
-from app.routes.onboarding import router as onboarding_router
 app.include_router(onboarding_router)
+app.include_router(passport_router)
+app.include_router(issue_router)
 
 @app.on_event("startup")
 def on_startup():

@@ -95,8 +95,12 @@ try:
     app.include_router(villa_links.router)
     app.include_router(websockett.router)
     app.include_router(what_to_do.router)
-    from app.routes import onboarding
-    app.include_router(onboarding.router)
+    from app.routes.onboarding import router as onboarding_router
+    from app.routes.passport_routes import router as passport_router
+    from app.routes.issue_routes import router as issue_router
+    app.include_router(onboarding_router)
+    app.include_router(passport_router)
+    app.include_router(issue_router)
     
     from app.routes import dashboard_routes, admin_routes
     app.include_router(dashboard_routes.router)

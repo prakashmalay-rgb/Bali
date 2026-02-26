@@ -7,6 +7,8 @@ import { getSubMenu } from '../services/api';
 import { chatAPI } from "../../api/chatApi"
 import { useVoiceToText } from "../../hooks/useVoiceToText";
 import { useLanguage } from "../../context/LanguageContext";
+import PassportSubmission from "../services/PassportSubmission";
+import IssueReporting from "../services/IssueReporting";
 
 const Chat = () => {
   const { language, toggleLanguage, t } = useLanguage();
@@ -138,7 +140,8 @@ const Chat = () => {
       'what_to_do': 'What To Do Today?',
       'plan_my_trip': 'Plan My Trip!',
       'voice_translator': 'Voice Translator',
-      'passport_submission': 'Passport Submission'
+      'passport_submission': 'Passport Submission',
+      'maintenance_issue': 'Report an Issue'
     };
 
     const categoryMenus = ['order_services', 'recommendations', 'discounts_promotions'];
@@ -157,6 +160,7 @@ const Chat = () => {
       'plan_my_trip': 'plan-my-trip',
       'voice_translator': 'voice-translator',
       'passport_submission': 'passport-submission',
+      'maintenance_issue': 'maintenance-issue',
       'local_guide': 'local-cuisine'
     };
 
@@ -252,7 +256,7 @@ const Chat = () => {
 
   // ✅ Auto-send initial message for API-based chats
   useEffect(() => {
-    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'passport-submission', 'local-cuisine'];
+    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'local-cuisine'];
 
     if (
       chatType &&
@@ -275,7 +279,7 @@ const Chat = () => {
 
   // ✅ Save messages to localStorage for API-based chats
   useEffect(() => {
-    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'passport-submission', 'local-cuisine'];
+    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'local-cuisine'];
     if (apiBasedChats.includes(chatType) && userId && messages.length > 0) {
       chatAPI.saveChatHistory(userId, chatType, messages);
       console.log("💾 Saved messages to localStorage");
@@ -293,7 +297,7 @@ const Chat = () => {
   // ✅ FIXED: WebSocket connection logic
   useEffect(() => {
     const sessionId = location.state?.sessionId;
-    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'passport-submission', 'local-cuisine'];
+    const apiBasedChats = ['what-to-do', 'currency-converter', 'plan-my-trip', 'things-to-do-in-bali', 'general', 'voice-translator', 'local-cuisine'];
 
     // Wait for chatType to be set
     if (!chatType) {
@@ -875,6 +879,7 @@ const Chat = () => {
     { id: "recommendations", name: t("recommendations"), icon: "/chat-icons/recommend.svg" },
     { id: "discounts_promotions", name: t("discounts_promotions"), icon: "/chat-icons/discount.svg" },
     { id: "passport_submission", name: t("passport_submission"), icon: "/chat-icons/passport.svg" },
+    { id: "maintenance_issue", name: t("maintenance_issue") || "Report Issue", icon: "/chat-icons/today.svg" },
   ];
 
   return (
@@ -1019,7 +1024,11 @@ const Chat = () => {
             aria-label="Chat messages"
           >
             <div className="flex flex-col gap-5">
-              {messages.map((message) => (
+              {activeTab === "passport_submission" ? (
+                <PassportSubmission userId={userId} villaCode={localStorage.getItem("villa_code") || "VILLA_DEFAULT"} />
+              ) : activeTab === "maintenance_issue" ? (
+                <IssueReporting userId={userId} villaCode={localStorage.getItem("villa_code") || "VILLA_DEFAULT"} />
+              ) : messages.map((message) => (
                 message.sender === "bot" ? (
                   <div key={message.id} className="flex items-end gap-2">
                     <div className="w-10 h-10 rounded-full bg-[#FF8000] flex items-center justify-center flex-shrink-0">
@@ -1074,62 +1083,65 @@ const Chat = () => {
             </div>
           </div>
         </div>
-        <div className="px-[10px]">
-          <div className="rounded-full bg-white shadow-lg flex px-[20px] sm:px-[40px] py-[20px] items-center justify-between h-[85px] mb-[20px] border-class">
-            {chatType === 'passport-submission' && (
-              <>
-                <input
-                  type="file"
-                  accept="image/*"
-                  id="passport-upload"
-                  className="hidden"
-                  onChange={handleFileChange}
-                />
-                <label htmlFor="passport-upload" className={`cursor-pointer mr-3 ${apiLoading ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500 hover:text-orange-500 transition">
-                    <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-                  </svg>
-                </label>
-              </>
-            )}
-            <input
-              type="text"
-              placeholder={t("chat_placeholder")}
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
-              disabled={apiLoading}
-              aria-label="Type your message"
-              className="w-[90%] py-4 sm:py-6 rounded-[50px] text-[#333] text-[16px] sm:text-[18px] placeholder:text-[#8e8e8e] disabled:opacity-50 outline-none"
-            />
-            <div className="flex items-center gap-4">
-              <button
-                aria-label={isListening ? "Stop voice search" : "Start voice search"}
-                onClick={toggleListening}
-                className={`focus:outline-none focus:ring-2 focus:ring-orange-500 rounded-full p-2 transition-all duration-300 ${isListening ? 'scale-125 mic-glow' : ''}`}
-              >
-                <img
-                  src="/assets/mic.svg"
-                  alt=""
-                  aria-hidden="true"
-                  className={isListening ? 'filter invert sepia(100%) saturate(10000%) hue-rotate(0deg) brightness(100%) contrast(100%)' : ''}
-                />
-              </button>
-              <button
-                aria-label="Send message"
-                onClick={handleSendClick}
+
+        {activeTab !== "passport_submission" && activeTab !== "maintenance_issue" && (
+          <div className="px-[10px]">
+            <div className="rounded-full bg-white shadow-lg flex px-[20px] sm:px-[40px] py-[20px] items-center justify-between h-[85px] mb-[20px] border-class">
+              {chatType === 'passport-submission' && (
+                <>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    id="passport-upload"
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
+                  <label htmlFor="passport-upload" className={`cursor-pointer mr-3 ${apiLoading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500 hover:text-orange-500 transition">
+                      <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                    </svg>
+                  </label>
+                </>
+              )}
+              <input
+                type="text"
+                placeholder={t("chat_placeholder")}
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyPress={handleKeyPress}
                 disabled={apiLoading}
-                className={`w-[35px] h-[35px] sm:w-[50px] sm:h-[50px] focus:outline-none focus:ring-2 focus:ring-orange-500 rounded-full flex items-center justify-center ${apiLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-              >
-                <img
-                  src="/assets/chat-btn.svg"
-                  alt=""
-                  aria-hidden="true"
-                />
-              </button>
+                aria-label="Type your message"
+                className="w-[90%] py-4 sm:py-6 rounded-[50px] text-[#333] text-[16px] sm:text-[18px] placeholder:text-[#8e8e8e] disabled:opacity-50 outline-none"
+              />
+              <div className="flex items-center gap-4">
+                <button
+                  aria-label={isListening ? "Stop voice search" : "Start voice search"}
+                  onClick={toggleListening}
+                  className={`focus:outline-none focus:ring-2 focus:ring-orange-500 rounded-full p-2 transition-all duration-300 ${isListening ? 'scale-125 mic-glow' : ''}`}
+                >
+                  <img
+                    src="/assets/mic.svg"
+                    alt=""
+                    aria-hidden="true"
+                    className={isListening ? 'filter invert sepia(100%) saturate(10000%) hue-rotate(0deg) brightness(100%) contrast(100%)' : ''}
+                  />
+                </button>
+                <button
+                  aria-label="Send message"
+                  onClick={handleSendClick}
+                  disabled={apiLoading}
+                  className={`w-[35px] h-[35px] sm:w-[50px] sm:h-[50px] focus:outline-none focus:ring-2 focus:ring-orange-500 rounded-full flex items-center justify-center ${apiLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                >
+                  <img
+                    src="/assets/chat-btn.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

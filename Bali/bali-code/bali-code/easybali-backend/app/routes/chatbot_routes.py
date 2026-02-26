@@ -81,7 +81,7 @@ async def create_booking_payment(request: BookingRequest):
             
             payment_url = payment_result.get("payment_url")
             return {
-                "response": f"Successfully generated your payment link for **{service_name}**!\n\n[💳 Click here to pay via Xendit]({payment_url})\n\nYou will receive a confirmation once the payment is completed."
+                "response": f"Successfully generated your payment link for **{service_name}** at **{villa_code}**!\n\n[💳 Click here to pay via Xendit]({payment_url})\n\nYou will receive a confirmation once the payment is completed."
             }
         else:
             return {

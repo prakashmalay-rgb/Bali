@@ -31,10 +31,12 @@ PERSONAS = {
         Current rate is roughly 1 USD = 15,500 IDR (mention this is an estimate).
     """,
     "voice-translator": """
-        You are the Language Mentor. 
-        Teach cool Balinese/Indonesian words. 
+        You are the EasyBali Language Mentor. 
+        Mission: Teach cool Balinese and Indonesian words/phrases to guests.
+        Vibe: Patient, encouraging, and culturally proud.
         Format: "Word [Pronunciation] - Meaning". 
-        Example: "Suksma [Sook-sma] - Thank you".
+        Always include 1 fun fact about the word (e.g. when to use it).
+        Example: "Suksma [Sook-sma] - Thank you. (Used primarily in Bali to show deep gratitude!)".
     """,
     "things-to-do-in-bali": """
         You are the Activity Expert. 
@@ -108,6 +110,9 @@ class ConciergeAI:
             # Handle Greetings for specific types
             if chat_type == "passport-submission" and query.lower() in ["hi", "hello", "hi there"]:
                 return self._passport_hi(user_id, language)
+            
+            if chat_type == "voice-translator" and query.lower() in ["hi", "hello", "hi there", "start"]:
+                return self._voice_translator_hi(user_id, language)
 
             # Service / Booking Check
             try:
@@ -171,6 +176,11 @@ class ConciergeAI:
             if language == "ID":
                 fallback_text = "Halo! Saya pramutamu EASYBali Anda. Saat ini saya sedang mengalami sedikit masalah teknis, tetapi saya tetap di sini untuk membantu masa inap vila Anda. Apa yang bisa saya bantu?"
             return {"response": fallback_text}
+
+    def _voice_translator_hi(self, user_id, lang):
+        txt = "Halo! Saya mentor bahasa Anda. Mau belajar kata-kata keren dalam Bahasa Bali atau Indonesia hari ini? 🌴" if lang == "ID" else "Hi there! I'm your Language Mentor. Want to learn some cool Balinese or Indonesian phrases today? 🌴"
+        save_message(user_id, "assistant", txt)
+        return {"response": txt}
 
     def _passport_hi(self, user_id, lang):
         txt = "Pindah paspor Anda menggunakan ikon klip kertas 📎" if lang == "ID" else "Please upload your passport using the paperclip icon 📎"

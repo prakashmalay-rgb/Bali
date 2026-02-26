@@ -260,3 +260,8 @@ async def get_price_distribution_details(service_item: str, location_zone: str =
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@router.get("/debug_sheets")
+async def debug_sheets():
+    workbook = get_workbook("1tuGBnQFjDntJQglofA17uHhiyekkVyDoSInErbwfR24")
+    return {"sheets": [s.title for s in workbook.worksheets()]}

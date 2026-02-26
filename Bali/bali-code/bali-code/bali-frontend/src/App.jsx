@@ -9,7 +9,7 @@ import Components from "./components/components";
 import Home from "./page/home";
 import Chat from "./components/chatbot/chat";
 import TripServices from "./components/services/Categories";
-import SubCategories from "./components/services/Subcategories"
+import SubCategories from "./components/services/Subcategories";
 import ServiceItems from "./components/services/serviceItems";
 import PrivacyPolicy from "./components/termspages/privacy-policy/PrivacyPolicy";
 import TermsConditons from "./components/termspages/terms-conditions/TermsConditons";

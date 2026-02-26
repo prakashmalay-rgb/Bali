@@ -25,7 +25,8 @@
 }
 
 /* Hide default arrows */
-.slick-prev, .slick-next {
+.slick-prev,
+.slick-next {
   display: none !important;
 }
 
@@ -100,26 +101,26 @@
     opacity: 1 !important;
     transform: scale(1) !important;
   }
-  
+
   .slick-slide .slider-card {
     filter: none !important;
     opacity: 1 !important;
     transform: scale(1) !important;
   }
-  
+
   /* Therapy slider mobile styles */
   .therapy-slider-card {
     filter: none !important;
     opacity: 1 !important;
     transform: scale(1) !important;
   }
-  
+
   .slick-slide .therapy-slider-card {
     filter: none !important;
     opacity: 1 !important;
     transform: scale(1) !important;
   }
-  
+
   .slider-item {
     padding: 0 20px !important;
   }
@@ -150,35 +151,39 @@ select option:checked {
   color: white !important;
 }
 
-.background-class{
-  background-image: url('./assets/images/bg.png');
+.background-class {
+  background-color: #f8fafc;
   object-fit: cover;
   background-size: cover;
   background-repeat: no-repeat;
   background-position: center center;
   background-attachment: fixed;
-} 
-
-.border-class{
-    border: 1px solid #c6c6c6 ;
 }
 
-.card-bg{
-    background-image: url('./assets/images/card.png');
-    object-fit: cover;
-    background-size: cover;
-    background-repeat: no-repeat;
-    background-position: center center;
+.border-class {
+  border: 1px solid #c6c6c6;
+}
+
+.card-bg {
+  background-image: url('./assets/images/card.png');
+  object-fit: cover;
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center center;
 
 }
-.word-class{
-    word-break: break-all;
+
+.word-class {
+  word-break: break-all;
 }
 
 @keyframes float {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translateY(0px);
   }
+
   50% {
     transform: translateY(-20px);
   }
@@ -193,10 +198,12 @@ select option:checked {
     box-shadow: 0 0 0 0 rgba(255, 128, 0, 0.7);
     transform: scale(1);
   }
+
   70% {
     box-shadow: 0 0 0 15px rgba(255, 128, 0, 0);
     transform: scale(1.1);
   }
+
   100% {
     box-shadow: 0 0 0 0 rgba(255, 128, 0, 0);
     transform: scale(1);

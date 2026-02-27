@@ -166,7 +166,9 @@ async def get_concierge_chats() -> Dict[str, Any]:
 @router.get("/passports")
 async def get_passport_submissions() -> Dict[str, Any]:
     try:
-        # Fetch latest passports explicitly tracked by the bot
+        from app.utils.bucket import generate_presigned_url
+
+        # Fetch latest passports
         recent_passports = await passport_collection.find().sort("uploaded_at", -1).limit(50).to_list(50)
         
         passport_list = []
@@ -174,12 +176,18 @@ async def get_passport_submissions() -> Dict[str, Any]:
             time_val = passport.get("uploaded_at")
             time_str = time_val.strftime("%Y-%m-%d %H:%M:%S") if hasattr(time_val, "strftime") else "Recently"
             user_id = str(passport.get("user_id", "Unknown"))
+            guest_name = passport.get("guest_name", f"Guest {user_id[-4:]}")
+            
+            # Generate a time-limited presigned URL from the stored S3 key
+            s3_key = passport.get("s3_key")
+            passport_url = generate_presigned_url(s3_key) if s3_key else None
             
             passport_list.append({
                 "id": str(passport.get("_id")),
                 "guest_id": user_id,
-                "guest_name": f"Guest {user_id[-4:]}",
-                "passport_url": passport.get("passport_url"),
+                "guest_name": guest_name,
+                "villa_code": passport.get("villa_code", "N/A"),
+                "passport_url": passport_url,
                 "status": passport.get("status", "pending_verification"),
                 "time": time_str
             })

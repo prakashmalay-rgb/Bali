@@ -2,10 +2,15 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 
+const API_BASE_URL = window.location.hostname === 'localhost'
+    ? 'http://localhost:8000'
+    : (import.meta.env.VITE_API_URL || 'https://bali-v92r.onrender.com');
+
 const PassportSubmission = ({ userId, villaCode }) => {
     const [file, setFile] = useState(null);
     const [fullName, setFullName] = useState('');
     const [loading, setLoading] = useState(false);
+    const [submitted, setSubmitted] = useState(false);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -16,22 +21,48 @@ const PassportSubmission = ({ userId, villaCode }) => {
 
         const formData = new FormData();
         formData.append('user_id', userId);
-        formData.append('villa_code', villaCode);
+        formData.append('villa_code', villaCode || 'WEB_VILLA_01');
         formData.append('full_name', fullName);
         formData.append('file', file);
 
         setLoading(true);
         try {
-            await axios.post(`${import.meta.env.VITE_API_URL}/passports/upload`, formData);
-            toast.success("Passport uploaded securely!");
+            const response = await axios.post(`${API_BASE_URL}/passports/upload`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+                timeout: 30000
+            });
+            toast.success("✅ Passport uploaded securely!");
+            setSubmitted(true);
             setFile(null);
             setFullName('');
         } catch (error) {
-            toast.error(error.response?.data?.detail || "Upload failed. Please try again.");
+            console.error("Passport upload error:", error);
+            const detail = error.response?.data?.detail || "Upload failed. Please try again.";
+            toast.error(detail);
         } finally {
             setLoading(false);
         }
     };
+
+    if (submitted) {
+        return (
+            <div className="passport-upload-card p-6 bg-white rounded-xl shadow-lg border border-green-200">
+                <div className="text-center py-8">
+                    <div className="text-5xl mb-4">✅</div>
+                    <h3 className="text-xl font-semibold text-green-700 mb-2">Passport Submitted!</h3>
+                    <p className="text-sm text-gray-500 mb-6">
+                        Your passport has been securely uploaded and encrypted. The villa staff will verify it shortly.
+                    </p>
+                    <button
+                        onClick={() => setSubmitted(false)}
+                        className="text-blue-600 underline text-sm hover:text-blue-800 transition"
+                    >
+                        Submit another passport
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="passport-upload-card p-6 bg-white rounded-xl shadow-lg border border-gray-100">
@@ -59,7 +90,7 @@ const PassportSubmission = ({ userId, villaCode }) => {
                         id="passport-file"
                         onChange={(e) => setFile(e.target.files[0])}
                         className="hidden"
-                        accept=".jpg,.jpeg,.png,.pdf"
+                        accept=".jpg,.jpeg,.png,.pdf,.webp"
                     />
                     <label htmlFor="passport-file" className="cursor-pointer">
                         {file ? (

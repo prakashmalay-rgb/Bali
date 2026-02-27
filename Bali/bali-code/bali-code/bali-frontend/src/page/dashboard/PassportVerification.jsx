@@ -29,6 +29,21 @@ const PassportVerification = () => {
         return () => clearInterval(interval);
     }, []);
 
+    const handleVerify = async (id) => {
+        try {
+            const response = await axios.put(`${API_BASE_URL}/dashboard-api/passports/${id}/verify`);
+            if (response.data.success) {
+                setPassports(prev => prev.map(p => p.id === id ? { ...p, status: 'verified' } : p));
+                setSelectedPassport(prev => prev && prev.id === id ? { ...prev, status: 'verified' } : prev);
+            } else {
+                alert("Error verifying passport: " + response.data.error);
+            }
+        } catch (error) {
+            console.error("Failed to verify passport:", error);
+            alert("Error verifying passport. Please try again.");
+        }
+    };
+
     const filteredPassports = passports.filter(p =>
         p.guest_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.guest_id.includes(searchTerm)
@@ -168,6 +183,11 @@ const PassportVerification = () => {
                         </div>
                         <div className="p-4 bg-white border-t border-gray-100 flex justify-end gap-3">
                             <button onClick={() => setSelectedPassport(null)} className="px-6 py-2.5 rounded-xl font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition">Close</button>
+                            {selectedPassport.status === 'pending_verification' && (
+                                <button onClick={() => handleVerify(selectedPassport.id)} className="px-6 py-2.5 rounded-xl font-semibold text-white bg-green-500 hover:bg-green-600 shadow-sm transition">
+                                    <FiCheckCircle className="inline mr-1" /> Verify Passport
+                                </button>
+                            )}
                             <a href={selectedPassport.passport_url} target="_blank" rel="noopener noreferrer" className="px-6 py-2.5 rounded-xl font-semibold text-white bg-primary hover:bg-[#0B97EE] shadow-blue-shadow transition">Download Origin</a>
                         </div>
                     </div>

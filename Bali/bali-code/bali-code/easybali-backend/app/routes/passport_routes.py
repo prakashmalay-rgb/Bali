@@ -35,8 +35,20 @@ async def _upload_passport_to_s3(file: UploadFile) -> str:
         key,
         ExtraArgs={'ContentType': file.content_type or 'application/octet-stream'}
     )
-    
-    return f"https://{settings.AWS_BUCKET_NAME}.s3.{settings.AWS_REGION}.amazonaws.com/{key}"
+    return key, f"https://{settings.AWS_BUCKET_NAME}.s3.{settings.AWS_REGION}.amazonaws.com/{key}"
+
+def get_presigned_url(s3_key: str, expiration=3600) -> str:
+    """Generate a temporary pre-signed URL to securely display a passport file."""
+    try:
+        url = _s3.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': settings.AWS_BUCKET_NAME, 'Key': s3_key},
+            ExpiresIn=expiration
+        )
+        return url
+    except Exception as e:
+        logger.error(f"Error generating presigned url for {s3_key}: {e}")
+        return ""
 
 
 @router.post("/upload")
@@ -60,16 +72,15 @@ async def upload_passport(
         raise HTTPException(status_code=400, detail="File too large. Maximum 10MB.")
     
     await file.seek(0)
-    
     try:
-        file_url = await _upload_passport_to_s3(file)
+        file_key, file_url = await _upload_passport_to_s3(file)
         
         passport_data = {
             "user_id": user_id,
             "villa_code": villa_code,
             "guest_name": full_name,
             "passport_url": file_url,
-            "s3_key": file_url,
+            "s3_key": file_key,
             "status": "pending_verification",
             "uploaded_at": datetime.utcnow(),
             "expires_at": datetime.utcnow() + timedelta(days=90)

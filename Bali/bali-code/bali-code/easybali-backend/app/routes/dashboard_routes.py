@@ -169,6 +169,8 @@ async def get_passport_submissions() -> Dict[str, Any]:
         # Fetch latest passports
         recent_passports = await passport_collection.find().sort("uploaded_at", -1).limit(50).to_list(50)
         
+        from app.routes.passport_routes import get_presigned_url
+        
         passport_list = []
         for passport in recent_passports:
             time_val = passport.get("uploaded_at")
@@ -176,12 +178,21 @@ async def get_passport_submissions() -> Dict[str, Any]:
             user_id = str(passport.get("user_id", "Unknown"))
             guest_name = passport.get("guest_name", f"Guest {user_id[-4:]}")
             
+            # Use safe presigned URL instead of raw link
+            s3_key_raw = passport.get("s3_key") or passport.get("passport_url", "")
+            if s3_key_raw.startswith("http"):
+                parsed_key = s3_key_raw.split(".amazonaws.com/")[-1]
+            else:
+                parsed_key = s3_key_raw
+                
+            secure_url = get_presigned_url(parsed_key) if parsed_key else passport.get("passport_url")
+            
             passport_list.append({
                 "id": str(passport.get("_id")),
                 "guest_id": user_id,
                 "guest_name": guest_name,
                 "villa_code": passport.get("villa_code", "N/A"),
-                "passport_url": passport.get("passport_url"),
+                "passport_url": secure_url,
                 "status": passport.get("status", "pending_verification"),
                 "time": time_str
             })
@@ -197,4 +208,39 @@ async def get_passport_submissions() -> Dict[str, Any]:
             "error": "Failed to fetch passport submissions",
             "passports": []
         }
+
+@router.put("/passports/{passport_id}/verify")
+async def verify_passport(passport_id: str) -> Dict[str, Any]:
+    from bson.objectid import ObjectId
+    from app.utils.whatsapp_func import send_whatsapp_message
+    
+    try:
+        # 1. Find the document
+        passport = await passport_collection.find_one({"_id": ObjectId(passport_id)})
+        if not passport:
+            return {"success": False, "error": "Passport submission not found"}
+            
+        # 2. Update status
+        await passport_collection.update_one(
+            {"_id": ObjectId(passport_id)},
+            {"$set": {"status": "verified"}}
+        )
+        
+        # 3. Notify Customer
+        user_id = passport.get("user_id")
+        guest_name = passport.get("guest_name", "Guest")
+        if user_id:
+            msg_customer = f"✅ *Verification Complete!*\n\nHi {guest_name}, your passport has been successfully verified. Welcome to Easy-Bali!"
+            await send_whatsapp_message(user_id, msg_customer)
+            
+        # 4. Notify Villa 
+        villa_code = passport.get("villa_code")
+        if villa_code:
+            msg_villa = f"✅ *Guest Verified!*\n\nThe passport for {guest_name} ({user_id}) has been officially verified by the Admin dashboard."
+            await send_whatsapp_message(villa_code, msg_villa)
+            
+        return {"success": True, "message": "Passport verified successfully"}
+    except Exception as e:
+        print(f"Error verifying passport {passport_id}: {e}")
+        return {"success": False, "error": str(e)}
 

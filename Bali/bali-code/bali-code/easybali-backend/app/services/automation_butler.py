@@ -44,31 +44,32 @@ async def check_order_triggers(order, now):
     if "pre_checkout" not in sent:
         check_out = order.get("check_out_date") # Assuming stored as datetime
         if check_out and (check_out - now) < timedelta(hours=18):
-            template = await get_template(villa_code, "pre_checkout")
-            message = template.format(name=guest_name)
-            await enqueue_whatsapp_message(phone, message)
-            await mark_sent(order["_id"], "pre_checkout")
+            template_content = await get_template(villa_code, "pre_checkout")
+            if template_content:
+                message = template_content.format(name=guest_name)
+                await enqueue_whatsapp_message(phone, message)
+                await mark_sent(order["_id"], "pre_checkout")
 
     # Example: Welcome Message
     if "welcome" not in sent:
         created_at = order.get("created_at")
         if created_at and (now - created_at) < timedelta(hours=1):
-            template = await get_template(villa_code, "welcome")
-            message = template.format(name=guest_name)
-            await enqueue_whatsapp_message(phone, message)
-            await mark_sent(order["_id"], "welcome")
+            template_content = await get_template(villa_code, "welcome")
+            if template_content:
+                message = template_content.format(name=guest_name)
+                await enqueue_whatsapp_message(phone, message)
+                await mark_sent(order["_id"], "welcome")
 
 async def get_template(villa_code, trigger_type):
     # Fetch customized template or fallback to default
     tpl = await template_collection.find_one({"villa_code": villa_code, "type": trigger_type})
-    if not tpl:
-        defaults = {
-            "welcome": "Hi {name}! Welcome to Bali. Our AI concierge is ready to help you with everything you need.",
-            "pre_checkout": "Hi {name}, we hope you enjoyed your stay. Your check-out is tomorrow. Need a transfer to the airport?",
-            "post_checkout": "Hi {name}, thank you for staying with us! Please rate your experience: https://bali.com/feedback"
-        }
-        return defaults.get(trigger_type, "Hello from Easy Bali!")
-    return tpl["content"]
+    if tpl:
+        if not tpl.get("is_active", True):
+            return None
+        return tpl["content"]
+        
+    # If no db record exists, assume disabled by default to prevent unwanted spam
+    return None
 
 async def mark_sent(order_id, trigger_name):
     await order_collection.update_one(

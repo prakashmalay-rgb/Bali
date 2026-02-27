@@ -163,7 +163,7 @@ const PassportSubmission = ({ userId, villaCode }) => {
                     </div>
                 </div>
                 <button onClick={handleReset} style={{
-                    background: 'none', border: 'none', color: '#2563eb',
+                    background: 'none', border: 'none', color: '#0169E4',
                     textDecoration: 'underline', cursor: 'pointer', fontSize: '14px', fontWeight: '500'
                 }}>
                     Submit another passport
@@ -219,10 +219,10 @@ const PassportSubmission = ({ userId, villaCode }) => {
 
                 {/* File Upload */}
                 <div style={{
-                    border: `2px dashed ${file ? '#3b82f6' : '#d1d5db'}`,
+                    border: `2px dashed ${file ? '#0169E4' : '#d1d5db'}`,
                     borderRadius: '12px', padding: '24px 16px', textAlign: 'center',
                     cursor: loading ? 'not-allowed' : 'pointer',
-                    marginBottom: '16px', background: file ? '#eff6ff' : '#fafafa'
+                    marginBottom: '16px', background: file ? '#f0f7ff' : '#fafafa'
                 }}
                     onClick={() => !loading && fileRef.current?.click()}
                 >
@@ -236,7 +236,7 @@ const PassportSubmission = ({ userId, villaCode }) => {
                     {file ? (
                         <div>
                             <span style={{ fontSize: '24px' }}>📄</span>
-                            <p style={{ color: '#2563eb', fontWeight: '600', fontSize: '14px', marginTop: '6px' }}>{file.name}</p>
+                            <p style={{ color: '#0169E4', fontWeight: '600', fontSize: '14px', marginTop: '6px' }}>{file.name}</p>
                             <p style={{ color: '#9ca3af', fontSize: '12px', marginTop: '2px' }}>{(file.size / 1024 / 1024).toFixed(2)} MB</p>
                         </div>
                     ) : (
@@ -274,7 +274,7 @@ const PassportSubmission = ({ userId, villaCode }) => {
                         }}>
                             <div style={{
                                 width: `${uploadProgress}%`, height: '100%',
-                                background: 'linear-gradient(90deg, #3b82f6, #6366f1)',
+                                background: 'linear-gradient(90deg, #0169E4, #0B97EE)',
                                 borderRadius: '999px', transition: 'width 0.3s ease'
                             }} />
                         </div>
@@ -291,10 +291,10 @@ const PassportSubmission = ({ userId, villaCode }) => {
                         cursor: (loading || !file || !fullName.trim()) ? 'not-allowed' : 'pointer',
                         background: (loading || !file || !fullName.trim())
                             ? '#9ca3af'
-                            : 'linear-gradient(135deg, #2563eb, #4f46e5)',
+                            : 'linear-gradient(135deg, #0169E4, #0B97EE)',
                         boxShadow: (loading || !file || !fullName.trim())
                             ? 'none'
-                            : '0 4px 14px rgba(37,99,235,0.3)',
+                            : '0 4px 14px rgba(1, 105, 228, 0.3)',
                         transition: 'all 0.2s'
                     }}
                 >

@@ -22,6 +22,9 @@ import DashboardMain from "./page/dashboard/DashboardMain";
 import DashboardLogin from "./page/dashboard/Login";
 import DashboardChats from "./page/dashboard/DashboardChats";
 import PassportVerification from "./page/dashboard/PassportVerification";
+import PromoManagement from "./page/dashboard/PromoManagement";
+import FAQManagement from "./page/dashboard/FAQManagement";
+import MessageAutomations from "./page/dashboard/MessageAutomations";
 import { Navigate } from "react-router-dom";
 import { LanguageProvider } from "./context/LanguageContext";
 import PageTransition from "./components/layout/PageTransition";
@@ -129,6 +132,18 @@ const appRouter = createBrowserRouter([
       {
         path: "passports",
         element: <PassportVerification />,
+      },
+      {
+        path: "promos",
+        element: <PromoManagement />,
+      },
+      {
+        path: "faqs",
+        element: <FAQManagement />
+      },
+      {
+        path: "automations",
+        element: <MessageAutomations />
       }
     ],
   },

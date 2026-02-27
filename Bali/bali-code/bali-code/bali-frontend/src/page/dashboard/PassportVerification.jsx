@@ -168,7 +168,7 @@ const PassportVerification = () => {
                         </div>
                         <div className="p-4 bg-white border-t border-gray-100 flex justify-end gap-3">
                             <button onClick={() => setSelectedPassport(null)} className="px-6 py-2.5 rounded-xl font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition">Close</button>
-                            <a href={selectedPassport.passport_url} target="_blank" rel="noopener noreferrer" className="px-6 py-2.5 rounded-xl font-semibold text-white bg-primary hover:bg-[#ff8000] shadow-blue-shadow transition">Download Origin</a>
+                            <a href={selectedPassport.passport_url} target="_blank" rel="noopener noreferrer" className="px-6 py-2.5 rounded-xl font-semibold text-white bg-primary hover:bg-[#0B97EE] shadow-blue-shadow transition">Download Origin</a>
                         </div>
                     </div>
                 </div>

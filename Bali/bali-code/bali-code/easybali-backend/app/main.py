@@ -16,10 +16,15 @@ from app.routes.passport_routes import router as passport_router
 from app.routes.issue_routes import router as issue_router
 from app.routes.onboarding import router as onboarding_router
 from app.routes.admin_users import router as admin_users_router
+from app.routes.promo_admin import router as promo_admin_router
+from app.routes.faq_admin import router as faq_admin_router
+from app.routes.automation_admin import router as automation_admin_router
 from fastapi.middleware.cors import CORSMiddleware
 from app.services.menu_services import start_cache_refresh, stop_cache_refresh
+from app.services.automation_butler import process_automations
 from app.services.openai_client import client
 import logging
+import asyncio
 
 
 logging.basicConfig(level=logging.INFO)
@@ -61,18 +66,23 @@ app.include_router(event_calender)
 app.include_router(local_cuisine)
 app.include_router(what_to_do)
 app.include_router(plan_my_trip)
-app.include_router(web_order_flow)
 app.include_router(language_lesson)
+app.include_router(web_order_flow)
 app.include_router(currency_converter)
 app.include_router(villa_links_router)
-app.include_router(onboarding_router)
-app.include_router(admin_users_router)
 app.include_router(passport_router)
 app.include_router(issue_router)
+app.include_router(onboarding_router)
+app.include_router(admin_users_router)
+app.include_router(promo_admin_router)
+app.include_router(faq_admin_router)
+app.include_router(automation_admin_router)
 
 @app.on_event("startup")
 def on_startup():
     start_cache_refresh()
+    # Start the automated messaging background task engine
+    asyncio.create_task(process_automations())
 
 @app.on_event("shutdown")
 def on_shutdown():

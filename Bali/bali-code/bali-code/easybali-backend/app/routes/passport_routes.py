@@ -12,12 +12,15 @@ logger = logging.getLogger(__name__)
 
 passport_collection = db["passports"]
 
+from botocore.config import Config
+
 # Passport-specific S3 client (no ACL usage)
 _s3 = boto3.client(
     's3',
     aws_access_key_id=settings.AWS_ACCESS_KEY,
     aws_secret_access_key=settings.AWS_SECRET_KEY,
-    region_name=settings.AWS_REGION
+    region_name=settings.AWS_REGION,
+    config=Config(signature_version='s3v4')
 )
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".pdf", ".webp"}

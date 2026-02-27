@@ -99,6 +99,27 @@ try:
 except Exception as e:
     logger.error(f"❌ xendit_webhook failed: {e}")
 
+try:
+    from app.routes.promo_admin import router as promo_admin_router
+    app.include_router(promo_admin_router)
+    logger.info("✅ promo_admin_router loaded")
+except Exception as e:
+    logger.error(f"❌ promo_admin_router failed: {e}")
+
+try:
+    from app.routes.faq_admin import router as faq_admin_router
+    app.include_router(faq_admin_router)
+    logger.info("✅ faq_admin_router loaded")
+except Exception as e:
+    logger.error(f"❌ faq_admin_router failed: {e}")
+
+try:
+    from app.routes.automation_admin import router as automation_admin_router
+    app.include_router(automation_admin_router)
+    logger.info("✅ automation_admin_router loaded")
+except Exception as e:
+    logger.error(f"❌ automation_admin_router failed: {e}")
+
 # ── Startup / Shutdown ────────────────────────────────────────────────────────
 @app.on_event("startup")
 async def startup_event():

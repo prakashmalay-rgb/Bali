@@ -24,7 +24,11 @@ cache = {
     "design_df": None,
     "last_updated": None,
     "main_menu_design":None,
-    "service_providers":None
+    "service_providers":None,
+    "archive_df": None,
+    "platform_design_df": None,
+    "price_diff_df": None,
+    "price_diff_sp_df": None
 }
 
 # Refresh thread control
@@ -58,6 +62,32 @@ def load_data_into_cache():
 
         cache["design_df"] = clean_dataframe(workbook.worksheet("Services Designs").get_all_values())
         cache["main_menu_design"] = clean_dataframe(workbook.worksheet("Menu Design").get_all_values())
+        
+        # Extended Context Sheets for AI Chatbot
+        try:
+            archive_ws = workbook.worksheet("Archive")
+            data_arch = archive_ws.get_all_values()
+            cache["archive_df"] = pd.DataFrame(data_arch[1:], columns=data_arch[0]) if data_arch else pd.DataFrame()
+        except Exception: cache["archive_df"] = pd.DataFrame()
+
+        try:
+            plat_ws = workbook.worksheet("Platform Design")
+            data_plat = plat_ws.get_all_values()
+            cache["platform_design_df"] = pd.DataFrame(data_plat[1:], columns=data_plat[0]) if data_plat else pd.DataFrame()
+        except Exception: cache["platform_design_df"] = pd.DataFrame()
+
+        try:
+            pdiff_ws = workbook.worksheet("Price Diff")
+            data_pdiff = pdiff_ws.get_all_values()
+            cache["price_diff_df"] = pd.DataFrame(data_pdiff[1:], columns=data_pdiff[0]) if data_pdiff else pd.DataFrame()
+        except Exception: cache["price_diff_df"] = pd.DataFrame()
+
+        try:
+            pdiffsp_ws = workbook.worksheet("Price Diff SP")
+            data_pdiffsp = pdiffsp_ws.get_all_values()
+            cache["price_diff_sp_df"] = pd.DataFrame(data_pdiffsp[1:], columns=data_pdiffsp[0]) if data_pdiffsp else pd.DataFrame()
+        except Exception: cache["price_diff_sp_df"] = pd.DataFrame()
+
         
         # Load specialized AI Data for refined RAG context
         try:

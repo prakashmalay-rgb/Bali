@@ -1,5 +1,6 @@
 import json
 import logging
+import pandas as pd
 from typing import Dict, Any, List, Optional
 from fastapi import HTTPException
 from app.settings.config import settings
@@ -18,12 +19,13 @@ PERSONAS = {
         You’re EasyBali, Bali’s most enthusiastic travel pal! 
         Vibe: Friendly, witty, local. 
         Mission: Suggest activities found in the INTERNAL DB (Services sheet). 
-        If nothing is there, suggest something epic from general knowledge.
+        You have been provided deep context from the Archive, Platform Design, and Price Diff tabs. If a user asks about a service you cannot find in the active directory, check the Archive list provided in your context. If it's still not there, intelligently browse your own general knowledge to answer.
     """,
     "plan-my-trip": """
         You are EasyBali - AI Travel Planner. 
         Help the guest plan their perfect trip in Bali. 
         Recommend activities, provide itineraries, and mention any available discounts or promotions (e.g. promo codes).
+        Always refer to the Archive or Price Diff context if asked about legacy or specific tier pricing before falling back to general knowledge.
     """,
     "currency-converter": """
         You are the Global Currency Assistant. 
@@ -47,6 +49,7 @@ PERSONAS = {
     "general": """
         Premium concierge for Bali villa guests. 
         Professional, excited, high-end.
+        You have been provided deep context from the Archive and Price Diff tabs. If a user asks about a service you cannot find in the active directory, check the Archive list provided in your context. If it's still not there, intelligently browse your own general knowledge to answer.
     """
 }
 
@@ -108,13 +111,45 @@ class ConciergeAI:
         """INTERNAL DB FETCH (Priority 1)"""
         context = ""
         try:
-            # 1. AI Data Sheet
+            # 1. AI Data Sheet (Core context)
             if cache.get("ai_data_df") is not None and not cache["ai_data_df"].empty:
-                context += "INTERNAL DB SERVICES:\n"
-                for _, row in cache["ai_data_df"].head(30).iterrows():
+                context += "--- ACTIVE SERVICES ---\n"
+                for _, row in cache["ai_data_df"].head(100).iterrows():
                     context += f"- {row.get('Service Item')}: {row.get('Service Item Description')} Price: {row.get('Price (Service Item Button)')}\n"
-        except: pass
-        return context
+            
+            # 2. Archive Data Sheet
+            if cache.get("archive_df") is not None and not cache["archive_df"].empty:
+                context += "\n--- ARCHIVE DATA (Legacy/Deep Query DB) ---\n"
+                arch_lines = []
+                for _, row in cache["archive_df"].head(150).iterrows():
+                    valid = [f"{col}:{val}" for col, val in row.items() if pd.notna(val) and str(val).strip()]
+                    if valid: arch_lines.append(" | ".join(valid))
+                context += "\n".join(arch_lines) + "\n"
+
+            # 3. Price Diff / Pricing Tiers
+            for sheet_name, lbl in [("price_diff_df", "PRICE DIFF"), ("price_diff_sp_df", "PRICE DIFF SP")]:
+                if cache.get(sheet_name) is not None and not cache[sheet_name].empty:
+                    context += f"\n--- {lbl} ---\n"
+                    lines = []
+                    for _, row in cache[sheet_name].head(150).iterrows():
+                        valid = [f"{col}:{val}" for col, val in row.items() if pd.notna(val) and str(val).strip()]
+                        if valid: lines.append(" | ".join(valid))
+                    context += "\n".join(lines) + "\n"
+                    
+            # 4. Platform Design
+            if cache.get("platform_design_df") is not None and not cache["platform_design_df"].empty:
+                context += "\n--- PLATFORM DESIGN ---\n"
+                p_lines = []
+                for _, row in cache["platform_design_df"].head(100).iterrows():
+                    valid = [f"{col}:{val}" for col, val in row.items() if pd.notna(val) and str(val).strip()]
+                    if valid: p_lines.append(" | ".join(valid))
+                context += "\n".join(p_lines) + "\n"
+
+        except Exception as e:
+            logger.error(f"Sheet Context Compilation Error: {e}")
+            
+        # Ensure context doesn't explode in length (approx 12,000 chars safety cap)
+        return context[:14000]
 
     async def process_query(self, query: str, user_id: str, chat_type: str, language: str, villa_code: str = "WEB_VILLA_01") -> Dict[str, Any]:
         """

@@ -1,17 +1,17 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
-from app.utils.bucket import upload_secure_file
+from app.utils.bucket import upload_to_s3
 from app.db.session import db
 from datetime import datetime, timedelta
 import logging
+import os
 
 router = APIRouter(prefix="/passports", tags=["Secure Documents"])
 logger = logging.getLogger(__name__)
 
 passport_collection = db["passports"]
-compliance_logs = db["compliance_logs"]
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".pdf", ".webp"}
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 @router.post("/upload")
 async def upload_passport(
@@ -21,67 +21,66 @@ async def upload_passport(
     file: UploadFile = File(...)
 ):
     """
-    Securely uploads a guest passport.
-    Validates file type/size and stores with encryption on S3.
+    Uploads a guest passport to S3 and stores metadata in MongoDB.
     """
-    import os
     file_extension = os.path.splitext(file.filename)[1].lower()
     
-    # 1. Validation
+    # 1. Validate file extension
     if file_extension not in ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail=f"Unsupported file type: {file_extension}. Use Images or PDF.")
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Unsupported file type: {file_extension}. Allowed: JPG, PNG, PDF, WEBP."
+        )
     
-    # Check file size (Read first chunk to see if it's already over or check spool)
-    # Note: SpooledTemporaryFile might not represent total size easily without reading
+    # 2. Validate file size
     content = await file.read()
     if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail="File too large. Maximum size is 5MB.")
+        raise HTTPException(status_code=400, detail="File too large. Maximum 10MB.")
     
-    # Seek back to start for S3 upload
+    # Reset file cursor for S3 upload
     await file.seek(0)
     
     try:
-        # 2. Secure Upload
-        file_key = await upload_secure_file(file, folder=f"passports/{villa_code}")
+        # 3. Upload to S3 (uses the proven public upload function)
+        file_url = await upload_to_s3(file)
         
-        # 3. Store Metadata
+        # 4. Store metadata in MongoDB
         passport_data = {
             "user_id": user_id,
             "villa_code": villa_code,
             "guest_name": full_name,
-            "s3_key": file_key,
+            "passport_url": file_url,
+            "s3_key": file_url,  # Keep both for backward compat
             "status": "pending_verification",
             "uploaded_at": datetime.utcnow(),
-            "expires_at": datetime.utcnow() + timedelta(days=90) # GDPR/Compliance: Auto-purge indicator
+            "expires_at": datetime.utcnow() + timedelta(days=90)
         }
         
         await passport_collection.insert_one(passport_data)
         
-        # 4. Compliance Log
-        await compliance_logs.insert_one({
-            "action": "UPLOAD",
-            "actor": user_id,
-            "resource": file_key,
-            "villa_code": villa_code,
-            "timestamp": datetime.utcnow(),
-            "status": "SUCCESS"
-        })
+        logger.info(f"Passport uploaded for {full_name} at {villa_code}: {file_url}")
         
         return {
             "status": "success",
-            "message": "Passport uploaded securely",
+            "message": "Passport uploaded successfully",
             "submission_id": str(user_id)
         }
         
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions directly
     except Exception as e:
-        logger.error(f"Passport upload logic failed: {e}")
-        raise HTTPException(status_code=500, detail="Internal processing error")
+        logger.error(f"Passport upload failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Upload processing error: {str(e)}")
 
 @router.get("/list/{villa_code}")
 async def list_villa_passports(villa_code: str):
-    """Admin route to list submissions for a specific villa."""
-    # TODO: Add Admin Authentication Guard
+    """Admin route to list passport submissions for a specific villa."""
     submissions = []
     async for entry in passport_collection.find({"villa_code": villa_code}, {"_id": 0}):
+        # Convert datetime to string for JSON serialization
+        if "uploaded_at" in entry and hasattr(entry["uploaded_at"], "strftime"):
+            entry["uploaded_at"] = entry["uploaded_at"].strftime("%Y-%m-%d %H:%M:%S")
+        if "expires_at" in entry and hasattr(entry["expires_at"], "strftime"):
+            entry["expires_at"] = entry["expires_at"].strftime("%Y-%m-%d %H:%M:%S")
         submissions.append(entry)
     return {"submissions": submissions}

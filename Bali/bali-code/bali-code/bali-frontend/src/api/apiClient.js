@@ -38,9 +38,9 @@ export function getUserFriendlyError(error) {
     const status = error.response.status;
     const detail = error.response?.data?.detail;
 
-    // Only expose clean, short API error details
-    if (detail && typeof detail === 'string' && detail.length < 200 && !detail.includes('SSL') && !detail.includes('mongo')) {
-        return detail;
+    // TEMPORARY: Expose exact raw backend error for debugging the 500 issue
+    if (detail) {
+        return `Backend Error: ${detail}`;
     }
 
     if (status === 422) return 'Please check your input and try again.';

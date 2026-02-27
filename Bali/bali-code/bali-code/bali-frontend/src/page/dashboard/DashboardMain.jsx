@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiTrendingUp, FiUsers, FiDollarSign, FiActivity } from 'react-icons/fi';
+import { FiTrendingUp, FiUsers, FiDollarSign, FiActivity, FiMessageSquare } from 'react-icons/fi';
 import axios from 'axios';
 
 const DashboardMain = () => {

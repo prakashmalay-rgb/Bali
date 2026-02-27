@@ -1,92 +1,54 @@
-// src/services/chatApi.js
+// src/api/chatApi.js
 import axios from 'axios';
-
-const API_BASE_URL = window.location.hostname === 'localhost'
-  ? 'http://localhost:8000'
-  : (import.meta.env.VITE_API_URL || 'https://bali-v92r.onrender.com');
+import { API_BASE_URL, apiRequest, getUserFriendlyError } from './apiClient';
 
 export const chatAPI = {
   createPayment: async (userId, service, locationZone) => {
-    try {
-      const response = await axios.post(
-        `${API_BASE_URL}/chatbot/create-booking-payment`,
-        { ...service, user_id: userId, location_zone: locationZone }
-      );
-      return response.data;
-    } catch (error) {
-      console.error("Error creating payment:", error);
-      throw error;
-    }
+    return apiRequest(() =>
+      axios.post(`${API_BASE_URL}/chatbot/create-booking-payment`, {
+        ...service, user_id: userId, location_zone: locationZone
+      }).then(r => r.data)
+    );
   },
-  // Send message to specific chat endpoint
+
   sendMessage: async (chatType, userId, query) => {
     const language = localStorage.getItem('language') || 'EN';
-    let villaCode = localStorage.getItem('current_villa_code') || 'WEB_VILLA_01';
+    const villaCode = localStorage.getItem('current_villa_code') || 'WEB_VILLA_01';
 
-    try {
-      const response = await axios.post(
+    return apiRequest(() =>
+      axios.post(
         `${API_BASE_URL}/chatbot/generate-response`,
-        {
-          query,
-          chat_type: chatType,
-          language: language,
-          villa_code: villaCode
-        },
-        { params: { user_id: userId } }
-      );
-      return response.data;
-    } catch (error) {
-      console.error(`Error in ${chatType} chat:`, error);
-      throw error;
-    }
+        { query, chat_type: chatType, language, villa_code: villaCode },
+        { params: { user_id: userId }, timeout: 30000 }
+      ).then(r => r.data)
+    );
   },
 
-  // Upload Passport
   uploadPassport: async (userId, file) => {
-    try {
-      const formData = new FormData();
-      formData.append('user_id', userId);
-      formData.append('file', file);
+    const formData = new FormData();
+    formData.append('user_id', userId);
+    formData.append('file', file);
 
-      const response = await axios.post(
-        `${API_BASE_URL}/chatbot/upload-passport`,
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        }
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Error uploading passport:', error);
-      throw error;
-    }
+    return apiRequest(() =>
+      axios.post(`${API_BASE_URL}/chatbot/upload-passport`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 30000
+      }).then(r => r.data)
+    );
   },
 
-  // Upload Audio for transcription (Whisper)
   uploadAudio: async (audioBlob) => {
-    try {
-      const formData = new FormData();
-      formData.append('file', audioBlob, 'audio.webm');
+    const formData = new FormData();
+    formData.append('file', audioBlob, 'audio.webm');
 
-      const response = await axios.post(
-        `${API_BASE_URL}/chatbot/upload-audio`,
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        }
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Error uploading audio for transcription:', error);
-      throw error;
-    }
+    return apiRequest(() =>
+      axios.post(`${API_BASE_URL}/chatbot/upload-audio`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 30000
+      }).then(r => r.data)
+    );
   },
 
-  // Get or create user ID
   getUserId: () => {
     let userId = localStorage.getItem('userId');
     if (!userId) {
@@ -96,13 +58,11 @@ export const chatAPI = {
     return userId;
   },
 
-  // Save chat history
   saveChatHistory: (userId, chatType, messages) => {
     const key = `chat_history_${chatType}_${userId}`;
     localStorage.setItem(key, JSON.stringify(messages));
   },
 
-  // Load chat history
   loadChatHistory: (userId, chatType) => {
     const key = `chat_history_${chatType}_${userId}`;
     const stored = localStorage.getItem(key);

@@ -2,17 +2,17 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from app.settings.config import settings
 
 import certifi
+import urllib.parse
 
-# Use certifi to explicitly provide trusted root certificates.
-# This fixes the MongoDB Atlas [SSL: TLSV1_ALERT_INTERNAL_ERROR] timeout issues on Render.
-client = AsyncIOMotorClient(
-    settings.MONGO_URII,
-    serverSelectionTimeoutMS=5000,
-    socketTimeoutMS=20000,
-    tls=True,
-    tlsCAFile=certifi.where(),  # Provides Mozilla's root CA bundle for trusted SSL handshake
-    maxIdleTimeMS=60000  # Drop connections idle for more than a minute
-)
+# Safely inject connection resilience parameters directly into the Atlas connection string.
+# Motor/PyMongo often ignore **kwargs when connecting to mongodb+srv:// endpoints.
+uri = settings.MONGO_URII
+if "?" in uri:
+    uri += "&tls=true&tlsAllowInvalidCertificates=true&serverSelectionTimeoutMS=5000&connectTimeoutMS=10000"
+else:
+    uri += "?tls=true&tlsAllowInvalidCertificates=true&serverSelectionTimeoutMS=5000&connectTimeoutMS=10000"
+
+client = AsyncIOMotorClient(uri, tlsCAFile=certifi.where())
 db = client.get_database('easybali')
 order_collection = db["orders-summary"]
 villa_code_collection = db['villa-codes']

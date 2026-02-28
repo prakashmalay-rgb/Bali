@@ -45,8 +45,16 @@ export const useVoiceToText = (onTranscript, onFinalTranscript) => {
                     // Call the backend Whisper API
                     const response = await chatAPI.uploadAudio(audioBlob);
 
-                    if (response && response.transcript && response.transcript.text) {
-                        const finalString = response.transcript.text;
+                    let finalString = null;
+                    if (response && response.transcript) {
+                        if (typeof response.transcript === 'string') {
+                            finalString = response.transcript;
+                        } else if (response.transcript.text) {
+                            finalString = response.transcript.text;
+                        }
+                    }
+
+                    if (finalString) {
                         if (onTranscript) onTranscript(finalString);
                         if (onFinalTranscript) onFinalTranscript(finalString);
                     } else {

@@ -178,8 +178,12 @@ const PassportVerification = () => {
                             </button>
                         </div>
                         <div className="flex-1 overflow-auto bg-[#e5e5e5] p-6 flex items-center justify-center min-h-[400px]">
-                            {/* Assuming S3 returns image formats mostly */}
-                            <img src={selectedPassport.passport_url} alt="Passport Scan" className="max-w-full max-h-full object-contain rounded-xl shadow-lg" />
+                            {/* Automatically handle PDF vs Image files for AWS S3 URLs */}
+                            {selectedPassport.passport_url && selectedPassport.passport_url.toLowerCase().split('?')[0].endsWith('.pdf') ? (
+                                <iframe src={selectedPassport.passport_url} className="w-full h-[500px] rounded-xl shadow-lg border-0" title="Passport PDF" />
+                            ) : (
+                                <img src={selectedPassport.passport_url} alt="Passport Scan" className="max-w-full max-h-full object-contain rounded-xl shadow-lg" />
+                            )}
                         </div>
                         <div className="p-4 bg-white border-t border-gray-100 flex justify-end gap-3">
                             <button onClick={() => setSelectedPassport(null)} className="px-6 py-2.5 rounded-xl font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition">Close</button>

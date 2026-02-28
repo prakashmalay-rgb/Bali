@@ -20,6 +20,7 @@ const Chat = () => {
   const [messages, setMessages] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
   const [inputMessage, setInputMessage] = useState("");
+  const inputMessageRef = useRef("");
   const [loadingItem, setLoadingItem] = useState(null);
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -27,6 +28,10 @@ const Chat = () => {
   const [userId, setUserId] = useState(null);
   const [apiLoading, setApiLoading] = useState(false);
   const [locationZone, setLocationZone] = useState(localStorage.getItem("location_zone") || "Seminyak");
+
+  useEffect(() => {
+    inputMessageRef.current = inputMessage;
+  }, [inputMessage]);
 
   useEffect(() => {
     localStorage.setItem("location_zone", locationZone);
@@ -38,10 +43,15 @@ const Chat = () => {
   );
 
   const handleAutoSend = (text) => {
-    if (!text.trim()) return;
+    if (text === "AUTO_SUBMIT_SIGNAL") {
+      const finalMsg = inputMessageRef.current;
+      if (finalMsg && finalMsg.trim()) {
+        handleSendClick(finalMsg);
+      }
+      return;
+    }
 
-    // We use a small timeout to ensure state has updated or we just pass the text directly
-    // to a new version of handleSendClick that can accept a direct message.
+    if (!text || !text.trim()) return;
     handleSendClick(text);
   };
 

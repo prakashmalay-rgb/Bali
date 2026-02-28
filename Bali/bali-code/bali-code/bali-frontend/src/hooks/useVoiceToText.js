@@ -1,82 +1,81 @@
 import { useState, useRef, useCallback } from 'react';
-import { chatAPI } from '../api/chatApi';
 
 export const useVoiceToText = (onTranscript, onFinalTranscript) => {
     const [isListening, setIsListening] = useState(false);
-    const mediaRecorderRef = useRef(null);
-    const audioChunksRef = useRef([]);
+    const recognitionRef = useRef(null);
 
     const toggleListening = useCallback(async () => {
-        // If already listening, stop recording
         if (isListening) {
-            setIsListening(false);
-            if (mediaRecorderRef.current) {
-                mediaRecorderRef.current.stop();
+            if (recognitionRef.current) {
+                recognitionRef.current.stop();
             }
+            setIsListening(false);
             return;
         }
 
-        // Start new recording
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            alert("Browser does not support audio recording.");
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert("Your browser does not support real-time speech recognition. Please try Chrome, Edge, or Safari.");
             return;
         }
 
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const mediaRecorder = new MediaRecorder(stream);
-            mediaRecorderRef.current = mediaRecorder;
-            audioChunksRef.current = [];
+            const recognition = new SpeechRecognition();
+            recognition.continuous = false; // Stop when the user stops talking
+            recognition.interimResults = true; // Stream partially recognized sentences
+            recognition.lang = 'en-US'; // Default to english, can be dynamic based on current user context if needed.
 
-            mediaRecorder.ondataavailable = (event) => {
-                if (event.data.size > 0) {
-                    audioChunksRef.current.push(event.data);
-                }
+            recognition.onstart = () => {
+                setIsListening(true);
             };
 
-            mediaRecorder.onstop = async () => {
-                setIsListening(false);
-                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+            recognition.onresult = (event) => {
+                let interimTranscript = '';
+                let finalTranscriptChunk = '';
 
-                try {
-                    // Show some "Processing..." feedback if needed
-                    if (onTranscript) onTranscript("Processing audio transcription...");
-
-                    // Call the backend Whisper API
-                    const response = await chatAPI.uploadAudio(audioBlob);
-
-                    let finalString = null;
-                    if (response && response.transcript) {
-                        if (typeof response.transcript === 'string') {
-                            finalString = response.transcript;
-                        } else if (response.transcript.text) {
-                            finalString = response.transcript.text;
-                        }
-                    }
-
-                    if (finalString) {
-                        if (onTranscript) onTranscript(finalString);
-                        if (onFinalTranscript) onFinalTranscript(finalString);
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalTranscriptChunk += event.results[i][0].transcript;
                     } else {
-                        throw new Error("Invalid transcription response");
+                        interimTranscript += event.results[i][0].transcript;
                     }
-                } catch (error) {
-                    console.error("🎙️ Whisper Transcription error:", error);
-                    alert("Poor audio quality or transcription error. Please try text input instead.");
-                    if (onTranscript) onTranscript(""); // Clear "Processing..."
-                } finally {
-                    // Turn off tracks to release mic light
-                    stream.getTracks().forEach(track => track.stop());
+                }
+
+                // If we have an interim guess, feed it into the text box for real-time typing
+                if (interimTranscript && onTranscript) {
+                    onTranscript(finalTranscriptChunk + interimTranscript);
+                }
+
+                // If the engine finalized a chunk early, pass it up
+                if (finalTranscriptChunk && !interimTranscript && onTranscript) {
+                    onTranscript(finalTranscriptChunk);
                 }
             };
 
-            setIsListening(true);
-            mediaRecorder.start();
+            recognition.onerror = (event) => {
+                console.error("Speech recognition error:", event.error);
+                if (event.error !== 'no-speech') {
+                    alert("Microphone error: " + event.error);
+                }
+                setIsListening(false);
+            };
+
+            recognition.onend = () => {
+                setIsListening(false);
+                if (onFinalTranscript) {
+                    // Send a ping to chat.jsx letting it know voice input is entirely finished so it can auto-submit.
+                    onFinalTranscript("AUTO_SUBMIT_SIGNAL");
+                }
+            };
+
+            recognitionRef.current = recognition;
+            recognition.start();
         } catch (error) {
             console.error("Microphone access denied or error:", error);
-            alert("Could not access microphone.");
+            alert("Could not start microphone.");
         }
     }, [isListening, onTranscript, onFinalTranscript]);
 
     return { isListening, toggleListening };
 };
+

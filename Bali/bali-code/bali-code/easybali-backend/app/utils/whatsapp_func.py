@@ -1460,16 +1460,36 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     logger.info("order number received")
                     if order_num:
                         service_provider_code = await get_service_provider_by_whatsapp(sender_id)
-                        await order_collection.update_one(
-                                {"order_number": order_num},
-                                {
-                                    "$set": {
-                                        "confirmed_by_provider": sender_id,
-                                        "confirmed_at": datetime.datetime.now(),
-                                        "service_provider_code":service_provider_code
-                                    }
+                        
+                        # [BUGFIX]: Atomic check to prevent race conditions. Only update if NOT already confirmed.
+                        updated_order = await order_collection.find_one_and_update(
+                            {
+                                "order_number": order_num,
+                                "confirmed_by_provider": {"$exists": False} # Or null, depending on schema, $exists is safer initially
+                            },
+                            {
+                                "$set": {
+                                    "confirmed_by_provider": sender_id,
+                                    "confirmed_at": datetime.datetime.now(),
+                                    "service_provider_code": service_provider_code
                                 }
-                            )
+                            },
+                            return_document=True
+                        )
+
+                        if not updated_order:
+                            # It was already claimed or doesn't exist.
+                            already_claimed = await order_collection.find_one({"order_number": order_num})
+                            if already_claimed and already_claimed.get("confirmed_by_provider"):
+                                await send_whatsapp_message(
+                                    sender_id, 
+                                    "⚠️ *Oops! Too late.*\n\nThis booking has already been claimed by another service provider. Thank you for your swift response, better luck next time!"
+                                )
+                            else:
+                                await send_whatsapp_message(sender_id, "Order not found or an error occurred.")
+                            
+                            order_sessions.pop(sender_id, None)
+                            return
                         user_sender_id = await update_order_confirmation(order_num, True)
                         print(user_sender_id)
                         order_data = await order_collection.find_one({"order_number": order_num})

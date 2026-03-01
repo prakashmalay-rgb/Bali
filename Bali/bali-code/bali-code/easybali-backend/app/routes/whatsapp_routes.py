@@ -61,7 +61,7 @@ async def verify_webhook(request: Request):
         challenge = request.query_params.get("hub.challenge")
 
         if mode == "subscribe" and token == settings.verify_token:
-            return int(challenge)
+            return Response(content=challenge, media_type="text/plain")
         else:
             raise HTTPException(status_code=403, detail="Verification failed")
     except Exception as e:

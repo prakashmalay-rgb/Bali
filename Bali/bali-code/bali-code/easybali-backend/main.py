@@ -92,12 +92,7 @@ try:
 except Exception as e:
     logger.error(f"❌ admin_users failed: {e}")
 
-try:
-    from app.routes.xendit_webhook import router as xendit_router
-    app.include_router(xendit_router)
-    logger.info("✅ xendit_webhook loaded")
-except Exception as e:
-    logger.error(f"❌ xendit_webhook failed: {e}")
+
 
 try:
     from app.routes.promo_admin import router as promo_admin_router

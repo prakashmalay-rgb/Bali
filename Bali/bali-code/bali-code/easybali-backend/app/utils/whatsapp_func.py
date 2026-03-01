@@ -1933,6 +1933,8 @@ async def send_whatsapp_message(recipient_id: str, message: str):
 
         async with httpx.AsyncClient() as client:
             response = await client.post(settings.whatsapp_api_url, json=payload, headers=headers)
+            if response.status_code >= 400:
+                 logger.error(f"❌ WhatsApp API Error (send_whatsapp_message): Status {response.status_code}, Body: {response.text}")
             response.raise_for_status()
     except Exception as e:
         print(f" Error sending WhatsApp message: {e}")

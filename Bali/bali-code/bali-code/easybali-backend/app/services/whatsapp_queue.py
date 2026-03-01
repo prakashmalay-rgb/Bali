@@ -98,3 +98,14 @@ class WhatsAppQueue:
 
 # Global instance
 whatsapp_queue = WhatsAppQueue()
+
+async def enqueue_whatsapp_message(recipient_id: str, message_text: str):
+    """Simple helper to enqueue a text message"""
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": recipient_id,
+        "type": "text",
+        "text": {"body": message_text}
+    }
+    return await whatsapp_queue.enqueue(recipient_id, payload, message_type="text")

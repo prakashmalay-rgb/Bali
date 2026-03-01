@@ -177,17 +177,33 @@ class AIMenuGenerator:
         
         # Pull categories from cache for more dynamic matching
         our_services = []
-        if cache.get("design_df") is not None:
-            # Menu Location in design_df acts as top-level category
-            df = cache["design_df"]
-            # Filter to relevant menu sections
-            services_rows = df[df["Menu Location"].isin(["Services", "Rental", "Discount & Promotions", "Recommendation"])]
-            for _, row in services_rows.iterrows():
-                our_services.append({
-                    "name": row.get("Title"),
-                    "category": row.get("Menu Location"),
-                    "keywords": [] # Will use AI to match based on title/category
-                })
+        if cache.get("main_menu_design") is not None and cache.get("design_df") is not None:
+            main_df = cache["main_menu_design"]
+            design_df = cache["design_df"]
+            
+            if "Menu Location" in main_df.columns and "Category" in design_df.columns:
+                # 1. Identify valid categories from main menu (Services, Rental, etc.)
+                valid_sections = main_df[main_df["Menu Location"].isin(["Services", "Rental", "Discount & Promotions", "Recommendation"])]
+                valid_category_names = valid_sections["Title"].unique().tolist()
+                
+                # 2. Map those categories to granular subcategories in design_df
+                if "Sub-category" in design_df.columns:
+                    relevant_services = design_df[design_df["Category"].isin(valid_category_names)]
+                    
+                    for _, row in relevant_services.drop_duplicates(subset=["Sub-category"]).iterrows():
+                        our_services.append({
+                            "name": row.get("Sub-category"),
+                            "category": row.get("Category"),
+                            "keywords": []
+                        })
+                else:
+                    # Fallback to just categories if sub-category column is missing
+                    for cat in valid_category_names:
+                        our_services.append({
+                            "name": cat,
+                            "category": "General",
+                            "keywords": []
+                        })
         
         # Fallback to hardcoded list if cache is empty or for specific detail
         if not our_services:

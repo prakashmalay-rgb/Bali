@@ -114,14 +114,16 @@ class ConciergeAI:
             # 1. AI Data Sheet (Core context)
             if cache.get("ai_data_df") is not None and not cache["ai_data_df"].empty:
                 context += "--- ACTIVE SERVICES ---\n"
-                for _, row in cache["ai_data_df"].head(100).iterrows():
+                # Use all available active services for accuracy (usually < 200 items)
+                for _, row in cache["ai_data_df"].iterrows():
                     context += f"- {row.get('Service Item')}: {row.get('Service Item Description')} Price: {row.get('Price (Service Item Button)')}\n"
             
-            # 2. Archive Data Sheet
+            # 2. Archive Data Sheet (Deep context)
             if cache.get("archive_df") is not None and not cache["archive_df"].empty:
-                context += "\n--- ARCHIVE DATA (Legacy/Deep Query DB) ---\n"
+                context += "\n--- ARCHIVE DATA (Rentals & Legacy) ---\n"
                 arch_lines = []
-                for _, row in cache["archive_df"].head(150).iterrows():
+                # Increase visibility into archive for better rental identification
+                for _, row in cache["archive_df"].head(300).iterrows():
                     valid = [f"{col}:{val}" for col, val in row.items() if pd.notna(val) and str(val).strip()]
                     if valid: arch_lines.append(" | ".join(valid))
                 context += "\n".join(arch_lines) + "\n"
@@ -140,7 +142,7 @@ class ConciergeAI:
             if cache.get("platform_design_df") is not None and not cache["platform_design_df"].empty:
                 context += "\n--- PLATFORM DESIGN ---\n"
                 p_lines = []
-                for _, row in cache["platform_design_df"].head(100).iterrows():
+                for _, row in cache["platform_design_df"].head(50).iterrows():
                     valid = [f"{col}:{val}" for col, val in row.items() if pd.notna(val) and str(val).strip()]
                     if valid: p_lines.append(" | ".join(valid))
                 context += "\n".join(p_lines) + "\n"
@@ -158,6 +160,7 @@ class ConciergeAI:
         Service booking detection ONLY runs for order-service modes.
         """
         try:
+            print(f"DEBUG: Processing query='{query}' chat_type='{chat_type}' user='{user_id}'")
             history = get_conversation_history(user_id)
             conv = trim_history(history + [{"role": "user", "content": query}])
             formatted_history = "\n".join([f"{m['role'].capitalize()}: {m['content']}" for m in conv])
@@ -211,7 +214,7 @@ class ConciergeAI:
             try:
                 service_check = await ai_menu_generator.intelligent_service_check(query)
                 if service_check.get("is_service_request") and service_check.get("we_offer_it"):
-                    menu = await self._handle_booking(query, user_id, language, service_check)
+                    menu = await self._handle_booking(query, user_id, language, service_check, villa_code)
                     if menu:
                         return menu
             except Exception as e:
@@ -276,13 +279,13 @@ CONVERSATION HISTORY:
         save_message(user_id, "assistant", txt)
         return {"response": txt}
 
-    async def _handle_booking(self, query, user_id, lang, check):
+    async def _handle_booking(self, query, user_id, lang, check, villa_code="WEB_VILLA_01"):
         try:
             matched_name = check.get("matched_service") or query
             intent = ai_menu_generator.detect_service_intent(matched_name)
             if intent:
                 reqs = ai_menu_generator.extract_requirements(query)
-                menu = await ai_menu_generator.generate_service_menu(intent["category"], intent["subcategory"], reqs)
+                menu = await ai_menu_generator.generate_service_menu(intent["category"], intent["subcategory"], reqs, villa_code)
                 if menu and "sections" in menu:
                     title = f"Pilihan untuk {intent['subcategory']}" if lang == "ID" else f"Options for {intent['subcategory']}"
                     table = {

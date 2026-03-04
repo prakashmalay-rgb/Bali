@@ -106,11 +106,11 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=500, detail=f"Webhook error: {str(e)}")
     
 
-@router.post("/webhook/xendit")
+@router.post("/webhook/xendit-payment")
 async def xendit_webhook_endpoint(request: Request):
     webhook_token = request.headers.get("x-callback-token")
     
-    if webhook_token != "S9yCjrIxAogZgrfdiLXM7ePCR3dmZLjE3YFFleoQCFrWOSDf":
+    if webhook_token != "cHih3lsmWqceMY9r2ZWvaxviVwFzk2sjjGqqJ2bRwvYelNEN":
         raise HTTPException(status_code=401, detail="Unauthorized webhook")
     
     webhook_data = await request.json()
@@ -560,7 +560,7 @@ async def get_service_items(request:dict):
 async def fetch_categories():
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get("https://easy-bali.onrender.com/whatsapp_categories")
+            response = await client.get(f"{settings.BASE_URL}/whatsapp_categories")
             if response.status_code == 200:
                 data = response.json()
                 categories = []
@@ -591,7 +591,7 @@ async def fetch_subcategories(category_title: str):
         async with httpx.AsyncClient() as client:
             # Use category_title instead of category_id
             payload = {"category_title": category_title}  # Changed key name
-            response = await client.post("https://easy-bali.onrender.com/categories/sections", json=payload)
+            response = await client.post(f"{settings.BASE_URL}/categories/sections", json=payload)
             if response.status_code == 200:
                 data = response.json()
                 subcategories = []
@@ -614,7 +614,7 @@ async def fetch_service_items(subcategory_title: str):
         async with httpx.AsyncClient() as client:
             # Use subcategory_title instead of subcategory_id
             payload = {"subcategory_title": subcategory_title}  # Changed key name
-            response = await client.post("https://easy-bali.onrender.com/sub_category/service_items", json=payload)
+            response = await client.post(f"{settings.BASE_URL}/sub_category/service_items", json=payload)
             if response.status_code == 200:
                 data = response.json()
                 service_items = []

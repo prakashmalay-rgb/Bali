@@ -14,6 +14,7 @@ from app.db.session import order_collection
 from app.models.order_summary import Order
 from app.settings.config import settings
 from app.services.menu_services import get_villa_location_by_code
+from app.services.promo_service import validate_promo_code, increment_promo_usage
 import logging
 import asyncio
 
@@ -108,45 +109,84 @@ async def get_price_distribution(service_item: str, location_zone: str = None) -
 
 # Enhanced payment creation function
 async def create_xendit_payment_with_distribution(order: Order):
-    """Create payment invoice and prepare distribution data"""
+    """Create payment invoice and prepare distribution data using direct service calls"""
+    from app.routes.main_menu_routes import (
+        get_bank_details_for_provider, 
+        get_bank_details_for_villa, 
+        get_price_distribution_details
+    )
+    
     try:
         # Resolve location zone from villa_code for dynamic pricing
         location_zone = await get_villa_location_by_code(order.villa_code)
         
-        # Get price distribution using specific location zone
-        price_distribution = await get_price_distribution(order.service_name, location_zone)
-        if not price_distribution:
-            return {
-                'success': False,
-                'error': 'Unable to fetch price distribution'
-            }
-        
-        # Get bank details for both parties
-        service_provider_bank = await get_service_provider_bank_details(order.service_provider_code)
-        villa_bank = await get_villa_bank_details(order.villa_code)
-        
-        if not service_provider_bank or not villa_bank:
-            return {
-                'success': False,
-                'error': 'Unable to fetch bank details'
-            }
+        # Get price distribution — DIRECT CALL instead of HTTP
+        price_distribution = {}
+        try:
+            price_distribution = await get_price_distribution_details(order.service_name, location_zone)
+        except Exception as e:
+            logger.warning(f"Failed to fetch price distribution for {order.service_name}: {e}")
+            
+        # Get bank details — DIRECT CALL
+        service_provider_bank = {}
+        try:
+            service_provider_bank = await get_bank_details_for_provider(order.service_provider_code)
+        except Exception as e:
+            logger.warning(f"Bank details missing for SP {order.service_provider_code}: {e}")
+            service_provider_bank = {"provider_code": order.service_provider_code, "bank_code": "UNKNOWN", "account_number": "TBD"}
+            
+        villa_bank = {}
+        try:
+            villa_bank = await get_bank_details_for_villa(order.villa_code)
+        except Exception as e:
+            logger.warning(f"Bank details missing for Villa {order.villa_code}: {e}")
+            villa_bank = {"provider_code": order.villa_code, "bank_code": "UNKNOWN", "account_number": "TBD"}
         
         external_id = f"booking_{order.order_number}_{int(datetime.datetime.now().timestamp())}"
         
         try:
             total_price_clean = clean_price_string(order.price)
-            sp_price_orig = clean_price_string(price_distribution['service_provider_price'])
-            villa_price_orig = clean_price_string(price_distribution['villa_price'])
             
-            # Pro-rate distribution if there's a discount
-            orig_total = sp_price_orig + villa_price_orig
-            if total_price_clean < orig_total and orig_total > 0:
-                ratio = total_price_clean / orig_total
-                service_provider_price = int(sp_price_orig * ratio)
-                villa_price = total_price_clean - service_provider_price # Villa takes the remainder/remainder of discount
+            # Apply promo code discount if present
+            final_price = total_price_clean
+            promo_code_used = None
+            
+            if hasattr(order, 'promo_code') and order.promo_code:
+                is_valid, discounted_price, message = await validate_promo_code(order.promo_code, total_price_clean)
+                if is_valid:
+                    final_price = int(discounted_price)
+                    promo_code_used = order.promo_code
+                    logger.info(f"Promo code {order.promo_code} applied: {message}")
+                else:
+                    logger.warning(f"Invalid promo code {order.promo_code}: {message}")
+            
+            # Calculate distribution amounts
+            if price_distribution and price_distribution.get('service_provider_price') and price_distribution.get('villa_price'):
+                try:
+                    sp_price_orig = clean_price_string(str(price_distribution['service_provider_price']))
+                    villa_price_orig = clean_price_string(str(price_distribution['villa_price']))
+                    orig_total = sp_price_orig + villa_price_orig
+                    eb_share_orig = max(0, total_price_clean - orig_total)
+                    
+                    if final_price < total_price_clean and total_price_clean > 0:
+                        ratio = final_price / total_price_clean
+                        service_provider_price = int(sp_price_orig * ratio)
+                        villa_price = int(villa_price_orig * ratio)
+                    else:
+                        service_provider_price = sp_price_orig
+                        villa_price = villa_price_orig
+                    easy_bali_price = final_price - (service_provider_price + villa_price)
+                except (ValueError, KeyError) as e:
+                    logger.warning(f"Distribution price parsing failed: {e} — using default 70/20/10 split")
+                    service_provider_price = int(final_price * 0.70)
+                    villa_price = int(final_price * 0.20)
+                    easy_bali_price = final_price - service_provider_price - villa_price
             else:
-                service_provider_price = sp_price_orig
-                villa_price = villa_price_orig
+                # Default split: SP 70%, Villa 20%, Easy-Bali 10%
+                logger.warning(f"No price distribution found for '{order.service_name}' — applying default 70/20/10 split")
+                service_provider_price = int(final_price * 0.70)
+                villa_price = int(final_price * 0.20)
+                easy_bali_price = final_price - service_provider_price - villa_price
                 
         except ValueError as e:
             print(f"Price cleaning error: {e}")
@@ -155,17 +195,24 @@ async def create_xendit_payment_with_distribution(order: Order):
                 'error': f"Invalid price format: {order.price}"
             }
         
-        # Create API client and instance
-        api_client = xendit.ApiClient()
+        # Create API client with configuration
+        config = xendit.Configuration(api_key=settings.XENDIT_SECRET_KEY)
+        api_client = xendit.ApiClient(configuration=config)
         api_instance = InvoiceApi(api_client)
+        
+        # Safe description (handle None date/time)
+        try:
+            date_str = order.date.strftime('%d-%m-%Y') if order.date else "TBD"
+        except AttributeError:
+            date_str = str(order.date) if order.date else "TBD"
         
         # Create invoice request
         create_invoice_request = CreateInvoiceRequest(
             external_id=external_id,
-            amount=float(total_price_clean),
+            amount=float(final_price),
             currency='IDR',
             invoice_duration=86400.0,  # 24 hours in seconds
-            description=f"Payment for {order.service_name} on {order.date.strftime('%d-%m-%Y')} at {order.time}",
+            description=f"Payment for {order.service_name} - {date_str}",
             customer=CustomerObject(
                 given_names='Customer',
                 mobile_number=order.sender_id,
@@ -175,15 +222,15 @@ async def create_xendit_payment_with_distribution(order: Order):
                 invoice_reminder=[NotificationChannel("whatsapp")],
                 invoice_paid=[NotificationChannel("whatsapp")]
             ),
-            success_redirect_url=f"{settings.BASE_URL}/chatbot",
-            failure_redirect_url=f"{settings.BASE_URL}/payment-failed?order={order.order_number}",
-            webhook_url=f"{settings.BASE_URL}/webhook/xendit-payment",
+            success_redirect_url=f"{settings.WEB_BASE_URL}/chatbot",
+            failure_redirect_url=f"{settings.WEB_BASE_URL}/payment-failed?order={order.order_number}",
+            webhook_url=f"{settings.XENDIT_WEBHOOK_BASE_URL}/webhook/xendit-payment",
             payment_methods = ["CREDIT_CARD", "BCA", "BNI", "BSI", "BRI", "MANDIRI", "PERMATA", "SAHABAT_SAMPOERNA", "BNC", "ALFAMART", "INDOMARET", "OVO", "DANA", "SHOPEEPAY", "LINKAJA", "JENIUSPAY", "DD_BRI", "DD_BCA_KLIKPAY", "QRIS"],
             items=[
                 InvoiceItem(
                     name=order.service_name,
                     quantity=1.0,
-                    price=float(total_price_clean),
+                    price=float(final_price),
                 )
             ]
         )
@@ -201,7 +248,11 @@ async def create_xendit_payment_with_distribution(order: Order):
                 'amount': villa_price,
                 'bank_details': villa_bank
             },
-            'total_distribution': service_provider_price + villa_price
+            'easy_bali': {
+                'amount': easy_bali_price,
+                'description': 'Platform commission'
+            },
+            'total_distribution': service_provider_price + villa_price + easy_bali_price
         }
         
         return {
@@ -224,6 +275,7 @@ async def create_xendit_payment_with_distribution(order: Order):
         return {
             'success': False,
             'error': str(e)
+
         }
 
 # Updated order update function
@@ -257,7 +309,7 @@ async def create_bank_disbursement(client: httpx.AsyncClient, amount: int, bank_
             "external_id": reference_id,
             "amount": amount,  # must be int, no decimals
             "bank_code": str (bank_details.get("bank_code")),
-            "account_holder_name": str (bank_details.get("account_name")),
+            "account_holder_name": str (bank_details.get("account_holder_name") or bank_details.get("account_name")),
             "account_number": bank_details.get("account_number"),
             "description": description
         }

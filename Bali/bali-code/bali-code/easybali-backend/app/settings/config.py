@@ -19,11 +19,13 @@ class Settings(BaseSettings):
     pinecone_cloud : str
     XENDIT_SECRET_KEY:str
     BASE_URL:str
+    XENDIT_WEBHOOK_BASE_URL:str
     WEB_BASE_URL:str
     WHATSAPP_APP_SECRET:str
     WHATSAPP_PRIVATE_KEY_PASSWORD:str
     GOOGLE_SERVICE_ACCOUNT_JSON: str = ""
     WHATSAPP_PRIVATE_KEY: str = ""
+    XENDIT_PUBLIC_KEY: str = ""
 
     class Config:
         env_file = ".env"

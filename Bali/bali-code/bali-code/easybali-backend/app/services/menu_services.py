@@ -107,7 +107,7 @@ def schedule_data_refresh():
     global should_stop
     while not should_stop:
         load_data_into_cache()
-        for _ in range(60):
+        for _ in range(300):
             if should_stop:
                 break
             threading.Event().wait(1)

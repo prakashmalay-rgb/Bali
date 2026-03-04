@@ -3,6 +3,7 @@ from app.db.session import order_collection
 from app.utils.whatsapp_func import notify_payment_completion
 from app.services.payment_service import distribute_order_payments
 from app.services.invoice_generator import generate_and_upload_invoice
+from app.services.promo_service import increment_promo_usage
 from app.utils.whatsapp_func import send_invoice_and_handle_closure, send_whatsapp_message
 from app.services.websocket_managerr import ConnectionManager
 import datetime
@@ -36,7 +37,7 @@ async def handle_xendit_webhook(webhook_data: dict):
                 "paid_at": datetime.datetime.now(),
                 "payment_method": webhook_data.get("payment_method", "Online Payment"),
                 "transaction_id": webhook_data.get("id"),
-                "amount_paid": webhook_data.get("amount", order_data.get("price"))
+                "paid_amount": webhook_data.get("amount", order_data.get("price"))
             }
             
             # Update order with payment information
@@ -45,11 +46,19 @@ async def handle_xendit_webhook(webhook_data: dict):
                 {
                     "$set": {
                         "payment": {**order_data.get("payment", {}), **payment_info},
-                        "status": "payment_completed"
+                        "status": "PAID"
                     }
                 }
             )
             logger.info(f"Order {order_number} payment status updated to completed")
+
+            # Increment promo code usage if applicable
+            if order_data.get("promo_code"):
+                try:
+                    await increment_promo_usage(order_data["promo_code"])
+                    logger.info(f"Promo code {order_data['promo_code']} usage incremented for order {order_number}")
+                except Exception as promo_err:
+                    logger.warning(f"Failed to increment promo code usage: {promo_err}")
 
             # Generate and upload invoice
             logger.info(f"Generating invoice for order {order_number}")

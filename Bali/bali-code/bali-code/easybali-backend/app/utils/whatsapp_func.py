@@ -59,27 +59,27 @@ language_lesson_sessions = {}
 persistent_mode_sessions = {}
 PERSISTENT_API_MAPPING = {
     "what_to_do_today?": {
-        "url": "https://easy-bali.onrender.com/what-to-do/chat/",  # Your Explore Now endpoint URL.
+        "url": f"{settings.BASE_URL}/what-to-do/chat/",  # Dynamic Base URL
         "fetch_func": fetch_explore_data
     },
     "things_to_do_in_bali":{
-        "url":"https://easy-bali.onrender.com/things-to-do-in-bali/chat",
+        "url": f"{settings.BASE_URL}/things-to-do-in-bali/chat",
         "fetch_func":fetch_explore_data
     },
     "event_calendar":{
-        "url":"https://easy-bali.onrender.com/event-calender/chat",
+        "url": f"{settings.BASE_URL}/event-calender/chat",
         "fetch_func": fetch_explore_data
     },
     "local_cousine_guide":{
-        "url":"https://easy-bali.onrender.com/local-cuisine/chat",
+        "url": f"{settings.BASE_URL}/local-cuisine/chat",
         "fetch_func": fetch_explore_data
     },
     "plan_my_trip!":{
-        "url": "https://easy-bali.onrender.com/plan-my-trip/chat",
+        "url": f"{settings.BASE_URL}/plan-my-trip/chat",
         "fetch_func": fetch_explore_data
     },
     "currency_converter":{
-        "url": "https://easy-bali.onrender.com/currency-converter/chat",
+        "url": f"{settings.BASE_URL}/currency-converter/chat",
         "fetch_func": fetch_explore_data
     },
 }
@@ -506,7 +506,7 @@ async def send_whatsapp_list_message(recipient_id: str, card_data: dict):
     except Exception as e:
         print(f"❌ Unexpected Error sending WhatsApp list: {e}")
 
-async def send_whatsapp_main_menu_list_message(recipient_id: str, card_data: dict):
+async def send_whatsapp_menu_list_message(recipient_id: str, card_data: dict):
     try:
         headers = {
             "Authorization": f"Bearer {settings.access_token}",
@@ -552,13 +552,62 @@ async def send_whatsapp_main_menu_list_message(recipient_id: str, card_data: dic
         async with httpx.AsyncClient() as client:
             response = await client.post(settings.whatsapp_api_url, json=payload, headers=headers)
             response.raise_for_status()
-            print(f"✅ WhatsApp API Response: {response.status_code}, {response.text}")
+            print(f"✅ WhatsApp Category List Sent: {response.status_code}")
 
-    except httpx.HTTPStatusError as e:
-        print(f"❌ HTTP Error sending WhatsApp list: {e.response.status_code}, {e.response.text}")
     except Exception as e:
-        print(f"❌ Unexpected Error sending WhatsApp list: {e}")
+        print(f"❌ Error sending Category list: {e}")
 
+async def send_whatsapp_subcategory_list_message(recipient_id: str, card_data: dict, category_name: str):
+    """Send secondary list for subcategories"""
+    try:
+        headers = {"Authorization": f"Bearer {settings.access_token}", "Content-Type": "application/json"}
+        sections = [{
+            "title": f"{category_name} - Subcategories",
+            "rows": [{
+                "id": f"subcat_{item['subcategory'].lower().replace(' ', '_')}",
+                "title": item["subcategory"][:24],
+                "description": item["description"][:69] + "..." if len(item["description"]) > 72 else item["description"]
+            } for item in card_data]
+        }]
+        payload = {
+            "messaging_product": "whatsapp", "to": recipient_id, "type": "interactive",
+            "interactive": {
+                "type": "list",
+                "body": {"text": f"📍 *{category_name}*\nSelect a sub-category below to explore our services."},
+                "footer": {"text": "Tap to view subcategories"},
+                "action": {"button": "Select Option", "sections": sections}
+            }
+        }
+        async with httpx.AsyncClient() as client:
+            await client.post(settings.whatsapp_api_url, json=payload, headers=headers)
+    except Exception as e:
+        print(f"❌ Error sending Subcategory list: {e}")
+
+async def send_whatsapp_service_list_message(recipient_id: str, card_data: dict, subcategory_name: str):
+    """Send tertiary list for service items (the 'Book' list)"""
+    try:
+        headers = {"Authorization": f"Bearer {settings.access_token}", "Content-Type": "application/json"}
+        sections = [{
+            "title": f"Services for {subcategory_name}",
+            "rows": [{
+                "id": f"service_{item['title'].lower().replace(' ', '_')}",
+                "title": item["title"][:24],
+                "description": f"💰 IDR {item['button']} | Tap to Book Now"
+            } for item in card_data]
+        }]
+        payload = {
+            "messaging_product": "whatsapp", "to": recipient_id, "type": "interactive",
+            "interactive": {
+                "type": "list",
+                "body": {"text": f"🛎️ *{subcategory_name} - Available Services*\nChoose a service below to start your booking."},
+                "footer": {"text": "Easy Bali - Instant Booking ✨"},
+                "action": {"button": "Book Now", "sections": sections}
+            }
+        }
+        async with httpx.AsyncClient() as client:
+            await client.post(settings.whatsapp_api_url, json=payload, headers=headers)
+    except Exception as e:
+        print(f"❌ Error sending Service list: {e}")
 
 async def send_ai_whatsapp_list_message(
     recipient_id: str,
@@ -1403,7 +1452,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     return
 
                 if button_id == "menu_button":
-                    api_url = "https://easy-bali.onrender.com/main_design"
+                    api_url = f"{settings.BASE_URL}/main_design"
                     menu_data = await fetch_menu_data(api_url, "Main Menu")
                     if menu_data:
                         print(f"🔍 DEBUG - menu_data type: {type(menu_data)}")
@@ -1545,9 +1594,56 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                 list_reply = message_payload["interactive"]["list_reply"]
                 serviceitems_text = list_reply["title"]
                 selected_id = list_reply["id"]
-    
-                # Check if this is from AI-generated menu
-                if selected_id.startswith("ai_service_"):
+
+                # 1. Handle Categorized Selection (from Main Menu)
+                # Categories from Main Menu use snake_case IDs. We'll use them to fetch subcategories.
+                if not selected_id.startswith(("ai_service_", "subcat_", "service_")):
+                    # Fetch subcategories for this category
+                    category_title = serviceitems_text
+                    api_url = f"{settings.BASE_URL}/categories/sections"
+                    try:
+                        async with httpx.AsyncClient() as client:
+                            response = await client.post(api_url, json={"category_title": category_title})
+                            if response.status_code == 200:
+                                subcat_data = response.json().get("subcategories", [])
+                                await send_whatsapp_subcategory_list_message(sender_id, subcat_data, category_title)
+                                return
+                    except Exception as e:
+                        print(f"Error fetching subcategories: {e}")
+
+                # 2. Handle Subcategory Selection (leads to Service Items list)
+                elif selected_id.startswith("subcat_"):
+                    subcategory_title = serviceitems_text
+                    api_url = f"{settings.BASE_URL}/sub_category/service_items"
+                    try:
+                        async with httpx.AsyncClient() as client:
+                            response = await client.post(api_url, json={"subcategory_title": subcategory_title})
+                            if response.status_code == 200:
+                                service_items = response.json().get("serviceitems", [])
+                                await send_whatsapp_service_list_message(sender_id, service_items, subcategory_title)
+                                return
+                    except Exception as e:
+                        print(f"Error fetching service items: {e}")
+
+                # 3. Handle Service Item Selection (triggers 'Book Now' Flow)
+                elif selected_id.startswith("service_"):
+                    service_name = serviceitems_text
+                    # Check if AI data exists for image/description
+                    service_details = await ai_menu_generator.get_service_details_by_id(selected_id)
+                    if service_details and service_details.get("image_url"):
+                         await send_whatsapp_image_with_caption(
+                            sender_id, 
+                            service_details["image_url"], 
+                            f"✨ *{service_name}*\n\n{service_details.get('description', '')[:200]}"
+                        )
+                    
+                    # Direct to Booking Flow
+                    token = f"book_{sender_id}_{service_name}"
+                    await send_whatsapp_order_flow_message(sender_id, token)
+                    return
+
+                # 4. Handle AI-generated menu (Legacy/Search flow)
+                elif selected_id.startswith("ai_service_"):
                     # Get full service details
                     service_details = await ai_menu_generator.get_service_details_by_id(selected_id)
                     
@@ -1639,31 +1735,43 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                         # Save the completed order to database
                         await save_order_to_db(new_order.dict())
 
-                        confirmation_message = (
-                            f"Thank you for booking {new_order.service_name}!\n"
-                            f"Order ID: {new_order.order_number}\n"
-                            f"Date: {new_order.date.strftime('%d-%m-%Y')}\n"
-                            f"Time: {new_order.time}\n"
-                            f"Persons: {person_selection}\n"
-                            f"Price: {new_order.price}\n"
-                            "Your booking has been sent to the service provider. We will let you know after the confirmation"
-                        )
-                        await send_whatsapp_message(sender_id, confirmation_message)
+                        # Fetch and Create Xendit Payment immediately
+                        logger.info(f"💳 Generating immediate payment for order {new_order.order_number}")
+                        payment_result = await create_xendit_payment_with_distribution(new_order)
+                        
+                        if payment_result.get("success"):
+                            await update_order_with_payment_info(new_order.order_number, payment_result)
+                            payment_url = payment_result.get("payment_url")
+                        else:
+                            payment_url = None
+                            logger.error(f"❌ Failed to generate payment link: {payment_result.get('error')}")
 
-                        order = {
-                            "order_number": new_order.order_number,
-                            "service_name": new_order.service_name,
-                            "date": new_order.date.strftime('%d-%m-%Y'),
-                            "time": new_order.time,
-                            "price": new_order.price,
-                        }
-                        providers_num = await fetch_whatsapp_numbers(new_order.service_name)
-                        for recipient in providers_num:
-                            result = await send_whatsapp_order_to_SP(recipient, order)
-                            if result:
-                                print(f"Message sent successfully to {recipient}!")
-                            else:
-                                print(f"Failed to send message to {recipient}.")
+                        confirmation_message = (
+                            f"✨ *Booking Confirmed!* ✨\n\n"
+                            f"**Order ID:** {new_order.order_number}\n"
+                            f"**Service:** {new_order.service_name}\n"
+                            f"**Date:** {new_order.date.strftime('%d-%m-%Y')}\n"
+                            f"**Time:** {new_order.time}\n"
+                            f"**Total Price:** IDR {int(new_order.price):,}\n\n"
+                            "Our service providers have been notified. First available provider to confirm will handle your booking."
+                        )
+
+                        await send_whatsapp_message(sender_id, confirmation_message)
+                        
+                        if payment_url:
+                            # Send the interactive "Pay Now" button
+                            await send_interactive_message(sender_id, payment_result)
+                        else:
+                            await send_whatsapp_message(
+                                sender_id, 
+                                "We encountered an issue generating your secure payment link. Don't worry, our team will send it shortly!"
+                            )
+
+                        # Parallel: Notify Service Providers
+                        service_numbers = await fetch_whatsapp_numbers(new_order.service_name)
+                        for num in service_numbers:
+                            await send_whatsapp_order_to_SP(num, new_order.dict())
+                        
                         return
                         
                     except ValueError:
@@ -1969,33 +2077,63 @@ async def notify_payment_completion(order_data: dict):
         sender_id = order_data.get("sender_id")
         order_number = order_data.get("order_number")
         service_name = order_data.get("service_name")
+        price = order_data.get("price")
+        villa_code = order_data.get("villa_code")
         
         if not sender_id:
-            print(f"No sender_id found for order {order_number}")
+            logger.warning(f"No sender_id found for order {order_number}")
             return
         
         # Determine connection type
         is_whatsapp = sender_id.isdigit()
         is_websocket = not is_whatsapp
         
-        # Payment confirmation message
+        # 1. Notify Customer
         completion_message = (
-            f"***✅ Payment Confirmed!***\n"
-            f"Order {order_number} for {service_name} has been paid successfully.\n "
-            f"The service provider has been notified and will contact you shortly."
+            f"🌟 ***Booking Confirmed & Paid!*** 🌟\n\n"
+            f"Hi! We've successfully received your payment for your **{service_name}** (Order: {order_number}).\n\n"
+            f"Our service provider has been notified and will coordinate final details with you shortly. "
+            f"Thank you for choosing EASY Bali! 🌴"
         )
         if is_whatsapp:
             await send_whatsapp_message(sender_id, completion_message)
-            await notify_service_provider(order_data)
         elif is_websocket:
             await manager.send_personal_message(
                 message=completion_message,
                 session_id=sender_id,
                 message_type="payment_confirmed"
             )
-            await notify_service_provider(order_data)
+            
+        # 2. Notify Service Provider
+        await notify_service_provider(order_data)
+        
+        # 3. Notify Villa
+        if villa_code:
+            villa_number = await get_villa_whatsapp_by_code(villa_code)
+            if villa_number:
+                villa_msg = (
+                    f"🛎️ ***Guest Payment Made!***\n\n"
+                    f"A guest in your villa ({villa_code}) has just paid for **{service_name}**.\n"
+                    f"**Order ID:** {order_number}\n"
+                    f"**Amount:** IDR {int(float(price)):,}\n\n"
+                    f"Service is scheduled as confirmed! ✅"
+                )
+                await send_whatsapp_message(villa_number, villa_msg)
+        
+        # 4. Notify Easy-Bali Admin
+        admin_number = os.getenv("ADMIN_WHATSAPP_NUMBER", "62895627705139") # Replace with real admin
+        admin_msg = (
+            f"💰 ***REVENUE ALERT!*** 💰\n\n"
+            f"Payment confirmed for Order **{order_number}**.\n"
+            f"**Service:** {service_name}\n"
+            f"**Villa:** {villa_code}\n"
+            f"**Amount Paid:** IDR {int(float(price)):,}\n\n"
+            f"Check Admin Console for details: {settings.BASE_URL}/admin/dashboard"
+        )
+        await send_whatsapp_message(admin_number, admin_msg)
+        
     except Exception as e:
-        print(f"Notification error: {str(e)}")
+        logger.error(f"Notification error in notify_payment_completion: {str(e)}")
         import traceback
         traceback.print_exc()
 
@@ -2046,17 +2184,42 @@ async def send_invoice_and_handle_closure(order_data: dict, invoice_result: dict
 
 async def notify_service_provider(order_data: dict):
     try:
-        service_provider_code = order_data.get("confirmed_by_provider")
+        service_provider_number = order_data.get("confirmed_by_provider")
         order_number = order_data.get("order_number")
         service_name = order_data.get("service_name")
         
-        if service_provider_code:
+        if service_provider_number:
             provider_message = (
-                f"💰 Payment Received!\n\n"
-                f"Order {order_number} for {service_name} has been paid successfully. "
-                f"Please proceed with the service delivery and contact the customer if needed."
+                f"💰 ***Payment Received!***\n\n"
+                f"Payment for Order **{order_number}** ({service_name}) has been confirmed.\n"
+                f"Please proceed with delivery and contact the guest for final coordination."
             )
-            await send_whatsapp_message(service_provider_code, provider_message)
+            await send_whatsapp_message(service_provider_number, provider_message)
             
     except Exception as e:
-        print(f"Service provider notification error: {str(e)}")
+        logger.error(f"Service provider notification error: {str(e)}")
+
+async def get_villa_whatsapp_by_code(villa_code: str) -> str:
+    from app.services.menu_services import cache
+    try:
+        villas_df = cache.get("villas_data")
+        if villas_df is not None and not villas_df.empty:
+            # Try to find a column that looks like WhatsApp or Phone
+            cols = villas_df.columns.tolist()
+            wa_col = next((c for c in cols if "whatsapp" in c.lower() or "phone" in c.lower() or "number" in c.lower() and c != "Number"), None)
+            
+            if not wa_col:
+                # Fallback to predefined mapping if any, or column index
+                return None
+                
+            match = villas_df[villas_df["Number"] == villa_code]
+            if not match.empty:
+                val = str(match.iloc[0][wa_col])
+                if val and val != "nan":
+                    # Clean number: ensure it has country code, no + or spaces
+                    clean = re.sub(r'[^\d]', '', val)
+                    return clean
+        return None
+    except Exception as e:
+        logger.error(f"Error fetching villa whatsapp: {e}")
+        return None

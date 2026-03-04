@@ -1,5 +1,6 @@
 import httpx
 import datetime
+import dateutil.parser
 import re
 import logging
 import asyncio
@@ -1734,13 +1735,21 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
 
                 if flow_token and selected_service and selected_date and person_selection and time_selection:
                     try:
-                        user_date = datetime.datetime.strptime(selected_date, '%Y-%m-%d')
+                        # Robust Date Parsing
+                        try:
+                            user_date = dateutil.parser.parse(str(selected_date))
+                        except (ValueError, TypeError):
+                            print(f"❌ Failed to parse date '{selected_date}', using current date")
+                            user_date = datetime.datetime.now()
 
                         # Reconstruct the original service name from the AI flow ID
+                        # Handles 'ai_service_N_Name_With_Underscores'
                         if str(selected_service).startswith("ai_service_"):
                             parts = str(selected_service).split("_", 3)
                             if len(parts) >= 4:
                                 selected_service = parts[3].replace('_', ' ')
+                        
+                        logger.info(f"✨ Booking flow processing: Service='{selected_service}', Date='{user_date}', Persons='{person_selection}'")
 
                         base_price = await get_service_base_price(selected_service)
 

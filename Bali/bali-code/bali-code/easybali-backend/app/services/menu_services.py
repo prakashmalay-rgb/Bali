@@ -388,12 +388,13 @@ async def get_service_base_price(service_name: str) -> str:
     filtered_df = df[df['Service Item'] == service_name]
     
     if filtered_df.empty:
-        # Fallback: Normalize spaces and underscores for comparison
-        norm_input = str(service_name).lower().replace("_", "").replace(" ", "")
+        # Fallback: Normalize all non-alphanumeric characters for maximum matching flexibility
+        import re
+        norm_input = re.sub(r'[^a-z0-9]', '', str(service_name).lower())
         for idx, row in df.iterrows():
             item = str(row['Service Item'])
-            norm_item = item.lower().replace("_", "").replace(" ", "")
-            if norm_input == norm_item or norm_input in norm_item:
+            norm_item = re.sub(r'[^a-z0-9]', '', item.lower())
+            if norm_input == norm_item or norm_input in norm_item or norm_item in norm_input:
                 filtered_df = df.iloc[[idx]]
                 break
 

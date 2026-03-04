@@ -84,66 +84,83 @@ PERSISTENT_API_MAPPING = {
     },
 }
 
+from app.services.google_sheets_service import get_main_menu_design
+
 async def fetch_menu_data(api_url: str, menu_type: str) -> list:
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(api_url, json={"type": menu_type})
-            response.raise_for_status()
-            data = response.json()
-            return data.get("data", [])  # Extract the 'data' field
+        data = await get_main_menu_design()
+        if data is None or data.empty or "Menu Location" not in data.columns:
+            return []
+        filtered_data = data[data["Menu Location"] == menu_type]
+        if filtered_data.empty:
+            return []
+        result = []
+        for _, row in filtered_data.iterrows():
+            result.append({
+                "id":row["Title"].lower().replace(" ", "_"),
+                "title": row["Title"],
+                "picture": row["Picture"],
+                "description": row["Description"],
+                "button": row["Button"]
+            })
+        return result
     except Exception as e:
-        print(f" Error fetching menu data: {e}")
+        print(f" Error fetching menu data locally: {e}")
         return []
     
 ### Fetch Submenu Data
 async def fetch_submenu_data(api_url: str):
+    from app.services.menu_services import get_sub_menu
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(api_url)
-            response.raise_for_status()
-            data = response.json()
-            return data.get("data", []) 
+        # api_url looks like /menu/sub/{main_menu}
+        main_menu = api_url.split("/")[-1]
+        return await get_sub_menu(main_menu)
     except Exception as e:
-        print(f" Error fetching submenu data: {e}")
+        print(f" Error fetching submenu data locally: {e}")
         return []
 
 async def fetch_service_items(api_url: str, subcategory: str) -> list:
+    from app.services.menu_services import get_service_items
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{api_url}/menu/service-items/{subcategory}")
-            response.raise_for_status()
-            data = response.json()
-            return data.get("data", [])  # Extract the 'data' field
+        return await get_service_items(subcategory)
     except Exception as e:
-        print(f"Error fetching service items: {e}")
+        print(f"Error fetching service items locally: {e}")
         return []
     
-async def fetch_menu_design(main_menu: str) -> dict:  # Changed return type from list to dict
+async def fetch_menu_design(main_menu: str) -> dict: 
+    from app.services.menu_services import get_order_service_sub_menu, get_restaurants_menu, get_sub_menu
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{settings.BASE_URL}/menu/sub/{main_menu}")
-            response.raise_for_status()
-            data = response.json()
-            return data.get("data", {})  # Return dict instead of list, default to empty dict
+        if main_menu == "Order Services":
+            return await get_order_service_sub_menu(main_menu)
+        elif main_menu in ["Restaurants", "For the 'gram"]:
+            return await get_restaurants_menu(main_menu)
+        else:
+            return await get_sub_menu(main_menu)
     except Exception as e:
-        print(f"Error fetching service items: {e}")
+        print(f"Error fetching service items locally: {e}")
         return {}
     
 
 async def fetch_whatsapp_numbers(serviceitem: str):
+    from app.services.menu_services import get_service_overview, get_service_providers
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{settings.BASE_URL}/menu/service/{serviceitem}")
-            response.raise_for_status()
-            data = response.json()
-            if isinstance(data, dict):
-                return data.get("data", [])
-            elif isinstance(data, list):
-                return data
-            else:
-                return []
+        design_df = await get_service_overview()
+        providers_df = await get_service_providers()
+        
+        matching_items = design_df[design_df["Service Item"].str.contains(serviceitem, case=False, na=False)]
+        
+        if matching_items.empty:
+            return []
+        provider_ids_nested = matching_items["Service Providers"].apply(lambda x: [p.strip() for p in x.split(",")])
+        flattened_provider_ids = [provider_id for sublist in provider_ids_nested for provider_id in sublist]
+        unique_provider_ids = list(set(flattened_provider_ids))
+        matching_providers = providers_df[providers_df["Number"].isin(unique_provider_ids)]
+        
+        if matching_providers.empty:
+            return []
+        return matching_providers["WhatsApp"].tolist()
     except Exception as e:
-        print(f"Error fetching service items: {e}")
+        print(f"Error fetching whatsapp numbers locally: {e}")
         return []
     
 

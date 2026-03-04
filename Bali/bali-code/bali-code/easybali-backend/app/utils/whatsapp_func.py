@@ -1806,8 +1806,13 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                         
                         return
                         
-                    except ValueError:
-                        await send_whatsapp_message(sender_id, "Invalid date format received. Please try selecting the date again.")
+                    except Exception as booking_err:
+                        import traceback
+                        logger.error(f"❌ Booking flow error: {booking_err}\n{traceback.format_exc()}")
+                        await send_whatsapp_message(
+                            sender_id,
+                            "Sorry, we encountered an issue processing your booking. Please try again or type *menu* to start over."
+                        )
                         return
         
         if message_text and "Hi, I am in" in message_text:    

@@ -1736,6 +1736,12 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     try:
                         user_date = datetime.datetime.strptime(selected_date, '%Y-%m-%d')
 
+                        # Reconstruct the original service name from the AI flow ID
+                        if str(selected_service).startswith("ai_service_"):
+                            parts = str(selected_service).split("_", 3)
+                            if len(parts) >= 4:
+                                selected_service = parts[3].replace('_', ' ')
+
                         base_price = await get_service_base_price(selected_service)
 
                         new_order = await initiate_chat_session(

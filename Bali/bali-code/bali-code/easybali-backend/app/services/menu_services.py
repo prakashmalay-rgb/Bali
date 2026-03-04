@@ -383,11 +383,24 @@ async def get_service_items(subcategory: str):
 async def get_service_base_price(service_name: str) -> str:
     if cache["services_df"] is None:
         raise ValueError("Services data not loaded")
-    filtered_df = cache["services_df"][cache["services_df"]['Service Item'] == service_name]
     
+    df = cache["services_df"]
+    filtered_df = df[df['Service Item'] == service_name]
+    
+    if filtered_df.empty:
+        # Fallback: Normalize spaces and underscores for comparison
+        norm_input = str(service_name).lower().replace("_", "").replace(" ", "")
+        for idx, row in df.iterrows():
+            item = str(row['Service Item'])
+            norm_item = item.lower().replace("_", "").replace(" ", "")
+            if norm_input == norm_item or norm_input in norm_item:
+                filtered_df = df.iloc[[idx]]
+                break
+
     if filtered_df.empty:
         print(f"Warning: Service '{service_name}' not found in services data")
         return "0"
+        
     price = filtered_df.iloc[0]["Final Price (Service Item Button)"]
     if pd.isna(price):
         return "0"

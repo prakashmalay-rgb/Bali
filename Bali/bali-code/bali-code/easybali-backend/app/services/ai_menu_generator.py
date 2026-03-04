@@ -216,7 +216,8 @@ Return ONLY valid JSON:
             except: pass
             
             try:
-                price_clean = f"{int(re.sub(r'[^\d]', '', str(price_val)) or 0):,}".replace(',', ' ')
+                price_digits = re.sub(r'[^\d]', '', str(price_val))
+                price_clean = f"{int(price_digits or 0):,}".replace(',', ' ')
             except: price_clean = str(price_val)
             
             rows.append({

@@ -77,16 +77,17 @@ async def whatsapp_response(query: str, user_id: str, villa_code: str = "WEB_VIL
         intent: Optional[Dict] = None
         requirements: Dict = ai_menu_generator.extract_requirements(query) or {}
         
-        if service_check["we_offer_it"]:
+        if service_check.get("we_offer_it", False):
             intent = ai_menu_generator.detect_service_intent(query)
 
-            if not intent and service_check["matched_service"]:
+            matched = service_check.get("matched_service")
+            if not intent and matched:
                 for service_type, info in ai_menu_generator.service_categories.items():
-                    if info["subcategory"] == service_check["matched_service"]:
+                    if info.get("subcategory") == matched:
                         intent = {
                             "service_type": service_type,
-                            "category": info["category"],
-                            "subcategory": info["subcategory"]
+                            "category": info.get("category", ""),
+                            "subcategory": info.get("subcategory", "")
                         }
                         break
 
@@ -148,9 +149,9 @@ DETECTED INTENT:
 
         will_show_menu = bool(intent and isinstance(intent, dict) and intent.get("category"))
         will_decline_service = (
-            service_check["is_service_request"] and 
-            not service_check["we_offer_it"] and
-            service_check["confidence"] > 0.7
+            service_check.get("is_service_request", False) and 
+            not service_check.get("we_offer_it", False) and
+            service_check.get("confidence", 0) > 0.7
         )
 
         # ============================================================
@@ -299,15 +300,18 @@ YOUR RESPONSE:"""
         image_url = None
 
         if intent and isinstance(intent, dict) and intent.get("category"):
-            menu_data = await ai_menu_generator.generate_service_menu(
-                category=intent["category"],
-                subcategory=intent.get("subcategory"),
-                requirements=requirements
-            )
-            should_send_menu = bool(menu_data and menu_data.get("sections"))
-            
-            if menu_data:
-                image_url = menu_data.get("image_url")
+            try:
+                menu_data = await ai_menu_generator.generate_service_menu(
+                    category=intent.get("category", ""),
+                    subcategory=intent.get("subcategory"),
+                    requirements=requirements
+                )
+                should_send_menu = bool(menu_data and menu_data.get("sections"))
+                
+                if menu_data:
+                    image_url = menu_data.get("image_url")
+            except Exception as menu_err:
+                print(f"[whatsapp_response] Menu generation error (non-fatal): {menu_err}")
 
         return {
             "text": ai_text,
@@ -316,7 +320,7 @@ YOUR RESPONSE:"""
             "menu_data": menu_data,
             "intent": intent or {},
             "requirements": requirements,
-            "service_check": service_check  # For logging/analytics
+            "service_check": service_check
         }
 
     except Exception as e:

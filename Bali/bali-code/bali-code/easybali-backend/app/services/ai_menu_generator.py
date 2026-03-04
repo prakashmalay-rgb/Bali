@@ -68,21 +68,24 @@ class AIMenuGenerator:
         """Use AI to determine if user is requesting/discussing a specific service we offer."""
         
         our_services = []
-        main_df = cache.get("main_menu_design")
-        design_df = cache.get("design_df")
-        
-        if main_df is not None and not main_df.empty and design_df is not None and not design_df.empty:
-            if "Menu Location" in main_df.columns and "Category" in design_df.columns:
-                valid_sections = main_df[main_df["Menu Location"].isin(["Services", "Rental", "Rentals", "Discount & Promotions", "Recommendation"])]
-                valid_cat_names = valid_sections["Title"].unique().tolist()
-                
-                if "Sub-category" in design_df.columns:
-                    mask = design_df["Category"].isin(valid_cat_names)
-                    relevant = design_df[mask]
-                    for _, row in relevant.drop_duplicates(subset=["Sub-category"]).iterrows():
-                        sub = row.get("Sub-category")
-                        if sub:
-                            our_services.append({"name": sub, "category": row.get("Category")})
+        try:
+            main_df = cache.get("main_menu_design")
+            design_df = cache.get("design_df")
+            
+            if main_df is not None and not main_df.empty and design_df is not None and not design_df.empty:
+                if "Menu Location" in main_df.columns and "Category" in design_df.columns:
+                    valid_sections = main_df[main_df["Menu Location"].isin(["Services", "Rental", "Rentals", "Discount & Promotions", "Recommendation"])]
+                    valid_cat_names = valid_sections["Title"].unique().tolist()
+                    
+                    if "Sub-category" in design_df.columns:
+                        mask = design_df["Category"].isin(valid_cat_names)
+                        relevant = design_df[mask]
+                        for _, row in relevant.drop_duplicates(subset=["Sub-category"]).iterrows():
+                            sub = row.get("Sub-category")
+                            if sub:
+                                our_services.append({"name": sub, "category": row.get("Category")})
+        except Exception as cache_err:
+            print(f"[intelligent_service_check] Cache read error (non-fatal): {cache_err}")
 
         if not our_services:
             for _, info in self.service_categories.items():

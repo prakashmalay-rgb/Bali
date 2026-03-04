@@ -25,14 +25,17 @@ async def get_active_sessions():
 
 @router.post("/main_design", summary="Get main menu items")
 async def main_menu_design(request: MenuRequest):
-    data = await get_main_menu_design()
+    try:
+        data = await get_main_menu_design()
+    except ValueError:
+        return {"data": []}
 
-    if "Menu Location" not in data.columns:
-        raise HTTPException(status_code=500, detail="Invalid data format. Missing 'Menu Location' column.")
+    if data is None or data.empty or "Menu Location" not in data.columns:
+        return {"data": []}
     filtered_data = data[data["Menu Location"] == request.type]
 
     if filtered_data.empty:
-        raise HTTPException(status_code=404, detail=f"No data found for menu type '{request.type}'")
+        return {"data": []}
     
     result = []
     for _, row in filtered_data.iterrows():

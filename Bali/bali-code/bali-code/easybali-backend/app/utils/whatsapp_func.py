@@ -121,7 +121,7 @@ async def fetch_service_items(api_url: str, subcategory: str) -> list:
 async def fetch_menu_design(main_menu: str) -> dict:  # Changed return type from list to dict
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"https://easy-bali.onrender.com/menu/sub/{main_menu}")
+            response = await client.get(f"{settings.BASE_URL}/menu/sub/{main_menu}")
             response.raise_for_status()
             data = response.json()
             return data.get("data", {})  # Return dict instead of list, default to empty dict
@@ -133,7 +133,7 @@ async def fetch_menu_design(main_menu: str) -> dict:  # Changed return type from
 async def fetch_whatsapp_numbers(serviceitem: str):
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"https://easy-bali.onrender.com/menu/service/{serviceitem}")
+            response = await client.get(f"{settings.BASE_URL}/menu/service/{serviceitem}")
             response.raise_for_status()
             data = response.json()
             if isinstance(data, dict):
@@ -1351,7 +1351,7 @@ async def get_ai_chatbot_response(query: str, user_id: str) -> Optional[str]:
     try:
         async with httpx.AsyncClient(timeout=50.0) as client:
             response = await client.post(
-                "https://easy-bali.onrender.com/chatbot/generate-response",
+                f"{settings.BASE_URL}/chatbot/generate-response",
                 json={"query": query},
                 params={"user_id": user_id}
             )
@@ -1851,7 +1851,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                 return
 
         if user_villa_code:
-            if message_text and message_text.lower() in ["hello", "hi", "hey", "good morning", "good afternoon", "good evening", "hey there", "hi there", "hello there", "howdy", "what's up?', 'how are you?', 'how's it going?','yo', 'greetings', 'bonjour'"]:
+            if message_text and message_text.lower() in ["hello", "hi", "hey", "good morning", "good afternoon", "good evening", "hey there", "hi there", "hello there", "howdy", "what's up?", "how are you?", "how's it going?", "yo", "greetings", "bonjour"]:
                 await starting_message(sender_id)
                 return
 
@@ -1904,7 +1904,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
             }
 
             if category_text in menu_mapping:
-                api_url = "https://easy-bali.onrender.com/main_design"
+                api_url = f"{settings.BASE_URL}/main_design"
                 menu_data = await fetch_menu_data(api_url, "Main Menu")
                 if menu_data:
                     if isinstance(menu_data, list):
@@ -1968,7 +1968,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     return
 
                 else:
-                    api_url = "https://easy-bali.onrender.com"
+                    api_url = settings.BASE_URL
                     serviceitem_data = await fetch_service_items(api_url, serviceitems_text)
 
                     if not serviceitem_data:

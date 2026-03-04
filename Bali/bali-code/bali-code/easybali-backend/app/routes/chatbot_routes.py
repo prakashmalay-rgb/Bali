@@ -5,7 +5,7 @@ from app.services.ai_prompt import generate_response
 from app.utils.bucket import upload_to_s3
 from app.db.session import passport_collection, order_collection
 from app.models.order_summary import Order, PaymentInfo
-from app.services.payment_service import create_xendit_payment_with_distribution, update_order_with_payment_info
+from app.services.payment_service import create_xendit_payment_with_distribution, update_order_with_payment_info, clean_price_string
 from app.services.order_summary import get_next_order_id, save_order_to_db
 from app.services.menu_services import cache
 from app.services.promo_service import validate_promo_code, increment_promo_usage
@@ -61,7 +61,6 @@ async def create_booking_payment(request: BookingRequest):
         discount_amount = 0.0
         promo_msg = ""
         if request.promo_code:
-            from app.services.payment_service import clean_price_string
             is_valid, final_amount, promo_msg = await validate_promo_code(request.promo_code, float(final_price_val))
             if is_valid:
                 discount_amount = float(final_price_val) - final_amount

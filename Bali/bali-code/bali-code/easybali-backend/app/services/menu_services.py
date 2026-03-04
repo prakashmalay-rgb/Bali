@@ -405,7 +405,10 @@ async def get_service_base_price(service_name: str) -> str:
     price = filtered_df.iloc[0]["Final Price (Service Item Button)"]
     if pd.isna(price):
         return "0"
-    return str(price)
+    # Strip non-breaking spaces, commas, and non-numeric garbage from Google Sheets
+    import re as _re
+    cleaned = _re.sub(r'[^\d]', '', str(price))
+    return cleaned if cleaned else "0"
 
 async def get_service_items_for_whatsapp(subcategory_title: str):
     if cache["services_df"]is None:

@@ -1778,13 +1778,20 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                             payment_url = None
                             logger.error(f"❌ Failed to generate payment link: {payment_result.get('error')}")
 
+                        # Clean price — strip EVERYTHING non-numeric (handles \xa0, commas, spaces from Google Sheets)
+                        try:
+                            price_cleaned = int(re.sub(r'[^\d]', '', str(new_order.price)) or '0')
+                            price_display = f"IDR {price_cleaned:,}"
+                        except Exception:
+                            price_display = f"IDR {new_order.price}"
+
                         confirmation_message = (
                             f"✨ *Booking Confirmed!* ✨\n\n"
-                            f"**Order ID:** {new_order.order_number}\n"
-                            f"**Service:** {new_order.service_name}\n"
-                            f"**Date:** {new_order.date.strftime('%d-%m-%Y')}\n"
-                            f"**Time:** {new_order.time}\n"
-                            f"**Total Price:** IDR {int(new_order.price):,}\n\n"
+                            f"*Order ID:* {new_order.order_number}\n"
+                            f"*Service:* {new_order.service_name}\n"
+                            f"*Date:* {new_order.date.strftime('%d-%m-%Y')}\n"
+                            f"*Time:* {new_order.time}\n"
+                            f"*Total Price:* {price_display}\n\n"
                             "Our service providers have been notified. First available provider to confirm will handle your booking."
                         )
 

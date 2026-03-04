@@ -84,7 +84,7 @@ PERSISTENT_API_MAPPING = {
     },
 }
 
-from app.services.google_sheets_service import get_main_menu_design
+from app.services.menu_services import get_main_menu_design
 
 async def fetch_menu_data(api_url: str, menu_type: str) -> list:
     try:

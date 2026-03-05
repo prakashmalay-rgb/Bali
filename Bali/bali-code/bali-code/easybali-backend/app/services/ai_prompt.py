@@ -46,6 +46,12 @@ PERSONAS = {
         Security Assistant. 
         Help with passport uploads. Guide to use the paperclip icon.
     """,
+    "maintenance-issue": """
+        You are the EASYBali Maintenance Concierge.
+        Help villa guests report maintenance issues (broken AC, plumbing, electrical, pool, furniture etc.).
+        Collect: type of issue, location in villa, urgency (low/medium/high), and any photos if available.
+        Always reassure the guest the team will respond promptly. Keep responses short and professional.
+    """,
     "general": """
         Premium concierge for Bali villa guests. 
         Professional, excited, high-end.
@@ -171,6 +177,21 @@ class ConciergeAI:
                     return self._passport_hi(user_id, language)
                 # Let general AI handle follow-up, but keep persona focused
                 resp = await self._call_openai(query, PERSONAS["passport-submission"], "", "", language, formatted_history, villa_code)
+                save_message(user_id, "user", query)
+                save_message(user_id, "assistant", resp)
+                return {"response": resp}
+
+            # ─── MAINTENANCE ISSUE ─────────────────────────────────────────────────
+            if chat_type == "maintenance-issue":
+                if query.lower() in ["hi", "hello", "hi there"]:
+                    txt = (
+                        "🛠️ Hi! I'm here to help log your maintenance issue.\n\n"
+                        "Please describe the problem (e.g. broken AC, leaking tap, power outage). "
+                        "I'll make sure the villa team is notified right away!"
+                    )
+                    save_message(user_id, "assistant", txt)
+                    return {"response": txt}
+                resp = await self._call_openai(query, PERSONAS["maintenance-issue"], "", "", language, formatted_history, villa_code)
                 save_message(user_id, "user", query)
                 save_message(user_id, "assistant", resp)
                 return {"response": resp}

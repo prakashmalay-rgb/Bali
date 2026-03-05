@@ -7,7 +7,18 @@
  */
 import axios from 'axios';
 
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://bali-v92r.onrender.com';
+// ─── GUARD RAIL ─────────────────────────────────────────────────────────────
+// If VITE_API_URL is missing the app will call the wrong URL and payment links
+// will silently fail. This error is intentionally loud.
+if (!import.meta.env.VITE_API_URL) {
+    console.error(
+        '%c⛔ VITE_API_URL is not set! Payment links & all API calls will FAIL.',
+        'color:red;font-size:16px;font-weight:bold;',
+        '\nCreate bali-frontend/.env with:\n  VITE_API_URL=http://localhost:8000'
+    );
+}
+
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 let _serverAwake = false;
 

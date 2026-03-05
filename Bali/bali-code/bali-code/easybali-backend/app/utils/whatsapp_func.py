@@ -678,39 +678,44 @@ async def send_ai_whatsapp_list_message(
 
         if len(whatsapp_rows) > 10:
             whatsapp_rows = whatsapp_rows[:10]
+
+        headers = {
+            "Authorization": f"Bearer {settings.access_token}",
+            "Content-Type": "application/json",
+        }
+
+        # If an image is available, send it first as a caption
+        if image_url:
+            await send_whatsapp_image_with_caption(
+                recipient_id,
+                image_url,
+                body_text[:1024]
+            )
+
+        # Now send the proper list message (cta_url does NOT support sections)
         payload = {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
             "to": recipient_id,
             "type": "interactive",
             "interactive": {
-                "type": "cta_url",
-                "header": {
-                    "type": "image",
-                    "image": {
-                        "link": image_url
-                    }
-                },
+                "type": "list",
                 "body": {
-                    "text": body_text
+                    "text": "✨ Tap *View Options* below to browse and select your service:"
                 },
                 "footer": {
                     "text": footer_text[:60]
                 },
                 "action": {
-                    "button": button_text[:20], 
+                    "button": button_text[:20],
                     "sections": [
                         {
-                            "title": "Options",
+                            "title": "Available Services",
                             "rows": whatsapp_rows
                         }
                     ]
                 }
             }
-        }
-        headers = {
-            "Authorization": f"Bearer {settings.access_token}",
-            "Content-Type": "application/json",
         }
 
         async with httpx.AsyncClient(timeout=50.0) as client:
@@ -1738,7 +1743,10 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                 print(f"⏰ Time: {time_selection}")
                 print(f"📋 Full response: {response_data}")
 
-                if flow_token and selected_service and selected_date and person_selection and time_selection:
+                if flow_token and selected_service and selected_date:
+                    # Use sane defaults for optional fields to prevent silent booking drops
+                    person_selection = person_selection or "1"
+                    time_selection = time_selection or "Flexible"
                     try:
                         # Robust Date Parsing
                         try:
@@ -1826,7 +1834,17 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                             "Sorry, we encountered an issue processing your booking. Please try again or type *menu* to start over."
                         )
                         return
+                else:
+                    # Missing critical booking fields — inform user clearly
+                    logger.error(f"❌ NFM reply missing fields: flow_token={flow_token}, service={selected_service}, date={selected_date}")
+                    await send_whatsapp_message(
+                        sender_id,
+                        "⚠️ We couldn't complete your booking — some details were missing from the form. "
+                        "Please try again by typing *Order Services* or selecting from the menu."
+                    )
+                    return
         
+
         if message_text and re.search(r"Hi,?\s*I\s*am\s*in", message_text, re.IGNORECASE):    
             try:
                 villa_name = extract_villa_name (message_text)

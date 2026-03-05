@@ -12,6 +12,7 @@ import topLeftPng from '../../assets/images/top-left.png'
 import { getServiceItems } from './api.jsx'
 import { useVoiceToText } from "../../hooks/useVoiceToText";
 import { chatAPI } from '../../api/chatApi';
+import { API_BASE_URL } from '../../api/apiClient';
 import { useLanguage } from '../../context/LanguageContext';
 
 const ServiceItems = () => {
@@ -168,7 +169,7 @@ const ServiceItems = () => {
 
   const createSession = async (payload) => {
     try {
-      const response = await fetch('https://bali-v92r.onrender.com/create-session', {
+      const response = await fetch(`${API_BASE_URL}/create-session`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -218,9 +219,16 @@ const ServiceItems = () => {
       setSessionId(response.session_id);
 
       handleCloseModal();
+
+      // Build initial message — include payment link if available
+      let initialMsg = response.message;
+      if (response.payment_url) {
+        initialMsg += `\n\n💳 **Payment Link**: [Click Here to Pay](${response.payment_url})`;
+      }
+
       navigate('/chatbot', {
         state: {
-          message: response.message,
+          message: initialMsg,
           sessionId: response.session_id
         }
       });

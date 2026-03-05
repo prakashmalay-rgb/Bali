@@ -95,7 +95,7 @@ const PromoManagement = () => {
                     <h3 className="font-semibold text-gray-800">Create New Promo</h3>
                 </div>
                 <div className="p-6">
-                    <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+                    <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Code</label>
                             <input
@@ -135,6 +135,15 @@ const PromoManagement = () => {
                                 value={formData.usage_limit} onChange={e => setFormData({ ...formData, usage_limit: e.target.value })}
                             />
                         </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Expiry Date (Optional)</label>
+                            <input
+                                type="datetime-local"
+                                className="w-full p-2 border rounded focus:ring-2 focus:ring-primary"
+                                value={formData.expiry} onChange={e => setFormData({ ...formData, expiry: e.target.value })}
+                                min={new Date().toISOString().slice(0, 16)}
+                            />
+                        </div>
                         <div className="w-full">
                             <button type="submit" disabled={isSubmitting} className="w-full p-2.5 bg-primary hover:bg-[#0B97EE] transition-colors text-white rounded font-medium flex justify-center items-center gap-2 shadow-sm">
                                 <FiPlus /> {isSubmitting ? 'Creating...' : 'Create Promo'}
@@ -157,15 +166,16 @@ const PromoManagement = () => {
                                 <th className="px-6 py-3 font-medium">Type</th>
                                 <th className="px-6 py-3 font-medium">Value</th>
                                 <th className="px-6 py-3 font-medium">Usage</th>
+                                <th className="px-6 py-3 font-medium">Expiry</th>
                                 <th className="px-6 py-3 font-medium">Status</th>
                                 <th className="px-6 py-3 font-medium text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {loading ? (
-                                <tr><td colSpan="6" className="text-center py-8">Loading promos...</td></tr>
+                                <tr><td colSpan="7" className="text-center py-8">Loading promos...</td></tr>
                             ) : promos.length === 0 ? (
-                                <tr><td colSpan="6" className="text-center py-8 text-gray-500">No promo codes existing.</td></tr>
+                                <tr><td colSpan="7" className="text-center py-8 text-gray-500">No promo codes existing.</td></tr>
                             ) : promos.map((promo) => (
                                 <tr key={promo.id} className="hover:bg-gray-50/50">
                                     <td className="px-6 py-4 font-bold text-gray-900">{promo.code}</td>
@@ -173,6 +183,9 @@ const PromoManagement = () => {
                                     <td className="px-6 py-4 ">{promo.type === 'percentage' ? `${promo.value}%` : `IDR ${promo.value.toLocaleString()}`}</td>
                                     <td className="px-6 py-4">
                                         {promo.current_usage} {promo.usage_limit ? `/ ${promo.usage_limit}` : 'uses'}
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        {promo.expiry ? new Date(promo.expiry).toLocaleDateString() : 'No expiry'}
                                     </td>
                                     <td className="px-6 py-4">
                                         <span className={`px-2 py-1 rounded text-xs font-semibold flex items-center gap-1 w-max ${promo.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>

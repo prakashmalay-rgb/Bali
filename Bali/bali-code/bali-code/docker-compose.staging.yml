@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  backend-staging:
+    build:
+      context: ./easybali-backend
+    container_name: easybali-backend-staging
+    ports:
+      - "8001:8000"
+    env_file:
+      - ./easybali-backend/.env.staging
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend-staging:
+    build:
+      context: ./bali-frontend
+    container_name: easybali-frontend-staging
+    ports:
+      - "8080:80"
+    depends_on:
+      backend-staging:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  default:
+    name: easybali-staging-network

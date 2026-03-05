@@ -14,3 +14,37 @@ EASYBali_accessKeys (1).csv
 Services Sheet.xlsx
 EASYBali Work Tracker.xlsx
 bali-code.zip
+
+# Logs and system artifacts
+*.log
+cf_out.txt
+cf_error.txt
+tunnel_log.txt
+tunnel_ssh.log
+tunnelmole.log
+uvicorn_error.log
+uvicorn_out.log
+
+# Python artifacts
+__pycache__/
+*.pyc
+.venv/
+easybali-backend/.venv/
+
+# Executables
+*.exe
+Bali/ngrok.exe
+
+# Temporary debug/test scripts (keeping repository clean)
+debug_cache_columns.py
+check_cols.py
+check_sizes.py
+patch_menu.py
+test_server.py
+test_server_fixed.py
+test_server_simple.py
+test_xendit_ping.py
+test_ai_fix.py
+test_booking.py
+test_chat_flow.py
+test_promo_integration.py

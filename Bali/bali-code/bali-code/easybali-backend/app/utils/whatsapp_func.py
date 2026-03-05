@@ -1354,11 +1354,16 @@ async def send_ai_whatsapp_order_flow_message(recipient_id: str, flow_token: str
 
 
 def extract_villa_name(text: str):
+    # Robust extraction: Capture everything after "Hi, I am in"
+    match = re.search(r"Hi,\s*I\s*am\s*in\s+(.+)", text, re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    
+    # Fallback to the old "word after villa" logic if regex fails
     words = text.split()
     for i, word in enumerate(words):
         if word.lower() == "villa" and i + 1 < len(words):
-            villa_name = words[i + 1]
-            return f"Villa {villa_name}" 
+            return f"Villa {words[i + 1]}"
     return None
 
 
@@ -1822,7 +1827,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                         )
                         return
         
-        if message_text and "Hi, I am in" in message_text:    
+        if message_text and re.search(r"Hi,?\s*I\s*am\s*in", message_text, re.IGNORECASE):    
             try:
                 villa_name = extract_villa_name (message_text)
                 villa_code = await get_villa_code_by_name(villa_name)

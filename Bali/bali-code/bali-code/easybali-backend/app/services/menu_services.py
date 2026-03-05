@@ -455,7 +455,14 @@ async def get_villa_code_by_name(villa_name: str):
     try:
         villas_df = cache["villas_data"]
         
-        # Search for exact match first (case-insensitive)
+        # 1. Check if input is already a code (e.g. "V1") in the Number column
+        matching_code = villas_df[
+            villas_df["Number"].astype(str).str.upper() == villa_name.upper()
+        ]
+        if not matching_code.empty:
+            return matching_code.iloc[0]["Number"]
+
+        # 2. Search for exact match in Name column
         matching_villa = villas_df[
             villas_df["Name of Villa"].str.lower() == villa_name.lower()
         ]

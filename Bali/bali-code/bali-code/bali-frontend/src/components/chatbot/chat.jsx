@@ -242,6 +242,7 @@ const Chat = () => {
     else if (location.state?.message && location.state?.sessionId) {
       console.log("📦 WebSocket order chat initialization");
       setChatType('order-service');
+      setUserId(chatAPI.getUserId()); // Ensure userId is set for API fallback
 
       const sessionId = location.state.sessionId;
 
@@ -261,7 +262,10 @@ const Chat = () => {
         setMessages([initialMessage]);
       }
     } else {
-      console.log("No initial state provided");
+      console.log("🆕 No initial state provided - initializing default general chat");
+      setChatType('general');
+      setUserId(chatAPI.getUserId());
+      setActiveTab("order_services");
     }
     console.log("===============================================");
   }, []); // ✅ Empty dependency array - only run once
@@ -326,9 +330,9 @@ const Chat = () => {
       let ws = null;
       isCleaningUp.current = false;
 
-      const baseUrl = import.meta.env.VITE_BASE_URL;
+      const baseUrl = import.meta.env.VITE_BASE_URL || import.meta.env.VITE_API_URL;
       if (!baseUrl) {
-        console.error("❌ VITE_BASE_URL is not defined in environment variables");
+        console.error("❌ NEITHER VITE_BASE_URL nor VITE_API_URL are defined in environment variables");
         return;
       }
       const wsUrl = baseUrl.replace(/^http/, 'ws') + `/ws/${sessionId}`;
@@ -462,8 +466,10 @@ const Chat = () => {
     } else {
       if (!sessionId) {
         console.log("ℹ️ No session ID found, skipping WebSocket");
-      } else if (apiBasedChats.includes(chatType)) {
-        console.log("ℹ️ API-based chat, skipping WebSocket");
+      }
+      if (apiBasedChats.includes(chatType)) {
+        console.log("ℹ️ API-based chat, setting connected state to true");
+        setIsConnected(true);
       }
     }
   }, [chatType]); // ✅ Only depend on chatType
@@ -573,8 +579,53 @@ const Chat = () => {
       // API-based chat
       console.log("📤 Sending via API");
       sendMessageToAPI(textToSend);
+    } else if (chatType === 'order-service') {
+      // Order-service: WebSocket stays open for provider notifications,
+      // but user messages are sent to AI API (as 'general') for an actual response.
+      console.log("📤 Order-service chat — sending user message to AI API as general");
+      const currentUserId = userId || chatAPI.getUserId();
+
+      // Call AI directly with 'general' type — 'order-service' has no dedicated AI handler
+      (async () => {
+        try {
+          setApiLoading(true);
+          const response = await chatAPI.sendMessage('general', currentUserId, textToSend);
+          const botMsg = {
+            id: Date.now(),
+            text: response.response,
+            sender: "bot",
+            timestamp: getCurrentTime(),
+          };
+          setMessages((prev) => [...prev, botMsg]);
+        } catch (error) {
+          console.error("❌ Error sending order-service message:", error);
+          const errorMsg = {
+            id: Date.now(),
+            text: t("process_error"),
+            sender: "bot",
+            timestamp: getCurrentTime(),
+          };
+          setMessages((prev) => [...prev, errorMsg]);
+        } finally {
+          setApiLoading(false);
+        }
+      })();
+
+      // Also forward via WebSocket if connected (for future backend handling)
+      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+        try {
+          socketRef.current.send(JSON.stringify({
+            message: textToSend,
+            timestamp: getCurrentTime(),
+            type: "user_message"
+          }));
+          startAutoCloseTimer();
+        } catch (e) {
+          console.warn("⚠️ WebSocket send failed (non-critical):", e);
+        }
+      }
     } else if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      // WebSocket-based chat (Order Services)
+      // Other WebSocket-based chats
       try {
         const payload = JSON.stringify({
           message: textToSend,
@@ -584,7 +635,6 @@ const Chat = () => {
         socketRef.current.send(payload);
         console.log("✅ Sent message via WebSocket:", textToSend);
 
-        // ✅ NEW: Reset the 120-second timer when user sends a message
         startAutoCloseTimer();
 
       } catch (error) {

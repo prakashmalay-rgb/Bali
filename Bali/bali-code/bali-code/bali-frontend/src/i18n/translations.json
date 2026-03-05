@@ -76,7 +76,9 @@
         "process_error": "Sorry, I couldn't process that. Please try again! 🙏",
         "upload_error": "Sorry, the upload failed. Please try again! 🙏",
         "no_message_error": "Sorry, no message content available.",
-        "chat_tab": "Chat"
+        "chat_tab": "Chat",
+        "maintenance_issue": "Maintenance Issue",
+        "location_zone": "Location Zone"
     },
     "ID": {
         "chat_placeholder": "Obrol dengan Bot AI kami",
@@ -155,6 +157,8 @@
         "process_error": "Maaf, saya tidak dapat memprosesnya. Silakan coba lagi! 🙏",
         "upload_error": "Maaf, pengunggahan gagal. Silakan coba lagi! 🙏",
         "no_message_error": "Maaf, tidak ada konten pesan yang tersedia.",
-        "chat_tab": "Obrolan"
+        "chat_tab": "Obrolan",
+        "maintenance_issue": "Masalah Pemeliharaan",
+        "location_zone": "Zona Lokasi"
     }
 }

@@ -41,16 +41,52 @@ class AIMenuGenerator:
             "massage": {
                 "category": "Health & Wellness",
                 "subcategory": "Massage",
-                "keywords": [
-                    "massage", "spa", "balinese", "aroma", "aromatherapy", "shiatsu", "zhiatzu",
-                    "reflexology", "foot massage", "head neck", "shoulder", "coconut oil",
-                    "sunburn massage", "aloevera", "facial", "natural facial", "body treatment"
-                ]
+                "keywords": ["massage", "spa", "balinese", "aroma", "aromatherapy", "shiatsu", "reflexology", "facial", "body treatment"]
             },
             "yoga": {
                 "category": "Health & Wellness",
                 "subcategory": "Yoga",
-                "keywords": ["yoga", "meditation", "mobility", "functional training", "stretch"]
+                "keywords": ["yoga", "meditation", "mobility", "stretch", "pilates"]
+            },
+            "muay_thai": {
+                "category": "Health & Wellness",
+                "subcategory": "Muay Thai",
+                "keywords": ["muay thai", "martial arts", "sparring", "thai boxing"]
+            },
+            "boxing": {
+                "category": "Health & Wellness",
+                "subcategory": "Boxing",
+                "keywords": ["boxing", "fight", "punch"]
+            },
+            "kickboxing": {
+                "category": "Health & Wellness",
+                "subcategory": "Kickboxing",
+                "keywords": ["kickboxing", "kick"]
+            },
+            "photography": {
+                "category": "Services",
+                "subcategory": "Photography",
+                "keywords": ["photography", "photoshoot", "photographer", "photo", "camera", "video"]
+            },
+            "private_chef": {
+                "category": "Dining",
+                "subcategory": "Private Chef",
+                "keywords": ["chef", "cook", "private chef", "bbq", "dinner"]
+            },
+            "iv_drip": {
+                "category": "Health & Wellness",
+                "subcategory": "IV Drip",
+                "keywords": ["iv drip", "medical", "physiotherapy", "doctor", "vitamin", "hangover"]
+            },
+            "tour_driver": {
+                "category": "Transportation",
+                "subcategory": "Tour with Driver",
+                "keywords": ["driver", "tour", "car", "van", "transport", "driver with car", "island tour"]
+            },
+            "helicopter": {
+                "category": "Transportation",
+                "subcategory": "Helicopter Ride",
+                "keywords": ["helicopter", "heli", "chopper", "flight"]
             },
             "airport_transfer": {
                 "category": "Transportation",
@@ -61,6 +97,21 @@ class AIMenuGenerator:
                 "category": "Rental",
                 "subcategory": "Bike Rental",
                 "keywords": ["scooter", "bike", "nmax", "pcx", "scoopy", "motorcycle", "yamaha", "honda"]
+            },
+            "fast_boat": {
+                "category": "Transportation",
+                "subcategory": "Fast Boat",
+                "keywords": ["boat", "fast boat", "gili", "nusa penida", "lembongan", "ferry"]
+            },
+            "flowers": {
+                "category": "Services",
+                "subcategory": "Flowers",
+                "keywords": ["flowers", "bouquet", "floral", "anniversary", "birthday"]
+            },
+            "laundry": {
+                "category": "Services",
+                "subcategory": "Laundry",
+                "keywords": ["laundry", "wash", "dry clean", "ironing"]
             }
         }
     
@@ -87,8 +138,9 @@ class AIMenuGenerator:
         except Exception as cache_err:
             print(f"[intelligent_service_check] Cache read error (non-fatal): {cache_err}")
 
-        if not our_services:
-            for _, info in self.service_categories.items():
+        # Always include core hardcoded services to ensure reliability for Martial Arts, Photography, etc.
+        for _, info in self.service_categories.items():
+            if not any(s['name'].lower() == info["subcategory"].lower() for s in our_services):
                 our_services.append({"name": info["subcategory"], "category": info["category"]})
         
         services_list = "\n".join([f"- {s['name']} ({s['category']})" for s in our_services])

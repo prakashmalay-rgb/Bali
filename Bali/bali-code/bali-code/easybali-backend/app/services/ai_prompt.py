@@ -56,6 +56,11 @@ PERSONAS = {
         Premium concierge for Bali villa guests. 
         Professional, excited, high-end.
         You have been provided deep context from the Archive and Price Diff tabs. If a user asks about a service you cannot find in the active directory, check the Archive list provided in your context. If it's still not there, intelligently browse your own general knowledge to answer.
+        
+        CRITICAL RULES:
+        - NEVER tell a user that a service is "booked" or that an "email has been sent" for booking.
+        - If a user wants to book, guide them to use the interactive "Book" or "Options" buttons that appear in the chat.
+        - If you don't see buttons yet, ask for their preferred date and time so the system can suggest options.
     """
 }
 
@@ -171,6 +176,19 @@ class ConciergeAI:
             conv = trim_history(history + [{"role": "user", "content": query}])
             formatted_history = "\n".join([f"{m['role'].capitalize()}: {m['content']}" for m in conv])
 
+            # ─── SERVICE BOOKING INTERCEPT (Dynamic Mapping) ────────────────────────
+            # Intercept service requests across all chat types for consistency
+            try:
+                # Only run for modes that actually allow ordering
+                if chat_type in ["general", "order-service", "plan-my-trip", "what-to-do", "things-to-do-in-bali", "local-cuisine"]:
+                    service_check = await ai_menu_generator.intelligent_service_check(query)
+                    if service_check.get("is_service_request") and service_check.get("we_offer_it"):
+                        menu = await self._handle_booking(query, user_id, language, service_check, villa_code)
+                        if menu:
+                            return menu
+            except Exception as e:
+                logger.error(f"Service Check Error: {e}")
+
             # ─── PASSPORT SUBMISSION ───────────────────────────────────────────────
             if chat_type == "passport-submission":
                 if query.lower() in ["hi", "hello", "hi there"]:
@@ -229,17 +247,6 @@ class ConciergeAI:
                 save_message(user_id, "user", query)
                 save_message(user_id, "assistant", resp)
                 return {"response": resp}
-
-            # ─── ORDER SERVICES / GENERAL (service booking intercept active) ───────
-            # Service / Booking Check ONLY runs here
-            try:
-                service_check = await ai_menu_generator.intelligent_service_check(query)
-                if service_check.get("is_service_request") and service_check.get("we_offer_it"):
-                    menu = await self._handle_booking(query, user_id, language, service_check, villa_code)
-                    if menu:
-                        return menu
-            except Exception as e:
-                logger.error(f"Service Check Error: {e}")
 
             # General fallback with RAG
             sheet_ctx = self.get_sheet_context()

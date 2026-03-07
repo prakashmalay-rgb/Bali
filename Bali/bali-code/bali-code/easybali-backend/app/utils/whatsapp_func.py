@@ -1635,7 +1635,8 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                                     message_type="link_message"
                                 )
                         else:
-                            error_message = "Sorry, there was an issue creating your payment link. Please try again or contact support."
+                            error_detail = payment_result.get('error', 'Unknown Error')
+                            error_message = f"⚠️ *Payment System Issue*\n\nSorry, we encountered an issue creating your secure payment link:\n_{error_detail}_\n\nPlease try again or contact support."
                             if user_sender_id.isdigit():
                                 await send_whatsapp_message(user_sender_id, error_message)
                             else:

@@ -125,28 +125,17 @@ async def create_booking_payment(request: BookingRequest):
         # 4. Save to DB
         await save_order_to_db(new_order.dict())
         
-        # 5. Create Xendit Payment
-        payment_result = await create_xendit_payment_with_distribution(new_order)
+        # 5. Notify Service Providers ONLY (No payment link yet)
+        await notify_service_providers(service, new_order.dict())
         
-        if payment_result.get("success"):
-            # 6. Update Order with payment info
-            await update_order_with_payment_info(order_number, payment_result)
-            
-            # 7. Notify Service Providers
-            await notify_service_providers(service, new_order.dict())
-            
-            payment_url = payment_result.get("payment_url")
-            success_msg = f"🎉 **Booking Confirmed!**\n\n**Service**: {service['service_name']}\n**Location**: {actual_location} Zone\n**Date**: To Be Confirmed\n**Time**: To Be Confirmed\n\n💰 **Price**: IDR {final_price_val:,}"
-            if discount_amount > 0:
-                success_msg += f"\n🎁 **Promo Applied**: {promo_msg}\n💸 **You Saved**: IDR {int(discount_amount):,}"
-            
-            return {
-                "response": f"{success_msg}\n\n⏳ **Next Steps**:\n1. We've notified available service providers\n2. First provider to confirm gets your booking\n3. You'll receive payment link once confirmed\n4. Complete payment for instant confirmation\n\n💳 **Payment Link**: [Click Here When Ready]({payment_url})\n\n📱 **WhatsApp**: +628123456789 for support"
-            }
-        else:
-            return {
-                "response": f"❌ **Booking Error**: Sorry, I encountered an error while generating your payment link: {payment_result.get('error')}. Please try again later or contact support."
-            }
+        actual_location = await get_villa_location_by_code(req_villa_code) or "Bali"
+        success_msg = f"🎉 **Booking Request Received!**\n\n**Service**: {service['service_name']}\n**Location**: {actual_location} Zone\n**Date**: To Be Confirmed\n**Time**: To Be Confirmed\n\n💰 **Estimated Price**: IDR {final_price_val:,}"
+        if discount_amount > 0:
+            success_msg += f"\n🎁 **Promo Applied**: {promo_msg}\n💸 **You Saved**: IDR {int(discount_amount):,}"
+        
+        return {
+            "response": f"{success_msg}\n\n⏳ **Next Steps**:\n1. We've notified our service providers for your request.\n2. Once a provider confirms their availability, we will send you a secure payment link immediately.\n3. Complete the payment to finalize your booking.\n\n📱 **WhatsApp**: +628123456789 for support"
+        }
             
     except Exception as e:
         print(f"Error in create_booking_payment: {e}")

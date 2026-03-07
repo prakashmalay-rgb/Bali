@@ -148,20 +148,55 @@ async def fetch_whatsapp_numbers(serviceitem: str):
         design_df = await get_service_overview()
         providers_df = await get_service_providers()
         
-        matching_items = design_df[design_df["Service Item"].str.contains(serviceitem, case=False, na=False)]
+        # Robust name matching - normalize both sides
+        service_norm = re.sub(r'[^a-zA-Z0-9]', '', serviceitem.lower())
+        design_df['norm_item'] = design_df["Service Item"].apply(lambda x: re.sub(r'[^a-zA-Z0-9]', '', str(x).lower()))
         
+        matching_items = design_df[design_df["norm_item"] == service_norm]
         if matching_items.empty:
+            # Fallback for partial matches
+            matching_items = design_df[design_df["norm_item"].str.contains(service_norm, na=False)]
+            
+        if matching_items.empty:
+            logger.warning(f"⚠️ No service items found for '{serviceitem}' to notify providers.")
             return []
-        provider_ids_nested = matching_items["Service Providers"].apply(lambda x: [p.strip() for p in x.split(",")])
-        flattened_provider_ids = [provider_id for sublist in provider_ids_nested for provider_id in sublist]
-        unique_provider_ids = list(set(flattened_provider_ids))
-        matching_providers = providers_df[providers_df["Number"].isin(unique_provider_ids)]
+
+        # Parse provider IDs with more robustness
+        all_ids = []
+        for ids_str in matching_items["Service Providers"].fillna("").astype(str):
+            # Split by comma or semicolon and strip spaces
+            ids = [i.strip() for i in re.split(r'[,;]', ids_str) if i.strip()]
+            all_ids.extend(ids)
+            
+        unique_provider_ids = list(set(all_ids))
+        logger.info(f"🔍 Found provider IDs {unique_provider_ids} for service '{serviceitem}'")
+        
+        # Match providers by ID (Number column)
+        matching_providers = providers_df[providers_df["Number"].astype(str).str.strip().isin(unique_provider_ids)]
         
         if matching_providers.empty:
+            logger.warning(f"⚠️ No providers in sheet match IDs {unique_provider_ids}")
             return []
-        return matching_providers["WhatsApp"].tolist()
+            
+        # Clean the WhatsApp numbers - MUST be digits only FOR WHATSAPP API
+        final_numbers = []
+        for num in matching_providers["WhatsApp"].tolist():
+            clean_num = re.sub(r'[^\d]', '', str(num))
+            
+            # Indonesian Number Normalization: Convert 08xxx to 628xxx
+            if clean_num.startswith('0'):
+                clean_num = '62' + clean_num[1:]
+            # If it starts with 8, it's likely missing the prefix entirely
+            elif clean_num.startswith('8'):
+                clean_num = '62' + clean_num
+                
+            if clean_num:
+                final_numbers.append(clean_num)
+                
+        logger.info(f"✅ Normalized WhatsApp numbers: {final_numbers}")
+        return final_numbers
     except Exception as e:
-        print(f"Error fetching whatsapp numbers locally: {e}")
+        logger.error(f"Error fetching whatsapp numbers for provider notification: {e}")
         return []
     
 
@@ -299,7 +334,7 @@ async def send_interactive_message(recipient_id, payment_result):
 
 
 
-async def send_confirmation_order_to_SP(recipient_number: str):
+async def send_confirmation_order_to_SP(recipient_number: str, order_number: str):
     try:
         headers = {
             "Authorization": f"Bearer {settings.access_token}",
@@ -318,14 +353,14 @@ async def send_confirmation_order_to_SP(recipient_number: str):
                         {
                             "type": "reply",
                             "reply": {
-                                "id": "yes_order",
+                                "id": f"yes_order_{order_number}",
                                 "title": "Yes"
                             }
                         },
                         {
                             "type": "reply",
                             "reply": {
-                                "id": "no_order",
+                                "id": f"no_order_{order_number}",
                                 "title": "No"
                             }
                         }
@@ -1511,7 +1546,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                         if session_id in website_sessions:
                             confirmation = await check_order_confirmation(order_num)
                             if confirmation == False:
-                                await send_confirmation_order_to_SP(sender_id)
+                                await send_confirmation_order_to_SP(sender_id, order_num)
                             elif confirmation == True:
                                 await send_whatsapp_message(sender_id, "Thank you for the acceptance.Unfortunately, this order has already been booked.")
                         else:
@@ -1519,7 +1554,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                             order_sessions[sender_id] = order_num
                             confirmation = await check_order_confirmation(order_num)
                             if confirmation == False:
-                                await send_confirmation_order_to_SP(sender_id)
+                                await send_confirmation_order_to_SP(sender_id, order_num)
                             elif confirmation == True:
                                 await send_whatsapp_message(sender_id, "Thank you for the acceptance.Unfortunately, this order has already been booked.")
                     elif category_text == "❌ Decline":
@@ -1533,8 +1568,12 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
 
                 elif category_text == "Yes":
                     logger.info("order number received")
-                    order_num = local_order_store.get(sender_id)
-                    logger.info("order number received")
+                    if button_id.startswith("yes_order_"):
+                        order_num = button_id.split("_", 2)[2]
+                    else:
+                        order_num = local_order_store.get(sender_id)
+                    
+                    logger.info(f"Order number for confirmation: {order_num}")
                     if order_num:
                         service_provider_code = await get_service_provider_by_whatsapp(sender_id)
                         
@@ -1776,20 +1815,11 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                         )
                         new_order.date = user_date
                         new_order.time = time_selection
+                        new_order.status = "pending_confirmation"
                         
                         # Save the completed order to database
                         await save_order_to_db(new_order.dict())
-
-                        # Fetch and Create Xendit Payment immediately
-                        logger.info(f"💳 Generating immediate payment for order {new_order.order_number}")
-                        payment_result = await create_xendit_payment_with_distribution(new_order)
-                        
-                        if payment_result.get("success"):
-                            await update_order_with_payment_info(new_order.order_number, payment_result)
-                            payment_url = payment_result.get("payment_url")
-                        else:
-                            payment_url = None
-                            logger.error(f"❌ Failed to generate payment link: {payment_result.get('error')}")
+                        logger.info(f"🛎️ Order {new_order.order_number} created - waiting for SP confirmation")
 
                         # Clean price — strip EVERYTHING non-numeric (handles \xa0, commas, spaces from Google Sheets)
                         try:
@@ -1799,25 +1829,16 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                             price_display = f"IDR {new_order.price}"
 
                         confirmation_message = (
-                            f"✨ *Booking Confirmed!* ✨\n\n"
+                            f"✨ *Booking Request Received!* ✨\n\n"
                             f"*Order ID:* {new_order.order_number}\n"
                             f"*Service:* {new_order.service_name}\n"
                             f"*Date:* {new_order.date.strftime('%d-%m-%Y')}\n"
                             f"*Time:* {new_order.time}\n"
                             f"*Total Price:* {price_display}\n\n"
-                            "Our service providers have been notified. First available provider to confirm will handle your booking."
+                            "Our service providers have been notified. We will send you a secure payment link as soon as a provider confirms their availability!"
                         )
 
                         await send_whatsapp_message(sender_id, confirmation_message)
-                        
-                        if payment_url:
-                            # Send the interactive "Pay Now" button
-                            await send_interactive_message(sender_id, payment_result)
-                        else:
-                            await send_whatsapp_message(
-                                sender_id, 
-                                "We encountered an issue generating your secure payment link. Don't worry, our team will send it shortly!"
-                            )
 
                         # Parallel: Notify Service Providers
                         service_numbers = await fetch_whatsapp_numbers(new_order.service_name)

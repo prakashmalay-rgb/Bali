@@ -25,6 +25,10 @@ import PassportVerification from "./page/dashboard/PassportVerification";
 import PromoManagement from "./page/dashboard/PromoManagement";
 import FAQManagement from "./page/dashboard/FAQManagement";
 import MessageAutomations from "./page/dashboard/MessageAutomations";
+import CustomerBucket from "./page/dashboard/CustomerBucket";
+import VillaBucket from "./page/dashboard/VillaBucket";
+import PaymentBucket from "./page/dashboard/PaymentBucket";
+import ServiceBucket from "./page/dashboard/ServiceBucket";
 import { Navigate } from "react-router-dom";
 import { LanguageProvider } from "./context/LanguageContext";
 import PageTransition from "./components/layout/PageTransition";
@@ -144,6 +148,22 @@ const appRouter = createBrowserRouter([
       {
         path: "automations",
         element: <MessageAutomations />
+      },
+      {
+        path: "customers",
+        element: <CustomerBucket />
+      },
+      {
+        path: "villas",
+        element: <VillaBucket />
+      },
+      {
+        path: "payments",
+        element: <PaymentBucket />
+      },
+      {
+        path: "services",
+        element: <ServiceBucket />
       }
     ],
   },

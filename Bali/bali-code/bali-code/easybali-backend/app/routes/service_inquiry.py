@@ -110,13 +110,7 @@ async def create_service_inquiry(
         order = Order(**order_data)
         await order_collection.insert_one(order_data)
         
-        # Generate Xendit payment link
-        payment_result = await create_xendit_payment_with_distribution(order)
-        
-        if not payment_result['success']:
-            raise HTTPException(status_code=500, detail=f"Payment creation failed: {payment_result['error']}")
-        
-        # Send notifications to service providers
+        # 5. Notify Service Providers ONLY (No payment link yet)
         await notify_service_providers(service, order_data)
         
         return {
@@ -127,15 +121,9 @@ async def create_service_inquiry(
                 "price": order_data["price"],
                 "date": order_data["date"],
                 "time": order_data["time"],
-                "status": "pending_payment"
+                "status": "pending_confirmation"
             },
-            "payment": {
-                "payment_url": payment_result['payment_url'],
-                "invoice_id": payment_result['invoice_id'],
-                "expires_at": payment_result['expires_at'],
-                "amount": payment_result.get('distribution_data', {}).get('total_distribution', 0)
-            },
-            "service_details": service
+            "message": "We have notified our service providers of your request. You will receive a secure payment link once a provider confirms their availability."
         }
         
     except HTTPException:

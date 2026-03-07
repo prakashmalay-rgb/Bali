@@ -10,7 +10,9 @@ import {
     FiFileText,
     FiTag,
     FiBook,
-    FiClock
+    FiClock,
+    FiDollarSign,
+    FiActivity
 } from 'react-icons/fi';
 
 const DashboardLayout = () => {
@@ -50,6 +52,10 @@ const DashboardLayout = () => {
         { path: '/dashboard/automations', icon: <FiClock className="text-xl" />, label: 'Automated Messaging', roles: ['admin', 'staff'] },
         { path: '/dashboard/passports', icon: <FiFileText className="text-xl" />, label: 'Passports', roles: ['admin'] },
         { path: '/dashboard/promos', icon: <FiTag className="text-xl" />, label: 'Promo Codes', roles: ['admin', 'staff'] },
+        { path: '/dashboard/customers', icon: <FiUser className="text-xl" />, label: 'Customers', roles: ['admin'] },
+        { path: '/dashboard/villas', icon: <FiHome className="text-xl" />, label: 'Villas', roles: ['admin'] },
+        { path: '/dashboard/payments', icon: <FiDollarSign className="text-xl" />, label: 'Payments', roles: ['admin'] },
+        { path: '/dashboard/services', icon: <FiActivity className="text-xl" />, label: 'Services', roles: ['admin'] },
     ];
 
     if (user) {

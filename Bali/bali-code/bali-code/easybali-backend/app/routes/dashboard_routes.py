@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from app.db.session import order_collection, passport_collection
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from datetime import datetime
 
 router = APIRouter(prefix="/dashboard-api", tags=["Dashboard"])
@@ -244,3 +244,146 @@ async def verify_passport(passport_id: str) -> Dict[str, Any]:
         print(f"Error verifying passport {passport_id}: {e}")
         return {"success": False, "error": str(e)}
 
+
+# ──────────────────────────────────────────────────────────────
+# THE "BUCKET" ANALYTICS SYSTEM
+# ──────────────────────────────────────────────────────────────
+
+@router.get("/buckets/customers")
+async def get_customer_bucket(start_date: Optional[str] = None, end_date: Optional[str] = None):
+    try:
+        match_query = {}
+        if start_date and end_date:
+            match_query["created_at"] = {
+                "$gte": datetime.fromisoformat(start_date),
+                "$lte": datetime.fromisoformat(end_date)
+            }
+        
+        pipeline = [
+            {"$match": match_query},
+            {"$group": {
+                "_id": "$sender_id",
+                "total_bookings": {"$sum": 1},
+                "total_spent": {"$sum": {"$toDouble": {"$ifNull": ["$payment.paid_amount", 0]}}},
+                "last_booking": {"$max": "$created_at"},
+                "services": {"$addToSet": "$service_name"}
+            }},
+            {"$sort": {"total_spent": -1}},
+            {"$limit": 50}
+        ]
+        
+        results = await order_collection.aggregate(pipeline).to_list(50)
+        return {"success": True, "data": results}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@router.get("/buckets/villas")
+async def get_villa_bucket(start_date: Optional[str] = None, end_date: Optional[str] = None):
+    try:
+        match_query = {}
+        if start_date and end_date:
+            match_query["created_at"] = {
+                "$gte": datetime.fromisoformat(start_date),
+                "$lte": datetime.fromisoformat(end_date)
+            }
+            
+        pipeline = [
+            {"$match": match_query},
+            {"$group": {
+                "_id": "$villa_code",
+                "total_requests": {"$sum": 1},
+                "confirmed_requests": {"$sum": {"$cond": [{"$eq": ["$status", "PAID"]}, 1, 0]}},
+                "total_revenue": {"$sum": {"$toDouble": {"$ifNull": ["$payment.paid_amount", 0]}}}
+            }},
+            {"$sort": {"total_revenue": -1}}
+        ]
+        results = await order_collection.aggregate(pipeline).to_list(100)
+        return {"success": True, "data": results}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@router.get("/buckets/payments")
+async def get_payment_bucket(start_date: Optional[str] = None, end_date: Optional[str] = None):
+    try:
+        match_query = {"status": "PAID"}
+        if start_date and end_date:
+            match_query["updated_at"] = {
+                "$gte": datetime.fromisoformat(start_date),
+                "$lte": datetime.fromisoformat(end_date)
+            }
+            
+        # Detail view of payments with their split distribution
+        payments = await order_collection.find(match_query).sort("updated_at", -1).limit(100).to_list(100)
+        
+        formatted_payments = []
+        for p in payments:
+            payment_info = p.get("payment", {})
+            dist = payment_info.get("distribution_data", {})
+            
+            formatted_payments.append({
+                "order_id": p.get("order_number"),
+                "service": p.get("service_name"),
+                "total_paid": payment_info.get("paid_amount"),
+                "currency": payment_info.get("currency", "IDR"),
+                "splits": {
+                    "sp_share": dist.get("sp_share"),
+                    "villa_share": dist.get("villa_share"),
+                    "eb_share": dist.get("eb_share")
+                },
+                "time": p.get("updated_at")
+            })
+            
+        return {"success": True, "data": formatted_payments}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@router.get("/buckets/services")
+async def get_service_bucket(start_date: Optional[str] = None, end_date: Optional[str] = None):
+    try:
+        match_query = {}
+        if start_date and end_date:
+            match_query["created_at"] = {
+                "$gte": datetime.fromisoformat(start_date),
+                "$lte": datetime.fromisoformat(end_date)
+            }
+            
+        pipeline = [
+            {"$match": match_query},
+            {"$group": {
+                "_id": "$service_name",
+                "popularity": {"$sum": 1},
+                "revenue": {"$sum": {"$toDouble": {"$ifNull": ["$payment.paid_amount", 0]}}},
+                "avg_price": {"$avg": {"$toDouble": {"$ifNull": ["$payment.paid_amount", 0]}}}
+            }},
+            {"$sort": {"popularity": -1}}
+        ]
+        results = await order_collection.aggregate(pipeline).to_list(50)
+        return {"success": True, "data": results}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@router.get("/history/{entity_type}/{entity_id}")
+async def get_detailed_history(entity_type: str, entity_id: str):
+    """Drill-down endpoint for history"""
+    try:
+        query = {}
+        if entity_type == "customer":
+            query = {"sender_id": entity_id}
+        elif entity_type == "villa":
+            query = {"villa_code": entity_id}
+        elif entity_type == "service":
+            query = {"service_name": entity_id}
+        elif entity_type == "provider":
+            query = {"service_provider_code": entity_id}
+            
+        history = await order_collection.find(query).sort("created_at", -1).to_list(100)
+        
+        # Clean history for response
+        for item in history:
+            item["_id"] = str(item["_id"])
+            if "created_at" in item: item["created_at"] = item["created_at"].isoformat()
+            if "updated_at" in item: item["updated_at"] = item["updated_at"].isoformat()
+            
+        return {"success": True, "history": history}
+    except Exception as e:
+        return {"success": False, "error": str(e)}

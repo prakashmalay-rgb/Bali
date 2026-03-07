@@ -5,6 +5,10 @@ import threading
 from datetime import datetime
 
 import os
+import logging
+
+logger = logging.getLogger(__name__)
+
 # Google Sheet configurations
 SHEET_ID = os.getenv("GOOGLE_SHEET_ID", "1tuGBnQFjDntJQglofA17uHhiyekkVyDoSInErbwfR24")
 
@@ -23,8 +27,10 @@ cache = {
     "services_df": None,
     "design_df": None,
     "last_updated": None,
-    "main_menu_design":None,
-    "service_providers":None,
+    "main_menu_design": None,
+    "service_providers": None,
+    "villas_data": None,
+    "price_distribution": None,
     "archive_df": None,
     "platform_design_df": None,
     "price_diff_df": None,
@@ -36,71 +42,48 @@ should_stop = False
 refresh_thread = None
 
 def load_data_into_cache():
-    """Loads data from Google Sheets into cache using worksheet names."""
+    """Loads data from Google Sheets into cache with individual sheet resilience."""
     print(f"Refreshing data at {datetime.now()}...")
     try:
         workbook = get_cached_workbook()
         
-        # Load worksheets by name for robustness
-        cache["menu_df"] = clean_dataframe(workbook.worksheet("Menu Structure").get_all_values())
+        # Helper to load a sheet safely
+        def safe_load(sheet_name, cache_key, use_clean=True):
+            try:
+                ws = workbook.worksheet(sheet_name)
+                data = ws.get_all_values()
+                if not data:
+                    logger.warning(f"Sheet '{sheet_name}' is empty.")
+                    return
+                
+                if use_clean:
+                    cache[cache_key] = clean_dataframe(data)
+                else:
+                    df = pd.DataFrame(data[1:], columns=data[0])
+                    cache[cache_key] = df
+                logger.info(f"✅ Loaded sheet: {sheet_name}")
+            except Exception as e:
+                logger.error(f"❌ Failed to load sheet '{sheet_name}': {e}")
+
+        # Core worksheets
+        safe_load("Menu Structure", "menu_df")
+        safe_load("Services Overview", "services_df")
+        safe_load("Mark-up", "price_distribution")
+        safe_load("Services Providers", "service_providers")
+        safe_load("QR Codes", "villas_data")
+        safe_load("Services Designs", "design_df")
+        safe_load("Menu Design", "main_menu_design")
         
-        services_sheet = workbook.worksheet("Services Overview")
-        data = services_sheet.get_all_values()
-        cache['services_df'] = pd.DataFrame(data[1:], columns=data[0]) if data else pd.DataFrame()
-
-        price_distribution = workbook.worksheet("Mark-up")
-        data3 = price_distribution.get_all_values()
-        cache['price_distribution'] = pd.DataFrame(data3[1:], columns=data3[0]) if data3 else pd.DataFrame()
-
-        service_providers = workbook.worksheet("Services Providers")
-        data1 = service_providers.get_all_values()
-        cache['service_providers'] = pd.DataFrame(data1[1:], columns=data1[0]) if data1 else pd.DataFrame()
-
-        villas = workbook.worksheet("QR Codes")
-        data2 = villas.get_all_values()
-        cache['villas_data'] = pd.DataFrame(data2[1:], columns=data2[0]) if data2 else pd.DataFrame()
-
-        cache["design_df"] = clean_dataframe(workbook.worksheet("Services Designs").get_all_values())
-        cache["main_menu_design"] = clean_dataframe(workbook.worksheet("Menu Design").get_all_values())
-        
-        # Extended Context Sheets for AI Chatbot
-        try:
-            archive_ws = workbook.worksheet("Archive")
-            data_arch = archive_ws.get_all_values()
-            cache["archive_df"] = pd.DataFrame(data_arch[1:], columns=data_arch[0]) if data_arch else pd.DataFrame()
-        except Exception: cache["archive_df"] = pd.DataFrame()
-
-        try:
-            plat_ws = workbook.worksheet("Platform Design")
-            data_plat = plat_ws.get_all_values()
-            cache["platform_design_df"] = pd.DataFrame(data_plat[1:], columns=data_plat[0]) if data_plat else pd.DataFrame()
-        except Exception: cache["platform_design_df"] = pd.DataFrame()
-
-        try:
-            pdiff_ws = workbook.worksheet("Price Diff")
-            data_pdiff = pdiff_ws.get_all_values()
-            cache["price_diff_df"] = pd.DataFrame(data_pdiff[1:], columns=data_pdiff[0]) if data_pdiff else pd.DataFrame()
-        except Exception: cache["price_diff_df"] = pd.DataFrame()
-
-        try:
-            pdiffsp_ws = workbook.worksheet("Price Diff SP")
-            data_pdiffsp = pdiffsp_ws.get_all_values()
-            cache["price_diff_sp_df"] = pd.DataFrame(data_pdiffsp[1:], columns=data_pdiffsp[0]) if data_pdiffsp else pd.DataFrame()
-        except Exception: cache["price_diff_sp_df"] = pd.DataFrame()
-
-        
-        # Load specialized AI Data for refined RAG context
-        try:
-            ai_data_sheet = workbook.worksheet("AI Data")
-            ai_data = ai_data_sheet.get_all_values()
-            cache["ai_data_df"] = pd.DataFrame(ai_data[1:], columns=ai_data[0]) if ai_data else pd.DataFrame()
-        except:
-            print("⚠️ 'AI Data' worksheet not found, skipping.")
-            cache["ai_data_df"] = pd.DataFrame()
+        # Optional / Extended worksheets
+        safe_load("Archive", "archive_df")
+        safe_load("Platform Design", "platform_design_df")
+        safe_load("Price Diff", "price_diff_df")
+        safe_load("Price Diff SP", "price_diff_sp_df")
+        safe_load("AI Data", "ai_data_df")
         
         cache["last_updated"] = datetime.now()
     except Exception as e:
-        print(f"Error while refreshing data: {e}")
+        logger.error(f"Critical error in load_data_into_cache: {e}")
 
 def schedule_data_refresh():
     """Runs data refresh at regular intervals."""
@@ -449,38 +432,41 @@ async def get_service_provider_by_whatsapp(whatsapp_number: str):
 
 
 async def get_villa_code_by_name(villa_name: str):
-    if cache["villas_data"] is None:
-        raise ValueError("Villa data not loaded")
+    if cache["villas_data"] is None or cache["villas_data"].empty:
+        logger.warning("Villa data not loaded into cache.")
+        return None
     
     try:
         villas_df = cache["villas_data"]
+        search_name = villa_name.strip().upper()
         
-        # 1. Check if input is already a code (e.g. "V1") in the Number column
+        # 1. Check if input is already a code (e.g. "S1", "V1") in the Number column
+        # Now stripping internal spaces to handle user input vs. sheet content
         matching_code = villas_df[
-            villas_df["Number"].astype(str).str.upper() == villa_name.upper()
+            villas_df["Number"].astype(str).str.strip().str.upper() == search_name
         ]
         if not matching_code.empty:
-            return matching_code.iloc[0]["Number"]
+            return str(matching_code.iloc[0]["Number"]).strip()
 
         # 2. Search for exact match in Name column
         matching_villa = villas_df[
-            villas_df["Name of Villa"].str.lower() == villa_name.lower()
+            villas_df["Name of Villa"].astype(str).str.strip().str.lower() == villa_name.strip().lower()
         ]
         
         # If no exact match, try partial match
         if matching_villa.empty:
             matching_villa = villas_df[
-                villas_df["Name of Villa"].str.contains(villa_name, case=False, na=False)
+                villas_df["Name of Villa"].astype(str).str.contains(villa_name, case=False, na=False)
             ]
         
         if matching_villa.empty:
             return None
             
         # Return the villa code (Number column)
-        return matching_villa.iloc[0]["Number"]
+        return str(matching_villa.iloc[0]["Number"]).strip()
         
     except Exception as e:
-        print(f"Error retrieving villa code: {e}")
+        logger.error(f"Error retrieving villa code for '{villa_name}': {e}")
         return None
 
 async def get_villa_location_by_code(villa_code: str):

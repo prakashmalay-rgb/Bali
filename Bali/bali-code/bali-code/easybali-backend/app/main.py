@@ -19,6 +19,8 @@ from app.routes.admin_users import router as admin_users_router
 from app.routes.promo_admin import router as promo_admin_router
 from app.routes.faq_admin import router as faq_admin_router
 from app.routes.automation_admin import router as automation_admin_router
+from app.routes.dashboard_routes import router as dashboard_router
+from app.routes.admin_routes import router as admin_router
 from fastapi.middleware.cors import CORSMiddleware
 from app.services.menu_services import start_cache_refresh, stop_cache_refresh
 from app.services.automation_butler import process_automations
@@ -77,6 +79,8 @@ app.include_router(admin_users_router)
 app.include_router(promo_admin_router)
 app.include_router(faq_admin_router)
 app.include_router(automation_admin_router)
+app.include_router(dashboard_router)
+app.include_router(admin_router)
 
 @app.on_event("startup")
 def on_startup():

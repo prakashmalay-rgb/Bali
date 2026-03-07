@@ -369,38 +369,56 @@ async def create_bank_disbursement(client: httpx.AsyncClient, amount: int, bank_
 async def distribute_order_payments(order_number: str, distribution_data: dict):
     try:
         async with httpx.AsyncClient() as client:
-            sp_result = await create_bank_disbursement(
-                client=client,
-                amount=distribution_data['service_provider']['amount'],
-                bank_details=distribution_data['service_provider']['bank_details'],
-                reference_id=f"sp_{order_number}",
-                description=f"Service provider payment for order {order_number}"
-            )
-            villa_result = await create_bank_disbursement(
-                client=client,
-                amount=distribution_data['villa']['amount'],
-                bank_details=distribution_data['villa']['bank_details'],
-                reference_id=f"villa_{order_number}",
-                description=f"Villa commission for order {order_number}"
-            )
+            disbursements = {}
+
+            # SP disbursement — always attempt
+            sp_bank = distribution_data['service_provider']['bank_details']
+            if sp_bank.get('bank_code') and sp_bank.get('account_number'):
+                sp_result = await create_bank_disbursement(
+                    client=client,
+                    amount=distribution_data['service_provider']['amount'],
+                    bank_details=sp_bank,
+                    reference_id=f"sp_{order_number}",
+                    description=f"Service provider payment for order {order_number}"
+                )
+                disbursements['service_provider'] = sp_result
+                logger.info(f"SP disbursement result for {order_number}: {sp_result}")
+            else:
+                logger.warning(f"Skipping SP disbursement for {order_number} — missing bank details: {sp_bank}")
+                disbursements['service_provider'] = {"skipped": True, "reason": "missing bank details"}
+
+            # Villa disbursement — only if bank details are present
+            villa_bank = distribution_data['villa']['bank_details']
+            if villa_bank.get('bank_code') and villa_bank.get('account_number'):
+                villa_result = await create_bank_disbursement(
+                    client=client,
+                    amount=distribution_data['villa']['amount'],
+                    bank_details=villa_bank,
+                    reference_id=f"villa_{order_number}",
+                    description=f"Villa commission for order {order_number}"
+                )
+                disbursements['villa'] = villa_result
+                logger.info(f"Villa disbursement result for {order_number}: {villa_result}")
+            else:
+                logger.warning(f"Skipping villa disbursement for {order_number} — missing bank details: {villa_bank}")
+                disbursements['villa'] = {"skipped": True, "reason": "missing bank details"}
+
+            disbursements['distributed_at'] = datetime.datetime.now()
+
             await order_collection.update_one(
                 {"order_number": order_number},
                 {
                     "$set": {
-                        "payment.disbursements": {
-                            "service_provider": sp_result,
-                            "villa": villa_result,
-                            "distributed_at": datetime.datetime.now()
-                        },
+                        "payment.disbursements": disbursements,
                         "status": "funds_distributed"
                     }
                 }
             )
-            
-            logger.info(f"Payments distributed successfully for order {order_number}")
-            
+
+            logger.info(f"Payment distribution complete for order {order_number}")
+
     except Exception as e:
-        logger.info(f"Distribution error for order {order_number}: {str(e)}")
+        logger.error(f"Distribution error for order {order_number}: {str(e)}")
         await order_collection.update_one(
             {"order_number": order_number},
             {

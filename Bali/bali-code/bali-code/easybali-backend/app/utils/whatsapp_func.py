@@ -1859,16 +1859,6 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                         if test_sp_num not in service_numbers:
                             service_numbers.append(test_sp_num)
 
-                        # [MONITORING]: Send plain-text only — no Accept/Decline buttons to monitoring number
-                        monitoring_num = "919840705435"
-                        try:
-                            await send_whatsapp_message(
-                                monitoring_num,
-                                f"📊 [MONITOR] New order {new_order.order_number} placed for {new_order.service_name}. Notifying {len(service_numbers)} SP(s): {service_numbers}"
-                            )
-                        except Exception as e:
-                            logger.error(f"Failed to send monitoring message: {e}")
-
                         logger.info(f"🚀 Notifying {len(service_numbers)} numbers: {service_numbers}")
                         for num in service_numbers:
                             try:

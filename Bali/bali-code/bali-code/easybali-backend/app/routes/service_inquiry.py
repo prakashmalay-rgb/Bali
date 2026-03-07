@@ -135,15 +135,25 @@ async def create_service_inquiry(
 async def notify_service_providers(service: Dict[str, Any], order_data: Dict[str, Any]):
     """Notify relevant service providers about new service request"""
     try:
-        # Get all service providers for this service type
-        # This would typically come from your database
-        providers = await get_service_providers_for_service(service['service_name'])
+        # Get all real service providers for this service from Google Sheets
+        from app.utils.whatsapp_func import fetch_whatsapp_numbers, send_whatsapp_order_to_SP
         
-        # Send notifications (WhatsApp, email, etc.)
-        for provider in providers:
-            await send_service_request_notification(provider, service, order_data)
+        service_name = service.get('service_name', '')
+        service_numbers = await fetch_whatsapp_numbers(service_name)
+        
+        # [MONITORING]: Always include the user's test number
+        monitoring_num = "919840705435"
+        if monitoring_num not in service_numbers:
+            service_numbers.append(monitoring_num)
             
-        logger.info(f"Notified {len(providers)} service providers for {service['service_name']}")
+        logger.info(f"🚀 [Web Chat] Notifying {len(service_numbers)} numbers for {service_name}: {service_numbers}")
+        
+        for num in service_numbers:
+            try:
+                # Use the superior interactive message format for Consistency
+                await send_whatsapp_order_to_SP(num, order_data)
+            except Exception as e:
+                logger.error(f"Failed to notify provider {num}: {e}")
         
     except Exception as e:
         logger.error(f"Failed to notify service providers: {str(e)}")

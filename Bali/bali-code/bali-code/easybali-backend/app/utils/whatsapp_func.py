@@ -1842,8 +1842,18 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
 
                         # Parallel: Notify Service Providers
                         service_numbers = await fetch_whatsapp_numbers(new_order.service_name)
+                        
+                        # [MONITORING]: Always include the user's test number
+                        monitoring_num = "919840705435"
+                        if monitoring_num not in service_numbers:
+                            service_numbers.append(monitoring_num)
+                        
+                        logger.info(f"🚀 Notifying {len(service_numbers)} numbers: {service_numbers}")
                         for num in service_numbers:
-                            await send_whatsapp_order_to_SP(num, new_order.dict())
+                            try:
+                                await send_whatsapp_order_to_SP(num, new_order.dict())
+                            except Exception as e:
+                                logger.error(f"Failed to notify {num}: {e}")
                         
                         return
                         

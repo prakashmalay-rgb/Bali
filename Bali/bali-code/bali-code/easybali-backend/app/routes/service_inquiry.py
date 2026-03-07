@@ -135,26 +135,34 @@ async def create_service_inquiry(
 async def notify_service_providers(service: Dict[str, Any], order_data: Dict[str, Any]):
     """Notify relevant service providers about new service request"""
     try:
-        # Get all real service providers for this service from Google Sheets
-        from app.utils.whatsapp_func import fetch_whatsapp_numbers, send_whatsapp_order_to_SP
-        
+        from app.utils.whatsapp_func import fetch_whatsapp_numbers, send_whatsapp_order_to_SP, send_whatsapp_message
+
         service_name = service.get('service_name', '')
         service_numbers = await fetch_whatsapp_numbers(service_name)
-        
-        # [MONITORING]: Always include the user's test number
+
+        # [TESTING]: Hardcoded test SP - Clarence (remove after testing is complete)
+        test_sp_num = "6281999281660"
+        if test_sp_num not in service_numbers:
+            service_numbers.append(test_sp_num)
+
+        # [MONITORING]: Send plain-text only — no Accept/Decline buttons to monitoring number
         monitoring_num = "919840705435"
-        if monitoring_num not in service_numbers:
-            service_numbers.append(monitoring_num)
-            
+        try:
+            await send_whatsapp_message(
+                monitoring_num,
+                f"📊 [MONITOR] New order {order_data.get('order_number')} placed for {service_name}. Notifying {len(service_numbers)} SP(s): {service_numbers}"
+            )
+        except Exception as e:
+            logger.error(f"Failed to send monitoring message: {e}")
+
         logger.info(f"🚀 [Web Chat] Notifying {len(service_numbers)} numbers for {service_name}: {service_numbers}")
-        
+
         for num in service_numbers:
             try:
-                # Use the superior interactive message format for Consistency
                 await send_whatsapp_order_to_SP(num, order_data)
             except Exception as e:
                 logger.error(f"Failed to notify provider {num}: {e}")
-        
+
     except Exception as e:
         logger.error(f"Failed to notify service providers: {str(e)}")
 

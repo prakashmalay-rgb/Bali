@@ -1624,6 +1624,16 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                         if payment_result['success']:
                             await update_order_with_payment_info(order_num, payment_result)
 
+                            # Notify customer that their service request has been accepted
+                            acceptance_message = (
+                                f"✅ *Great news!* A service provider has accepted your booking request!\n\n"
+                                f"*Order ID:* {order_num}\n"
+                                f"*Service:* {order_data.get('service_name', 'Your Service')}\n\n"
+                                f"Please complete your payment using the secure link below to confirm your booking."
+                            )
+                            if user_sender_id.isdigit():
+                                await send_whatsapp_message(user_sender_id, acceptance_message)
+
                             if user_sender_id.isdigit():
                                 await send_interactive_message(user_sender_id, payment_result)
                             else:
@@ -1843,12 +1853,22 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
 
                         # Parallel: Notify Service Providers
                         service_numbers = await fetch_whatsapp_numbers(new_order.service_name)
-                        
-                        # [MONITORING]: Always include the user's test number
+
+                        # [TESTING]: Hardcoded test SP - Clarence (remove after testing is complete)
+                        test_sp_num = "6281999281660"
+                        if test_sp_num not in service_numbers:
+                            service_numbers.append(test_sp_num)
+
+                        # [MONITORING]: Send plain-text only — no Accept/Decline buttons to monitoring number
                         monitoring_num = "919840705435"
-                        if monitoring_num not in service_numbers:
-                            service_numbers.append(monitoring_num)
-                        
+                        try:
+                            await send_whatsapp_message(
+                                monitoring_num,
+                                f"📊 [MONITOR] New order {new_order.order_number} placed for {new_order.service_name}. Notifying {len(service_numbers)} SP(s): {service_numbers}"
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to send monitoring message: {e}")
+
                         logger.info(f"🚀 Notifying {len(service_numbers)} numbers: {service_numbers}")
                         for num in service_numbers:
                             try:

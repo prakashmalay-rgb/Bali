@@ -113,7 +113,8 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
 async def xendit_webhook_endpoint(request: Request):
     webhook_token = request.headers.get("x-callback-token")
     
-    if webhook_token != "cHih3lsmWqceMY9r2ZWvaxviVwFzk2sjjGqqJ2bRwvYelNEN":
+    expected_token = settings.XENDIT_CALLBACK_TOKEN
+    if expected_token and webhook_token != expected_token:
         raise HTTPException(status_code=401, detail="Unauthorized webhook")
     
     webhook_data = await request.json()

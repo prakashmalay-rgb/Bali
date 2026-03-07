@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     GOOGLE_SERVICE_ACCOUNT_JSON: str = ""
     WHATSAPP_PRIVATE_KEY: str = ""
     XENDIT_PUBLIC_KEY: str = ""
+    XENDIT_CALLBACK_TOKEN: str = ""
 
     class Config:
         env_file = ".env"

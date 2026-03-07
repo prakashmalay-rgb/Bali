@@ -1,6 +1,7 @@
 import uuid
 import re
 from datetime import datetime, timedelta
+from urllib.parse import quote
 
 from fastapi import HTTPException
 from fastapi.responses import RedirectResponse
@@ -30,8 +31,8 @@ async def villa_redirect(villa_name: str):
 
         bot_number = "6282247959788"
 
-        welcome_text = f"Hi, I am in {formatted_villa_name}       "
-        whatsapp_url = f"https://wa.me/{bot_number}?text={welcome_text}"
+        welcome_text = f"Hi, I am in {formatted_villa_name}"
+        whatsapp_url = f"https://wa.me/{bot_number}?text={quote(welcome_text)}"
         
         return RedirectResponse(url=whatsapp_url)
         

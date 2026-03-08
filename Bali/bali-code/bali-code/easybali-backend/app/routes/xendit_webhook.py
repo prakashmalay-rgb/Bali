@@ -52,6 +52,9 @@ async def handle_xendit_webhook(webhook_data: dict):
             )
             logger.info(f"Order {order_number} payment status updated to completed")
 
+            # Refresh order_data after payment update so confirmed_by_provider is guaranteed present
+            order_data = await order_collection.find_one({"order_number": order_number}) or order_data
+
             # Increment promo code usage if applicable
             if order_data.get("promo_code"):
                 try:

@@ -2296,7 +2296,8 @@ async def notify_service_provider(order_data: dict):
         service_provider_number = order_data.get("confirmed_by_provider")
         order_number = order_data.get("order_number")
         service_name = order_data.get("service_name")
-        
+
+        logger.info(f"SP payment notification: order={order_number}, sp_number={service_provider_number}")
         if service_provider_number:
             provider_message = (
                 f"💰 ***Payment Received!***\n\n"

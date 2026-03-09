@@ -10,6 +10,7 @@ from app.utils.chat_memory import get_conversation_history, trim_history, save_m
 from app.services.pinconeservice import get_index
 from app.utils.navigation_rules import rules
 from app.services.ai_menu_generator import ai_menu_generator
+from app.services.rag_service import rag_service
 
 logger = logging.getLogger(__name__)
 
@@ -74,49 +75,8 @@ class ConciergeAI:
         self.service_index = service_index
 
     async def get_rag_context(self, query: str, chat_type: str = "general", villa_code: str = "WEB_VILLA_01") -> str:
-        try:
-            # Query specific indexes, falling back to villa-faqs for general questions
-            if chat_type == "things-to-do-in-bali":
-                index_name = "things-to-do-in-bali"
-            elif chat_type == "local-cuisine":
-                index_name = "local-cuisine"
-            else:
-                index_name = "villa-faqs" # Primary fallback for general queries/house rules
-                
-            index = get_index(index_name)
-            if index is None: return ""
-
-            embed = await client.embeddings.create(input=query, model="text-embedding-ada-002")
-            
-            # Filter matches by villa_code if provided (Isolation Principle)
-            filter_dict = {"villa_code": villa_code} if index_name == "villa-faqs" else None
-            
-            res = index.query(
-                vector=embed.data[0].embedding, 
-                top_k=5, 
-                include_metadata=True,
-                filter=filter_dict
-            )
-            
-            all_matches = res.get("matches", [])
-            high_confidence = [m for m in all_matches if m.get("score", 0) > 0.75]
-            matches = [m["metadata"].get("text", "") for m in high_confidence]
-            
-            # ── RAG Retrieval Accuracy Monitoring ──
-            all_scores = [round(m.get("score", 0), 4) for m in all_matches]
-            avg_score = round(sum(all_scores) / len(all_scores), 4) if all_scores else 0
-            logger.info(
-                f"RAG Monitor [{index_name}] | query='{query[:80]}' | "
-                f"total_hits={len(all_matches)} | above_threshold={len(high_confidence)} | "
-                f"scores={all_scores} | avg_score={avg_score} | "
-                f"verdict={'HIT' if matches else 'MISS → LLM fallback'}"
-            )
-            
-            return "\n\n".join(matches) if matches else ""
-                
-        except Exception as e:
-            logger.error(f"RAG Error: {e}")
-            return ""
+        """Proxies to the unified RAG service"""
+        return await rag_service.get_rag_context(query, chat_type, villa_code)
 
     def get_sheet_context(self) -> str:
         """INTERNAL DB FETCH (Priority 1)"""
@@ -266,8 +226,17 @@ class ConciergeAI:
 
     async def _call_openai(self, query: str, persona: str, sheet_ctx: str, rag_ctx: str, language: str, history: str, villa_code: str) -> str:
         """Centralised OpenAI call with a structured prompt."""
+        from app.services.menu_services import get_villa_info_by_code
+        villa_info = await get_villa_info_by_code(villa_code)
+        villa_context = ""
+        if villa_info:
+             villa_context = f"VILLA INFO: Name: {villa_info.get('name')}, Location: {villa_info.get('location')}, Address: {villa_info.get('address')}"
+             if villa_info.get('directions'):
+                 villa_context += f", Directions: {villa_info.get('directions')}"
+        
         prompt = f"""SYSTEM:
-You are assisting a guest at villa: {villa_code}.
+{villa_context}
+You are assisting a guest at villa. Code: {villa_code}.
 
 PERSONA:
 {persona}
@@ -278,9 +247,11 @@ PERSONA:
 
 RULES:
 - Respond in language: {language}
+- **GROUNDING RULE**: Use the provided "INTERNAL DB" and "KNOWLEDGE BASE" as your primary and mandatory sources of truth for specific services, prices, and house rules.
+- **FALLBACK RULE**: If the required information is not found in the structured data above, only then use your general LLM reasoning to provide a helpful, culturally relevant answer. 
+- **NO HALLUCINATION**: If structured data is missing, admit you don't have the exact price or detail but offer to help with general information.
 - Be concise, helpful, and professional.
 - Never say "Not Found" or expose technical errors to the user.
-- If you have no specific data, use your best general knowledge.
 - Do NOT ask for information you already have.
 
 CONVERSATION HISTORY:

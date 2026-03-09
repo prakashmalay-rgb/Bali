@@ -2,6 +2,7 @@ from app.services.openai_client import client
 from app.services.pinconeservice import get_index
 from app.utils.chat_memory import get_conversation_history, save_message, trim_history
 from app.services.ai_menu_generator import ai_menu_generator
+from app.services.rag_service import rag_service
 from app.settings.config import settings
 from typing import Dict, Any, Optional
 import traceback
@@ -72,6 +73,14 @@ def _clean_ai_response(text: str) -> str:
 
 async def whatsapp_response(query: str, user_id: str, villa_code: str = "WEB_VILLA_01") -> Dict[str, Any]:
     try:
+        from app.services.menu_services import get_villa_info_by_code
+        villa_info = await get_villa_info_by_code(villa_code)
+        villa_context = f"VILLA: {villa_code}"
+        if villa_info:
+             villa_context = f"VILLA: {villa_info.get('name')} in {villa_info.get('location')}. Address: {villa_info.get('address')}"
+             if villa_info.get('directions'):
+                 villa_context += f". Directions: {villa_info.get('directions')}"
+
         service_check = await ai_menu_generator.intelligent_service_check(query)
     
         intent: Optional[Dict] = None
@@ -115,37 +124,7 @@ DETECTED INTENT:
         conversation = trim_history(chat_history + [{"role": "user", "content": query}])
 
         # Get RAG context
-        context = ""
-        try:
-            # Primary villa-specific index
-            index_name = "villa-faqs"
-            index = get_index(index_name)
-            
-            embed = await client.embeddings.create(
-                input=query,
-                model="text-embedding-ada-002"
-            )
-            
-            # Filter matches by villa_code (Isolation Principle)
-            filter_dict = {"villa_code": villa_code}
-            
-            results = index.query(
-                vector=embed.data[0].embedding,
-                top_k=5,
-                include_metadata=True,
-                filter=filter_dict
-            )
-            matches = results.get("matches", [])
-            if matches:
-                context_pieces = []
-                for m in matches:
-                    text = m.get("metadata", {}).get("text", "").strip()
-                    score = m.get("score", 0)
-                    if text and score > 0.75:
-                        context_pieces.append(text)
-                context = "\n\n".join(context_pieces)
-        except Exception as e:
-            print(f"[Pinecone] Non-critical error: {e}")
+        context = await rag_service.get_rag_context(query, "general", villa_code)
 
         will_show_menu = bool(intent and isinstance(intent, dict) and intent.get("category"))
         will_decline_service = (
@@ -177,7 +156,7 @@ DETECTED INTENT:
             all_examples = specific_examples + general_examples
             examples_block = "\n".join(f"- {ex}" for ex in all_examples[:3])
 
-            prompt = f"""You are **EASYBali**, a helpful AI concierge for luxury villa guests at villa: {villa_code}.
+            prompt = f"""You are **EASYBali**, a helpful AI concierge for luxury villa guests at {villa_context}.
  
  KNOWLEDGE BASE CONTEXT (PRIMARY SOURCE for {villa_code}):
  {context if context else f"No direct data found for this villa. Use general EASYBali knowledge but keep it relevant to {villa_code} guests."}
@@ -210,6 +189,8 @@ Now reply briefly:"""
             requested_service_name = service_check.get("requested_service", "that service")
             
             prompt = f"""{EASYBALI_CORE_IDENTITY}
+ 
+ CURRENT CONTEXT: You are assisting a guest at {villa_context}.
  
  KNOWLEDGE BASE CONTEXT (PRIMARY SOURCE for {villa_code}):
  {context if context else "Note: No specific spreadsheet data found for this query."}
@@ -251,6 +232,8 @@ YOUR RESPONSE:"""
             
             prompt = f"""{EASYBALI_CORE_IDENTITY}
  
+ CURRENT CONTEXT: You are assisting a guest at {villa_context}.
+ 
  KNOWLEDGE BASE CONTEXT (MANDATORY PRIMARY SOURCE for {villa_code}):
  {context if context else f"Note: No specific spreadsheet data found for {villa_code}. Use internal knowledge but stay aligned with EASYBali standards for this villa."}
 
@@ -260,12 +243,11 @@ CONVERSATION HISTORY:
 GUEST'S CURRENT MESSAGE: "{query}"
 
 STRICT RULES:
-1. PRIORITIZE Information: Always check the 'KNOWLEDGE BASE CONTEXT' first. If the answer is there, use it as the definitive answer.
-2. NO HALLUCINATION: Do not mention services or prices not supported by the context or your core identity.
-3. EXTERNAL KNOWLEDGE: Only use external info if the spreadsheet context is silent on the topic.
-4. Respond naturally and helpfully.
-5. Paint experiences, don't just list facts.
-6. Keep response 50-100 words.
+1. **GROUNDING RULE**: Always check the 'KNOWLEDGE BASE CONTEXT' first. If the answer is there, use it as the absolute source of truth.
+2. **FALLBACK RULE**: Only use your internal knowledge and reasoning if the 'KNOWLEDGE BASE CONTEXT' is silent on the topic.
+3. **NO HALLUCINATION**: Do not invent services, prices, or villa-specific rules that are not in the context. If data is missing, admit you don't have the exact detail but offer general helpful advice.
+4. Respond naturally, paint experiences, and be solution-oriented.
+5. Keep response 50-100 words.
 
 YOUR RESPONSE:"""
 
@@ -304,7 +286,8 @@ YOUR RESPONSE:"""
                 menu_data = await ai_menu_generator.generate_service_menu(
                     category=intent.get("category", ""),
                     subcategory=intent.get("subcategory"),
-                    requirements=requirements
+                    requirements=requirements,
+                    villa_code=villa_code
                 )
                 should_send_menu = bool(menu_data and menu_data.get("sections"))
                 

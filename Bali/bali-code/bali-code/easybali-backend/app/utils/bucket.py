@@ -21,17 +21,17 @@ s3_client = boto3.client(
 )
 
 async def upload_to_s3(file: UploadFile) -> str:
-    """Standard public upload (used for avatars/general assets)."""
+    """Standard upload (used for avatars/general assets)."""
     if not file:
         raise HTTPException(status_code=400, detail="No file uploaded")
     file_extension = os.path.splitext(file.filename)[1]
     unique_filename = f"public/{uuid4()}{file_extension}"
     try:
+        # Uploading without explicit ACL as many modern buckets disable them
         s3_client.upload_fileobj(
             file.file,
             AWS_BUCKET_NAME,
-            unique_filename,
-            ExtraArgs={'ACL': 'public-read'}
+            unique_filename
         )
         file_url = f"https://{AWS_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com/{unique_filename}"
         return file_url

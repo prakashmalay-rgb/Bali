@@ -438,32 +438,39 @@ async def get_villa_code_by_name(villa_name: str):
     
     try:
         villas_df = cache["villas_data"]
-        search_name = villa_name.strip().upper()
+        search_input = villa_name.strip().lower()
         
-        # 1. Check if input is already a code (e.g. "S1", "V1") in the Number column
-        # Now stripping internal spaces to handle user input vs. sheet content
-        matching_code = villas_df[
-            villas_df["Number"].astype(str).str.strip().str.upper() == search_name
-        ]
-        if not matching_code.empty:
-            return str(matching_code.iloc[0]["Number"]).strip()
-
-        # 2. Search for exact match in Name column
+        # 1. Search by Number (ID) - Check if input contains the code (robust for 'villa V2')
+        for _, row in villas_df.iterrows():
+            code = str(row.get("Number", "")).strip().lower()
+            if code and (code == search_input or f" {code}" in f" {search_input}"):
+                return str(row["Number"]).strip()
+        
+        # 2. Search by Name - Exact match
         matching_villa = villas_df[
-            villas_df["Name of Villa"].astype(str).str.strip().str.lower() == villa_name.strip().lower()
+            villas_df["Name of Villa"].astype(str).str.strip().str.lower() == search_input
         ]
-        
-        # If no exact match, try partial match
-        if matching_villa.empty:
-            matching_villa = villas_df[
-                villas_df["Name of Villa"].astype(str).str.contains(villa_name, case=False, na=False)
-            ]
-        
-        if matching_villa.empty:
-            return None
+        if not matching_villa.empty:
+            return str(matching_villa.iloc[0]["Number"]).strip()
+
+        # 3. Search by Name - Check if input contains the name (robust for 'Villa Hassan Umalas')
+        for _, row in villas_df.iterrows():
+            name = str(row.get("Name of Villa", "")).strip().lower()
+            if name and name in search_input:
+                return str(row["Number"]).strip()
+
+        # 4. Search by Name - Check if name contains input (Partial match fallback)
+        matching_villa = villas_df[
+            villas_df["Name of Villa"].astype(str).str.contains(villa_name, case=False, na=False)
+        ]
+        if not matching_villa.empty:
+            return str(matching_villa.iloc[0]["Number"]).strip()
             
-        # Return the villa code (Number column)
-        return str(matching_villa.iloc[0]["Number"]).strip()
+        return None
+    
+    except Exception as e:
+        logger.error(f"Error in get_villa_code_by_name: {e}")
+        return None
         
     except Exception as e:
         logger.error(f"Error retrieving villa code for '{villa_name}': {e}")
@@ -471,7 +478,7 @@ async def get_villa_code_by_name(villa_name: str):
 
 async def get_villa_location_by_code(villa_code: str):
     if cache["villas_data"] is None:
-        raise ValueError("Villa data not loaded")
+        return None
     
     try:
         villas_df = cache["villas_data"]
@@ -484,4 +491,23 @@ async def get_villa_location_by_code(villa_code: str):
         
     except Exception as e:
         print(f"Error retrieving villa location: {e}")
+        return None
+async def get_villa_info_by_code(villa_code: str):
+    """Retrieves full villa metadata by its code."""
+    if cache["villas_data"] is None or cache["villas_data"].empty:
+        return None
+    try:
+        df = cache["villas_data"]
+        match = df[df["Number"] == villa_code]
+        if match.empty:
+            return None
+        row = match.iloc[0]
+        return {
+            "name": row.get("Name of Villa"),
+            "location": row.get("Location"),
+            "address": row.get("Address"),
+            "directions": row.get("Directions")
+        }
+    except Exception as e:
+        logger.error(f"Error in get_villa_info_by_code: {e}")
         return None

@@ -1,14 +1,23 @@
 from fastapi import HTTPException, UploadFile
+from typing import Any
 import qrcode
 from io import BytesIO
 from uuid import uuid4
 from app.utils.bucket import upload_to_s3
 
-async def generate_and_upload_qrcode(data: dict) -> str:
+async def generate_and_upload_qrcode(data: Any) -> str:
     try:
         # Generate QR code
         qr = qrcode.QRCode(version=1, box_size=10, border=4)
-        qr.add_data(data)
+        
+        # If it's a dict, we might want to convert to a URL or just stringify
+        # For guest-facing QRs, this SHOULD be a URL string.
+        qr_data = data
+        if isinstance(data, dict):
+            # If a website_url is provided in the dict, prioritize it
+            qr_data = data.get("website_url") or str(data)
+            
+        qr.add_data(qr_data)
         qr.make(fit=True)
         qr_image = qr.make_image(fill="black", back_color="white")
 

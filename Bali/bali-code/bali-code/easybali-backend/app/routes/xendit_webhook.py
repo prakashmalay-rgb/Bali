@@ -1,6 +1,6 @@
 import logging
 from app.db.session import order_collection
-from app.utils.whatsapp_func import notify_payment_completion
+from app.utils.whatsapp_func import notify_payment_completion, notify_payment_failure
 from app.services.payment_service import distribute_order_payments
 from app.services.invoice_generator import generate_and_upload_invoice
 from app.services.promo_service import increment_promo_usage
@@ -153,6 +153,7 @@ async def handle_xendit_webhook(webhook_data: dict):
                         f"⏰ Payment link expired for order {order_number}. Please contact us to get a new payment link.",
                         "payment_expired"
                     )
+                    await notify_payment_failure(order_data, "EXPIRED")
                 
                 logger.info(f"Payment expiration handled for order {order_number}")
             return True
@@ -185,6 +186,7 @@ async def handle_xendit_webhook(webhook_data: dict):
                         f"❌ Payment failed for order {order_number}. Please simply type 'Pay' or 'Retry' to generate a new secure payment link.",
                         "payment_failed"
                     )
+                    await notify_payment_failure(order_data, "FAILED")
                 
                 logger.info(f"Payment failure handled (Error Recovery Initialized) for order {order_number}")
             return True

@@ -104,34 +104,26 @@ async def add_villa_data(
         # Upload entrance picture to S3
         entrance_picture_url = await upload_to_s3(entrance_picture)
 
-        # Prepare data for QR code generation
-        qr_data = {
-            "name_of_villa": name_of_villa,
-            "address": address,
-            "google_maps_link": google_maps_link,
-            "directions": directions,
-            "entrance_picture": entrance_picture_url,
-            "location": location,
-            "contact_vm": contact_vm,
-            "contact_mt": contact_mt,
-            "passport_collection": passport_collection,
-            "number_of_bdr": number_of_bdr,
-            "website_url": website_url,
-            "whatsapp_url": whatsapp_url,
-            "messenger_url": messenger_url,
-            "instagram_url": instagram_url,
-        }
-
-        # Generate and upload the QR code
-        qr_code_url = await generate_and_upload_qrcode(qr_data)
-
         # Access worksheet (Google Sheets)
         workbook = get_workbook(SHEET_ID)
-        worksheet = workbook.get_worksheet(3)
+        worksheet = workbook.worksheet("QR Codes")
 
         # Find the next available row number
         existing_rows = len(worksheet.get_all_values())
         next_number = f"V{existing_rows}"
+
+        # Finalize URLs with V-code and Location for robust mapping (Task 8 & 11)
+        # Format: https://www.easy-bali.com/welcome?villa=V1&location=Canggu
+        from app.settings.config import settings
+        final_website_url = f"{settings.WEB_BASE_URL}/welcome?villa={next_number}&location={location}"
+        
+        # WhatsApp Pre-filled URL: https://wa.me/BOT?text=Hi, I am in Villa Hassan
+        bot_number = "6282247959788" # Core Bot Number
+        from urllib.parse import quote
+        final_whatsapp_url = f"https://wa.me/{bot_number}?text={quote(f'Hi, I am in {name_of_villa}')}"
+
+        # Generate and upload a proper URL-based QR code (Guest Experience Fix)
+        qr_code_url = await generate_and_upload_qrcode(final_website_url)
 
         # Prepare row data
         row_data = [
@@ -146,8 +138,8 @@ async def add_villa_data(
             contact_mt,
             passport_collection,
             number_of_bdr,
-            website_url,
-            whatsapp_url,
+            final_website_url,
+            final_whatsapp_url,
             messenger_url,
             instagram_url,
             qr_code_url

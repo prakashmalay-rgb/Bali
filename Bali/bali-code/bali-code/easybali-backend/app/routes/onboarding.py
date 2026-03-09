@@ -30,9 +30,9 @@ async def generate_villa_qr(
             villa_code = f"{villa_code}_{str(uuid4())[:4]}"
 
         # QR Data: The link that users will scan
-        # Format: WEB_BASE_URL/welcome?villa=V1
+        # Format: WEB_BASE_URL/welcome?villa=V1&location=Canggu
         from app.settings.config import settings
-        welcome_url = f"{settings.WEB_BASE_URL}/welcome?villa={villa_code}"
+        welcome_url = f"{settings.WEB_BASE_URL}/welcome?villa={villa_code}&location={location}"
         
         qr_url = await generate_and_upload_qrcode(welcome_url)
         

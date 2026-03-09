@@ -905,6 +905,14 @@ async def send_calendar_flow(recipient_id: str):
 
 async def starting_message(recipient_number: str):
     try:
+        from app.services.menu_services import get_villa_info_by_code
+        villa_code = await get_user_villa_code(recipient_number)
+        villa_info = await get_villa_info_by_code(villa_code) if villa_code else None
+        
+        welcome_header = "🌴 Welcome to EASYBali! 🌴"
+        if villa_info:
+            welcome_header = f"🌴 Welcome to {villa_info.get('name', 'EASYBali')}! 🌴"
+
         headers = {
             "Authorization": f"Bearer {settings.access_token}",
             "Content-Type": "application/json"
@@ -918,7 +926,7 @@ async def starting_message(recipient_number: str):
                 "type": "button",
                 "header": {
                     "type": "text",
-                    "text": "🌴 Hi there! Welcome to EASYBali! 🌴\n\n"
+                    "text": welcome_header
                 },
                 "body": {
                     "text": (
@@ -2230,21 +2238,54 @@ async def notify_payment_completion(order_data: dict):
                 await send_whatsapp_message(villa_number, villa_msg)
         
         # 4. Notify Easy-Bali Admin
-        admin_number = os.getenv("ADMIN_WHATSAPP_NUMBER", "62895627705139") # Replace with real admin
-        admin_msg = (
-            f"💰 ***REVENUE ALERT!*** 💰\n\n"
-            f"Payment confirmed for Order **{order_number}**.\n"
-            f"**Service:** {service_name}\n"
-            f"**Villa:** {villa_code}\n"
-            f"**Amount Paid:** IDR {int(float(price)):,}\n\n"
-            f"Check Admin Console for details: {settings.BASE_URL}/admin/dashboard"
-        )
-        await send_whatsapp_message(admin_number, admin_msg)
+        await notify_admin_of_outcome(order_data, "SUCCESS")
         
     except Exception as e:
         logger.error(f"Notification error in notify_payment_completion: {str(e)}")
         import traceback
         traceback.print_exc()
+
+async def notify_payment_failure(order_data: dict, reason: str):
+    """Notify relevant parties about payment failure/expiry."""
+    try:
+        await notify_admin_of_outcome(order_data, f"FAILURE: {reason}")
+    except Exception as e:
+        logger.error(f"Error in notify_payment_failure: {e}")
+
+async def notify_admin_of_outcome(order_data: dict, outcome: str):
+    """Unified admin notification for booking outcomes."""
+    try:
+        order_number = order_data.get("order_number")
+        service_name = order_data.get("service_name")
+        price = order_data.get("price")
+        villa_code = order_data.get("villa_code")
+        admin_number = os.getenv("ADMIN_WHATSAPP_NUMBER", "62895627705139")
+
+        if outcome == "SUCCESS":
+            emoji = "💰"
+            title = "REVENUE ALERT!"
+            status_text = "Payment confirmed"
+        else:
+            emoji = "⚠️"
+            title = "BOOKING ALERT (ACTION MAY BE NEEDED)"
+            status_text = f"Payment {outcome}"
+
+        admin_msg = (
+            f"{emoji} ***{title}*** {emoji}\n\n"
+            f"**Order:** {order_number}\n"
+            f"**Status:** {status_text}\n"
+            f"**Service:** {service_name}\n"
+            f"**Villa:** {villa_code}\n"
+            f"**Amount:** IDR {int(float(price)):,}\n\n"
+            f"Check Dashboard: {settings.BASE_URL}/admin/dashboard"
+        )
+        await send_whatsapp_message(admin_number, admin_msg)
+        
+        # Placeholder for real email if needed in future
+        logger.info(f"📧 Admin Notification (Email Simulated) for Order {order_number}: {status_text}")
+        
+    except Exception as e:
+        logger.error(f"Admin notification error: {e}")
 
 async def send_invoice_and_handle_closure(order_data: dict, invoice_result: dict, is_whatsapp: bool, is_websocket: bool):
     try:
@@ -2296,18 +2337,36 @@ async def notify_service_provider(order_data: dict):
         service_provider_number = order_data.get("confirmed_by_provider")
         order_number = order_data.get("order_number")
         service_name = order_data.get("service_name")
+        appointment_date = order_data.get("date")
+        appointment_time = order_data.get("time")
+        villa_code = order_data.get("villa_code")
+
+        # Format date for readability
+        date_str = "N/A"
+        if appointment_date:
+            if hasattr(appointment_date, "strftime"):
+                date_str = appointment_date.strftime("%d %B %Y")
+            else:
+                date_str = str(appointment_date)
 
         logger.info(f"SP payment notification: order={order_number}, sp_number={service_provider_number}")
         if service_provider_number:
             provider_message = (
-                f"💰 ***Payment Received!***\n\n"
-                f"Payment for Order **{order_number}** ({service_name}) has been confirmed.\n"
-                f"Please proceed with delivery and contact the guest for final coordination."
+                f"🎉 ***Congratulations!*** 🎉\n\n"
+                f"The customer has paid for the service which you accepted. Kindly provide the accepted service.\n\n"
+                f"📌 ***Order Details:***\n"
+                f"• **Order #:** {order_number}\n"
+                f"• **Service:** {service_name}\n"
+                f"• **Date:** {date_str}\n"
+                f"• **Time:** {appointment_time or 'As scheduled'}\n"
+                f"• **Villa:** {villa_code or 'N/A'}\n"
+                f"• **Status:** PAID ✅\n\n"
+                f"Please coordinate directly to ensure a smooth delivery. Thank you for your professional service!"
             )
             await send_whatsapp_message(service_provider_number, provider_message)
             
     except Exception as e:
-        logger.error(f"Service provider notification error: {str(e)}")
+        logger.error(f"Service provider notification error in notify_service_provider: {str(e)}")
 
 async def get_villa_whatsapp_by_code(villa_code: str) -> str:
     from app.services.menu_services import cache

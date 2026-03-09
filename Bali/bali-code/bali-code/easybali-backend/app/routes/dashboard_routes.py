@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.db.session import order_collection, passport_collection
+from app.db.session import order_collection, passport_collection, checkin_collection
 from typing import Dict, Any, Optional
 from datetime import datetime
 
@@ -207,6 +207,38 @@ async def get_passport_submissions() -> Dict[str, Any]:
             "success": False,
             "error": "Failed to fetch passport submissions",
             "passports": []
+        }
+
+@router.get("/checkins")
+async def get_checkins() -> Dict[str, Any]:
+    try:
+        # Fetch latest 50 check-ins
+        recent_checkins = await checkin_collection.find().sort("checkin_time", -1).limit(50).to_list(50)
+        
+        checkin_list = []
+        for c in recent_checkins:
+            time_val = c.get("checkin_time")
+            time_str = time_val.strftime("%Y-%m-%d %H:%M:%S") if hasattr(time_val, "strftime") else "Recently"
+            
+            checkin_list.append({
+                "id": str(c.get("_id")),
+                "guest_id": c.get("sender_id"),
+                "villa_code": c.get("villa_code", "N/A"),
+                "villa_name": c.get("villa_name", "N/A"),
+                "status": c.get("status", "active"),
+                "time": time_str
+            })
+
+        return {
+            "success": True,
+            "checkins": checkin_list
+        }
+    except Exception as e:
+        print(f"Error fetching check-ins: {e}")
+        return {
+            "success": False,
+            "error": "Failed to fetch check-ins",
+            "checkins": []
         }
 
 @router.put("/passports/{passport_id}/verify")

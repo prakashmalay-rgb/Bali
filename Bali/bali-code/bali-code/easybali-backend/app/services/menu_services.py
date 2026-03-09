@@ -506,7 +506,13 @@ async def get_villa_info_by_code(villa_code: str):
             "name": row.get("Name of Villa"),
             "location": row.get("Location"),
             "address": row.get("Address"),
-            "directions": row.get("Directions")
+            "directions": row.get("Directions"),
+            "manager_name": row.get("Manager"),
+            "manager_number": row.get("Manager Number"),
+            "wifi_name": row.get("WiFi Name"),
+            "wifi_password": row.get("WiFi Password"),
+            "house_rules": row.get("Rules"),
+            "map_link": row.get("Map Link")
         }
     except Exception as e:
         logger.error(f"Error in get_villa_info_by_code: {e}")

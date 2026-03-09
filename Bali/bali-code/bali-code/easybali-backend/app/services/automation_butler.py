@@ -7,6 +7,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 order_collection = db["orders-summary"]
+checkin_collection = db["checkins"]
+passport_collection = db["passports"]
 template_collection = db["message_templates"]
 
 async def process_automations():
@@ -15,22 +17,47 @@ async def process_automations():
     """
     while True:
         try:
-            now = datetime.utcnow()
+            now = datetime.now()
             logger.info("🤖 Butler: Scanning for guest automations...")
             
-            # 1. Welcome Message (Sent within 1 hour of booking or scheduled check-in)
-            # 2. Mid-Stay Check-in (Stay duration / 2)
-            # 3. Pre-Checkout (18 hours before)
-            # 4. Post-Checkout (6 hours after)
-            
-            # Query for active guests
-            async for order in order_collection.find({"status": "paid"}):
+            # 1. Process Orders
+            async for order in order_collection.find({"status": "PAID"}):
                 await check_order_triggers(order, now)
+                
+            # 2. Process Check-ins (Task 18: Passport reminders etc)
+            async for checkin in checkin_collection.find({"status": "active"}):
+                await check_checkin_triggers(checkin, now)
                 
         except Exception as e:
             logger.error(f"Butler Error: {e}")
             
         await asyncio.sleep(3600) # Run every hour
+
+async def check_checkin_triggers(checkin, now):
+    sender_id = checkin.get("sender_id")
+    villa_code = checkin.get("villa_code")
+    checkin_time = checkin.get("checkin_time")
+    sent = checkin.get("sent_automations", [])
+
+    # Passport Reminder (1 hour after checkin if no passport found)
+    if "passport_reminder" not in sent:
+        if checkin_time and (now - checkin_time) > timedelta(hours=1):
+            # Check if passport exists
+            existing = await passport_collection.find_one({"user_id": sender_id})
+            if not existing:
+                reminder_msg = (
+                    "👋 *A Friendly Reminder*\n\n"
+                    "We noticed you haven't submitted your passport yet. It's required for local registration.\n\n"
+                    "Please upload a clear photo of your passport here on WhatsApp. 📄"
+                )
+                await enqueue_whatsapp_message(sender_id, reminder_msg)
+                await mark_checkin_sent(checkin["_id"], "passport_reminder")
+
+async def mark_checkin_sent(checkin_id, trigger_name):
+    await checkin_collection.update_one(
+        {"_id": checkin_id},
+        {"$addToSet": {"sent_automations": trigger_name}}
+    )
 
 async def check_order_triggers(order, now):
     villa_code = order.get("villa_code")
@@ -50,15 +77,21 @@ async def check_order_triggers(order, now):
                 await enqueue_whatsapp_message(phone, message)
                 await mark_sent(order["_id"], "pre_checkout")
 
-    # Example: Welcome Message
-    if "welcome" not in sent:
+    # Mid-Stay Suggestion (3 days after creation if not checked out)
+    if "mid_stay" not in sent:
         created_at = order.get("created_at")
-        if created_at and (now - created_at) < timedelta(hours=1):
-            template_content = await get_template(villa_code, "welcome")
-            if template_content:
-                message = template_content.format(name=guest_name)
-                await enqueue_whatsapp_message(phone, message)
-                await mark_sent(order["_id"], "welcome")
+        if created_at and (now - created_at) > timedelta(days=3):
+            message = f"🌴 Hi {guest_name}, we hope you're having a wonderful stay! Need a relaxing massage or a private driver for tomorrow? Just type *Order Services* to explore."
+            await enqueue_whatsapp_message(phone, message)
+            await mark_sent(order["_id"], "mid_stay")
+
+    # Feedback Request (6 hours after check_out)
+    if "feedback_request" not in sent:
+        check_out = order.get("check_out_date")
+        if check_out and (now - check_out) > timedelta(hours=6):
+            message = f"👋 Hi {guest_name}, thank you for staying with us! We'd love to hear about your experience. How was your stay and our concierge service? (Reply directly here)"
+            await enqueue_whatsapp_message(phone, message)
+            await mark_sent(order["_id"], "feedback_request")
 
 async def get_template(villa_code, trigger_type):
     # Fetch customized template or fallback to default

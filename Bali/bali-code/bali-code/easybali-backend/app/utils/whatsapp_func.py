@@ -10,10 +10,10 @@ from typing import Optional, Dict, List, Any
 from app.services.whatsapp_ai_prompt import whatsapp_response
 from app.services.ai_menu_generator import ai_menu_generator
 from app.services.invoice_generator import generate_and_upload_invoice
-from app.services.menu_services import get_service_provider_by_whatsapp, get_villa_code_by_name, get_service_base_price
+from app.services.menu_services import get_service_provider_by_whatsapp, get_villa_code_by_name, get_service_base_price, get_villa_info_by_code
 from app.services.order_summary import initiate_chat_session, active_chat_sessions, save_order_to_db, format_order_summary, check_order_confirmation,order_sessions, update_order_confirmation, get_sender_id_by_order, get_order_by_number
 from app.settings.config import settings
-from app.db.session import order_collection, villa_code_collection
+from app.db.session import order_collection, villa_code_collection, checkin_collection
 from app.models.order_summary import Order
 from typing import Dict
 from app.services.websocket_managerr import ConnectionManager
@@ -966,6 +966,60 @@ async def starting_message(recipient_number: str):
 
 
 
+async def perform_arrival_confirmation(sender_id: str, villa_code: str):
+    """Logs check-in, notifies manager, and activates guest profile."""
+    try:
+        villa_info = await get_villa_info_by_code(villa_code)
+        villa_name = villa_info.get("name") if villa_info else f"Villa {villa_code}"
+        
+        # 1. Log to DB
+        checkin_data = {
+            "sender_id": sender_id,
+            "villa_code": villa_code,
+            "villa_name": villa_name,
+            "checkin_time": datetime.datetime.now(),
+            "status": "active"
+        }
+        await checkin_collection.update_one(
+            {"sender_id": sender_id, "status": "active"},
+            {"$set": checkin_data},
+            upsert=True
+        )
+        
+        # 2. Notify Manager
+        if villa_info and villa_info.get("manager_number"):
+            manager_num = str(villa_info["manager_number"]).strip()
+            # Ensure manager_num is clean (no +, just digits)
+            clean_mgr = "".join(filter(str.isdigit, manager_num))
+            
+            manager_msg = (
+                f"🔔 *New Guest Arrival!*\n\n"
+                f"Guest `{sender_id}` has just checked into *{villa_name}* ({villa_code}).\n\n"
+                f"Access is now granted for concierge services."
+            )
+            await send_whatsapp_message(clean_mgr, manager_msg)
+            logger.info(f"Check-in notification sent to Manager {clean_mgr} for {villa_name}")
+
+        # 3. Activation confirmation to guest
+        wifi_info = ""
+        if villa_info and villa_info.get("wifi_name"):
+            wifi_info = f"\n\n📶 *WiFi Details:*\nName: `{villa_info['wifi_name']}`\nPass: `{villa_info.get('wifi_password', 'N/A')}`"
+            
+        map_link = f"\n📍 *Villa Location:* {villa_info['map_link']}" if villa_info and villa_info.get("map_link") else ""
+
+        guest_conf = (
+            f"✅ *Arrival Confirmed!*\n\n"
+            f"Hi {sender_id[-4:]}, welcome to *{villa_name}*. Your profile is now active.{wifi_info}{map_link}\n\n"
+            f"I am your virtual concierge. Type *Order Services* to see what I can do for you, or ask me anything about the villa!"
+        )
+        await send_whatsapp_message(sender_id, guest_conf)
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error in perform_arrival_confirmation for {sender_id}: {e}")
+        return False
+
+
 async def send_decline_confirmation(recipient_number: str, order_num: str):
     try:
         headers = {
@@ -1912,6 +1966,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                 if villa_code:
                     success = await save_user_villa_code(sender_id, villa_code)
                     if success:
+                        await perform_arrival_confirmation(sender_id, villa_code)
                         await starting_message(sender_id)
                         return
                     else:

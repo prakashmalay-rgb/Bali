@@ -2228,7 +2228,10 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                         f"Issue: {description}{media_info}\n\n"
                         f"Please check the dashboard for details."
                     )
-                    await send_whatsapp_message(clean_mgr, mgr_msg)
+                    try:
+                        await send_whatsapp_message(clean_mgr, mgr_msg)
+                    except Exception as e:
+                        logger.error(f"Failed to notify manager {clean_mgr}: {e}")
                 
                 issue_reporting_sessions.pop(sender_id, None)
                 await send_whatsapp_message(

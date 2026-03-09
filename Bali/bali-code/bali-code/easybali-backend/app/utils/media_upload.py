@@ -21,18 +21,31 @@ _s3 = boto3.client(
 
 async def download_whatsapp_media(media_id: str):
     """Downloads media from WhatsApp given its Media ID."""
-    url = f"https://graph.facebook.com/v21.0/{media_id}"
+    # Use v22.0 to match the current app configuration set in .env
+    url = f"https://graph.facebook.com/v22.0/{media_id}"
     headers = {"Authorization": f"Bearer {settings.access_token}"}
     
+    logger.info(f"Downloading WhatsApp media info for ID: {media_id}")
     async with httpx.AsyncClient() as client:
         res = await client.get(url, headers=headers)
-        res.raise_for_status()
-        media_url = res.json()["url"]
-        
+        if res.status_code != 200:
+            logger.error(f"Failed to get media URL for {media_id}: {res.text}")
+            res.raise_for_status()
+            
+        media_url = res.json().get("url")
+        if not media_url:
+            logger.error(f"No media URL found in response for {media_id}: {res.json()}")
+            raise ValueError("Media URL not found")
+            
+        logger.info(f"Fetching actual media content from {media_url[:50]}...")
         media_res = await client.get(media_url, headers=headers)
-        media_res.raise_for_status()
+        if media_res.status_code != 200:
+            logger.error(f"Failed to download media content from {media_url[:50]}: {media_res.text}")
+            media_res.raise_for_status()
         
-        return media_res.content, media_res.headers.get("content-type", "image/jpeg")
+        content_type = media_res.headers.get("content-type", "image/jpeg")
+        logger.info(f"Successfully downloaded {len(media_res.content)} bytes of type {content_type}")
+        return media_res.content, content_type
 
 def upload_bytes_to_s3(file_bytes: bytes, content_type: str, folder: str = "passports") -> tuple:
     """Uploads file bytes directly to S3 without ACLs."""
@@ -52,16 +65,18 @@ def upload_bytes_to_s3(file_bytes: bytes, content_type: str, folder: str = "pass
     url = f"https://{settings.AWS_BUCKET_NAME}.s3.{settings.AWS_REGION}.amazonaws.com/{key}"
     return key, url
 
-async def process_whatsapp_passport(sender_id: str, media_id: str, villa_code: str = "UNKNOWN"):
+async def process_whatsapp_passport(sender_id: str, media_id: str, villa_code: str = "UNKNOWN", guest_name: str = None):
     """Downloads WA media, uploads to S3, and saves as a pending passport."""
     try:
         file_bytes, content_type = await download_whatsapp_media(media_id)
         s3_key, s3_url = upload_bytes_to_s3(file_bytes, content_type, folder="passports")
         
+        final_guest_name = guest_name or f"WhatsApp Guest {sender_id[-4:]}"
+        
         passport_data = {
             "user_id": sender_id,
             "villa_code": villa_code,
-            "guest_name": f"WhatsApp Guest {sender_id[-4:]}",
+            "guest_name": final_guest_name,
             "passport_url": s3_url,
             "s3_key": s3_key,
             "status": "pending_verification",

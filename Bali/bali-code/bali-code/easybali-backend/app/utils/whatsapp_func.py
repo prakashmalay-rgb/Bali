@@ -28,6 +28,7 @@ manager = ConnectionManager()
 villa_code_sessions = {}
 issue_reporting_sessions = {}
 feedback_sessions = {}
+passport_sessions = {}
 
 local_order_store: Dict[str, str] = {}
 
@@ -1588,9 +1589,9 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
             media_id = media_info.get("id")
             
             if media_id:
-                # If guest is in issue reporting mode, we let the lower logic handle it
-                if sender_id in issue_reporting_sessions:
-                    pass # Continue to specific handler
+                # If guest is in an active session (issue or passport), we let the specific handler below it
+                if sender_id in issue_reporting_sessions or sender_id in passport_sessions:
+                    pass 
                 else:
                     # Default: Assume Passport for image/document
                     if "image" in message_payload or "document" in message_payload:
@@ -1824,9 +1825,16 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                 serviceitems_text = list_reply["title"]
                 selected_id = list_reply["id"]
 
+                # 0. Handle Passport Submission Start
+                if selected_id == "passport_submission":
+                    passport_sessions[sender_id] = {"step": "awaiting_name", "timestamp": datetime.datetime.now()}
+                    await send_whatsapp_message(
+                        sender_id,
+                        "🛂 *Passport Submission*\n\nPlease enter your *Full Name* as it appears on your passport:"
+                    )
+                    return
+
                 # 1. Handle Categorized Selection (from Main Menu)
-                # Categories from Main Menu use snake_case IDs. We'll use them to fetch subcategories.
-                if not selected_id.startswith(("ai_service_", "subcat_", "service_")):
                     # Fetch subcategories for this category
                     category_title = serviceitems_text
                     api_url = f"{settings.BASE_URL}/categories/sections"
@@ -2112,6 +2120,51 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                 return
 
         if user_villa_code:
+            # Active Passport Submission Session
+            if sender_id in passport_sessions:
+                session = passport_sessions[sender_id]
+                
+                if message_text == "CANCEL":
+                    passport_sessions.pop(sender_id, None)
+                    await send_whatsapp_message(sender_id, "Passport submission cancelled.")
+                    await starting_message(sender_id)
+                    return
+
+                if session["step"] == "awaiting_name":
+                    if not message_text or len(message_text) < 3:
+                        await send_whatsapp_message(sender_id, "Please enter your full name (at least 3 characters):")
+                        return
+                    
+                    session["guest_name"] = message_text
+                    session["step"] = "awaiting_file"
+                    await send_whatsapp_message(
+                        sender_id,
+                        f"Thank you, *{message_text}*.\n\n"
+                        "Now, please **upload a clear photo** or **PDF document** of your passport. 📸 📄"
+                    )
+                    return
+
+                elif session["step"] == "awaiting_file":
+                    media_id = None
+                    if "image" in message_payload:
+                        media_id = message_payload["image"]["id"]
+                    elif "document" in message_payload:
+                        media_id = message_payload["document"]["id"]
+                    
+                    if media_id:
+                        await send_whatsapp_message(sender_id, "⏳ Processing your document, please wait...")
+                        success, msg = await process_whatsapp_passport(
+                            sender_id, media_id, user_villa_code, session.get("guest_name")
+                        )
+                        await send_whatsapp_message(sender_id, msg)
+                        if success:
+                            passport_sessions.pop(sender_id, None)
+                            await starting_message(sender_id)
+                        return
+                    else:
+                        await send_whatsapp_message(sender_id, "Please upload a passport image or PDF document. (Or type CANCEL to exit)")
+                        return
+
             # Task 22: Active Issue Reporting Session
             if sender_id in issue_reporting_sessions:
                 if message_text == "CANCEL":

@@ -13,7 +13,7 @@ from app.services.invoice_generator import generate_and_upload_invoice
 from app.services.menu_services import get_service_provider_by_whatsapp, get_villa_code_by_name, get_service_base_price, get_villa_info_by_code
 from app.services.order_summary import initiate_chat_session, active_chat_sessions, save_order_to_db, format_order_summary, check_order_confirmation,order_sessions, update_order_confirmation, get_sender_id_by_order, get_order_by_number
 from app.settings.config import settings
-from app.db.session import order_collection, villa_code_collection, checkin_collection
+from app.db.session import order_collection, villa_code_collection, checkin_collection, inquiry_collection
 from app.models.order_summary import Order
 from typing import Dict
 from app.services.websocket_managerr import ConnectionManager
@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 manager = ConnectionManager()
 
 villa_code_sessions = {}
+issue_reporting_sessions = {}
 
 local_order_store: Dict[str, str] = {}
 
@@ -1020,6 +1021,36 @@ async def perform_arrival_confirmation(sender_id: str, villa_code: str):
         return False
 
 
+async def log_guest_inquiry(sender_id: str, villa_code: str, query: str, response: str, intent: str = "general"):
+    """Logs a guest's question/interaction to the database for oversight."""
+    try:
+        inquiry_doc = {
+            "sender_id": sender_id,
+            "villa_code": villa_code,
+            "query": query,
+            "response": response,
+            "intent": intent,
+            "timestamp": datetime.datetime.now(),
+            "status": "responded"
+        }
+        await inquiry_collection.insert_one(inquiry_doc)
+        logger.info(f"Logged inquiry from {sender_id} at {villa_code}")
+        
+        # If it's a support request, notify manager immediately
+        if intent == "support_request":
+            villa_info = await get_villa_info_by_code(villa_code)
+            if villa_info and villa_info.get("manager_number"):
+                mgr_num = "".join(filter(str.isdigit, str(villa_info["manager_number"])))
+                mgr_msg = (
+                    f"🆘 *Support Requested!*\n\n"
+                    f"Villa: *{villa_info.get('name')}*\n"
+                    f"Guest ID: `{sender_id[-4:]}`\n"
+                    f"The guest has requested to speak with us. Please respond as soon as possible."
+                )
+                await send_whatsapp_message(mgr_num, mgr_msg)
+    except Exception as e:
+        logger.error(f"Failed to log inquiry: {e}")
+
 async def send_decline_confirmation(recipient_number: str, order_num: str):
     try:
         headers = {
@@ -1531,15 +1562,28 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
 
         if "text" in message_payload:
             message_text = message_payload["text"]["body"].strip()
-        elif "image" in message_payload or "document" in message_payload:
-            # Handle media uploads for passport/document submission
-            media_info = message_payload.get("image") or message_payload.get("document")
+        elif "audio" in message_payload:
+            message_text = "VOICE_NOTE" # Signal it's a voice note for processing
+            audio_id = message_payload["audio"]["id"]
+        elif "image" in message_payload or "document" in message_payload or "audio" in message_payload:
+            # Handle media uploads for passport/document submission OR issues
+            media_info = message_payload.get("image") or message_payload.get("document") or message_payload.get("audio")
             media_id = media_info.get("id")
+            
             if media_id:
-                user_villa_code = await get_user_villa_code(sender_id) or "UNKNOWN"
-                success, msg = await process_whatsapp_passport(sender_id, media_id, user_villa_code)
-                await send_whatsapp_message(sender_id, msg)
-                return
+                # If guest is in issue reporting mode, we let the lower logic handle it
+                if sender_id in issue_reporting_sessions:
+                    pass # Continue to specific handler
+                else:
+                    # Default: Assume Passport for image/document
+                    if "image" in message_payload or "document" in message_payload:
+                        user_villa_code = await get_user_villa_code(sender_id) or "UNKNOWN"
+                        success, msg = await process_whatsapp_passport(sender_id, media_id, user_villa_code)
+                        await send_whatsapp_message(sender_id, msg)
+                        return
+                    else:
+                        # Audio outside of session? Maybe just ignore or pass to AI
+                        pass
         elif "interactive" in message_payload:
             persistent_mode_sessions.pop(sender_id, None)
             language_lesson_sessions.pop(sender_id, None)
@@ -1601,6 +1645,14 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                         sender_id,
                         "💬 You can now chat with us! Just send your message and we'll be happy to help you with anything you need during your stay in Bali."
                     )
+                    # Task 20: Flag support activation
+                    asyncio.create_task(log_guest_inquiry(
+                        sender_id,
+                        user_villa_code or "WEB_VILLA_01",
+                        "CLICKED: Chat with Us",
+                        "Assigned to Support",
+                        intent="support_request"
+                    ))
                     return
 
                 if category_text in ["✅ Accept", "❌ Decline"]:
@@ -2032,8 +2084,70 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                 return
 
         if user_villa_code:
+            # Task 22: Active Issue Reporting Session
+            if sender_id in issue_reporting_sessions:
+                if message_text == "CANCEL":
+                    issue_reporting_sessions.pop(sender_id, None)
+                    await send_whatsapp_message(sender_id, "Issue reporting cancelled.")
+                    await starting_message(sender_id)
+                    return
+                
+                # Logic to process text, image, or voice note as an issue
+                media_id = None
+                media_type = "text"
+                if "image" in message_payload:
+                    media_id = message_payload["image"]["id"]
+                    media_type = "image"
+                elif "audio" in message_payload:
+                    media_id = message_payload["audio"]["id"]
+                    media_type = "voice_note"
+                
+                # Log the issue
+                issue_data = {
+                    "sender_id": sender_id,
+                    "villa_code": user_villa_code,
+                    "description": message_text if media_type == "text" else f"Media issue: {media_type}",
+                    "media_id": media_id,
+                    "media_type": media_type,
+                    "timestamp": datetime.datetime.now(),
+                    "status": "pending"
+                }
+                await issue_collection.insert_one(issue_data)
+                
+                # Notify Villa Manager
+                villa_info = await get_villa_info_by_code(user_villa_code)
+                if villa_info and villa_info.get("manager_number"):
+                    mgr_num = "".join(filter(str.isdigit, str(villa_info["manager_number"])))
+                    mgr_msg = (
+                        f"🚨 *New Issue Reported!*\n\n"
+                        f"Villa: *{villa_info.get('name')}* ({user_villa_code})\n"
+                        f"Guest ID: `{sender_id[-4:]}`\n"
+                        f"Issue: {issue_data['description']}\n"
+                        f"Type: {media_type.capitalize()}"
+                    )
+                    await send_whatsapp_message(mgr_num, mgr_msg)
+                
+                issue_reporting_sessions.pop(sender_id, None)
+                await send_whatsapp_message(
+                    sender_id,
+                    "✅ *Issue Received*\n\n"
+                    "Thank you for reporting this. Our team and the villa manager have been notified and will address this as soon as possible."
+                )
+                return
+
             if message_text and message_text.lower() in ["hello", "hi", "hey", "good morning", "good afternoon", "good evening", "hey there", "hi there", "hello there", "howdy", "what's up?", "how are you?", "how's it going?", "yo", "greetings", "bonjour"]:
                 await starting_message(sender_id)
+                return
+
+            # Task 22: Issue Reporting Detection
+            if message_text and any(word in message_text.lower() for word in ["issue", "problem", "report", "broken", "not working", "complain", "help me"]):
+                issue_reporting_sessions[sender_id] = {"step": "awaiting_description", "timestamp": datetime.datetime.now()}
+                await send_whatsapp_message(
+                    sender_id,
+                    "⚠️ *Issue Reporting Mode*\n\n"
+                    "I'm sorry to hear you're experiencing an issue. Please describe the problem in detail.\n\n"
+                    "You can also send a **Photo** or **Voice Note** to help us understand the situation better. 📸 🎤"
+                )
                 return
 
             if message_text and sender_id in persistent_mode_sessions and not serviceitems_text and not category_text:
@@ -2178,6 +2292,14 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                         else:
                             # Only send text message if there's no menu
                             await send_whatsapp_message(sender_id, ai_result["text"])
+                            
+                            # Task 19: Log Inquiry for Tracking
+                            asyncio.create_task(log_guest_inquiry(
+                                sender_id, 
+                                user_villa_code or "WEB_VILLA_01",
+                                message_text,
+                                ai_result["text"]
+                            ))
                     else:
                         await send_whatsapp_message(
                             sender_id, 

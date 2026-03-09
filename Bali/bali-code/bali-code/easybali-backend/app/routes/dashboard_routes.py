@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.db.session import order_collection, passport_collection, checkin_collection
+from app.db.session import order_collection, passport_collection, checkin_collection, inquiry_collection, issue_collection
 from typing import Dict, Any, Optional
 from datetime import datetime
 
@@ -23,8 +23,13 @@ async def get_dashboard_stats() -> Dict[str, Any]:
         revenue_result = await order_collection.aggregate(pipeline).to_list(1)
         revenue = revenue_result[0]["total_revenue"] if revenue_result else 0
         
-        # Pending inquiries
-        pending_inquiries = await order_collection.count_documents({"status": {"$in": ["payment_pending", "pending", "init"]}})
+        # Pending inquiries (Orders pending + AI Inquiries)
+        pending_orders = await order_collection.count_documents({"status": {"$in": ["payment_pending", "pending", "init"]}})
+        recent_ai_inquiries = await inquiry_collection.count_documents({"timestamp": {"$gte": datetime.utcnow().replace(hour=0, minute=0, second=0)}})
+        pending_inquiries = pending_orders + recent_ai_inquiries
+
+        # Reported Issues (Recent issues)
+        reported_issues = await issue_collection.count_documents({"status": {"$ne": "resolved"}})
 
         # Recent activity - fetch latest 5 orders
         recent_orders = await order_collection.find().sort("updated_at", -1).limit(5).to_list(5)
@@ -60,10 +65,11 @@ async def get_dashboard_stats() -> Dict[str, Any]:
         return {
             "success": True,
             "stats": {
-                "activeGuests": active_guests or 5,  # fallback to visual 5 if DB empty
-                "totalBookings": total_bookings or 12,
-                "revenue": revenue or 0,
-                "pendingInquiries": pending_inquiries or 2
+                "activeGuests": active_guests,
+                "totalBookings": total_bookings,
+                "revenue": revenue,
+                "pendingInquiries": pending_inquiries,
+                "reportedIssues": reported_issues
             },
             "recentActivity": recent_activity
         }
@@ -239,6 +245,72 @@ async def get_checkins() -> Dict[str, Any]:
             "success": False,
             "error": "Failed to fetch check-ins",
             "checkins": []
+        }
+
+@router.get("/issues")
+async def get_issues() -> Dict[str, Any]:
+    try:
+        # Fetch latest 50 issues
+        recent_issues = await issue_collection.find().sort("timestamp", -1).limit(50).to_list(50)
+        
+        issue_list = []
+        for i in recent_issues:
+            time_val = i.get("timestamp")
+            time_str = time_val.strftime("%Y-%m-%d %H:%M:%S") if hasattr(time_val, "strftime") else "Recently"
+            
+            issue_list.append({
+                "id": str(i.get("_id")),
+                "guest_id": i.get("sender_id"),
+                "villa_code": i.get("villa_code", "N/A"),
+                "description": i.get("description", ""),
+                "media_type": i.get("media_type", "text"),
+                "status": i.get("status", "pending"),
+                "time": time_str
+            })
+
+        return {
+            "success": True,
+            "issues": issue_list
+        }
+    except Exception as e:
+        print(f"Error fetching issues: {e}")
+        return {
+            "success": False,
+            "error": "Failed to fetch issues",
+            "issues": []
+        }
+
+@router.get("/inquiries")
+async def get_inquiries() -> Dict[str, Any]:
+    try:
+        # Fetch latest 50 AI inquiries
+        recent_inquiries = await inquiry_collection.find().sort("timestamp", -1).limit(50).to_list(50)
+        
+        inquiry_list = []
+        for i in recent_inquiries:
+            time_val = i.get("timestamp")
+            time_str = time_val.strftime("%Y-%m-%d %H:%M:%S") if hasattr(time_val, "strftime") else "Recently"
+            
+            inquiry_list.append({
+                "id": str(i.get("_id")),
+                "guest_id": i.get("sender_id"),
+                "villa_code": i.get("villa_code", "N/A"),
+                "query": i.get("query", ""),
+                "response": i.get("response", ""),
+                "status": i.get("status", "responded"),
+                "time": time_str
+            })
+
+        return {
+            "success": True,
+            "inquiries": inquiry_list
+        }
+    except Exception as e:
+        print(f"Error fetching inquiries: {e}")
+        return {
+            "success": False,
+            "error": "Failed to fetch inquiries",
+            "inquiries": []
         }
 
 @router.put("/passports/{passport_id}/verify")

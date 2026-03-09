@@ -12,7 +12,11 @@ import {
     FiBook,
     FiClock,
     FiDollarSign,
-    FiActivity
+    FiActivity,
+    FiAlertCircle,
+    FiSettings,
+    FiPlusSquare,
+    FiStar
 } from 'react-icons/fi';
 
 const DashboardLayout = () => {
@@ -46,10 +50,15 @@ const DashboardLayout = () => {
 
     let navItems = [
         { path: '/dashboard', icon: <FiHome className="text-xl" />, label: 'Overview', roles: ['admin', 'staff', 'read_only'] },
-        { path: '/dashboard/guests', icon: <FiUser className="text-xl" />, label: 'Guest Activity', roles: ['admin', 'staff', 'read_only'] },
+        { path: '/dashboard/guests', icon: <FiUser className="text-xl" />, label: 'Guest activity', roles: ['admin', 'staff', 'read_only'] },
+        { path: '/dashboard/bookings', icon: <FiBook className="text-xl" />, label: 'Bookings', roles: ['admin', 'staff', 'read_only'] },
+        { path: '/dashboard/issues', icon: <FiAlertCircle className="text-xl" />, label: 'Maintenance Issues', roles: ['admin', 'staff', 'read_only'] },
+        { path: '/dashboard/checkins', icon: <FiHome className="text-xl" />, label: 'Villa Arrivals', roles: ['admin', 'staff', 'read_only'] },
+        { path: '/dashboard/villa-profile', icon: <FiSettings className="text-xl" />, label: 'Property Profile', roles: ['admin', 'staff'] },
         { path: '/dashboard/chats', icon: <FiMessageSquare className="text-xl" />, label: 'Concierge Chats', roles: ['admin', 'staff'] },
         { path: '/dashboard/faqs', icon: <FiBook className="text-xl" />, label: 'AI Memory Rules', roles: ['admin', 'staff'] },
         { path: '/dashboard/automations', icon: <FiClock className="text-xl" />, label: 'Automated Messaging', roles: ['admin', 'staff'] },
+        { path: '/dashboard/feedback', icon: <FiStar className="text-xl" />, label: 'Guest Feedback', roles: ['admin', 'staff', 'read_only'] },
         { path: '/dashboard/passports', icon: <FiFileText className="text-xl" />, label: 'Passports', roles: ['admin'] },
         { path: '/dashboard/promos', icon: <FiTag className="text-xl" />, label: 'Promo Codes', roles: ['admin', 'staff'] },
         { path: '/dashboard/customers', icon: <FiUser className="text-xl" />, label: 'Customers', roles: ['admin'] },

@@ -75,3 +75,26 @@ async def process_whatsapp_passport(sender_id: str, media_id: str, villa_code: s
     except Exception as e:
         logger.error(f"Failed to process WhatsApp passport {media_id}: {e}")
         return False, "Sorry, there was an issue processing your document. Please try again later."
+
+async def process_whatsapp_issue(sender_id: str, media_id: str, villa_code: str, description: str, media_type: str = "image"):
+    """Handles issue reporting with media attachments."""
+    try:
+        file_bytes, content_type = await download_whatsapp_media(media_id)
+        s3_key, s3_url = upload_bytes_to_s3(file_bytes, content_type, folder="issues")
+        
+        issue_data = {
+            "sender_id": sender_id,
+            "villa_code": villa_code,
+            "description": description,
+            "media_url": s3_url,
+            "s3_key": s3_key,
+            "media_type": media_type,
+            "status": "pending",
+            "timestamp": datetime.utcnow()
+        }
+        await issue_collection.insert_one(issue_data)
+        logger.info(f"Issue for villa {villa_code} reported with {media_type}. URL: {s3_url}")
+        return True, s3_url
+    except Exception as e:
+        logger.error(f"Failed to process WhatsApp issue {media_id}: {e}")
+        return False, None

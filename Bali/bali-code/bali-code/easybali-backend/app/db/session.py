@@ -4,8 +4,7 @@ from app.settings.config import settings
 import certifi
 import urllib.parse
 
-# Safely inject connection resilience parameters directly into the Atlas connection string.
-# Motor/PyMongo often ignore **kwargs when connecting to mongodb+srv:// endpoints.
+# Atlas URL construction
 uri = settings.MONGO_URII
 if "?" in uri:
     uri += "&tls=true&tlsAllowInvalidCertificates=true&serverSelectionTimeoutMS=5000&connectTimeoutMS=10000"
@@ -14,9 +13,11 @@ else:
 
 client = AsyncIOMotorClient(uri, tlsCAFile=certifi.where())
 db = client.get_database('easybali')
+
 order_collection = db["orders-summary"]
 villa_code_collection = db['villa-codes']
 passport_collection = db['passports']
 checkin_collection = db['checkins']
 issue_collection = db['issues']
 inquiry_collection = db['inquiries']
+feedback_collection = db['feedback']

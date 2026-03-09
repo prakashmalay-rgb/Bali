@@ -1,66 +1,76 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Query
 from app.db.session import order_collection, passport_collection, checkin_collection, inquiry_collection, issue_collection
-from typing import Dict, Any, Optional
+from app.utils.auth import requires_role
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 
-router = APIRouter(prefix="/dashboard-api", tags=["Dashboard"])
+router = APIRouter(prefix="/dashboard-api", tags=["Dashboard"], dependencies=[Depends(requires_role("read_only"))])
 
 @router.get("/stats")
-async def get_dashboard_stats() -> Dict[str, Any]:
+async def get_dashboard_stats(user: dict = Depends(requires_role("read_only"))) -> Dict[str, Any]:
     try:
+        # Check if user is restricted to specific villas
+        villa_filter = {}
+        if "*" not in user.get("villa_codes", ["*"]):
+            villa_filter = {"villa_code": {"$in": user["villa_codes"]}}
+
         # Total bookings
-        total_bookings = await order_collection.count_documents({})
+        total_bookings = await order_collection.count_documents(villa_filter)
         
         # Active Guests - count of distinct sender_ids
-        unique_guests = await order_collection.distinct("sender_id")
+        unique_guests = await order_collection.distinct("sender_id", villa_filter)
         active_guests = len(unique_guests)
         
         # Revenue - Sum of "payment.paid_amount" for PAID orders
         pipeline = [
             {"$match": {"status": "PAID"}},
+            {"$match": villa_filter},
             {"$group": {"_id": None, "total_revenue": {"$sum": "$payment.paid_amount"}}}
         ]
         revenue_result = await order_collection.aggregate(pipeline).to_list(1)
         revenue = revenue_result[0]["total_revenue"] if revenue_result else 0
         
-        # Pending inquiries (Orders pending + AI Inquiries)
-        pending_orders = await order_collection.count_documents({"status": {"$in": ["payment_pending", "pending", "init"]}})
-        recent_ai_inquiries = await inquiry_collection.count_documents({"timestamp": {"$gte": datetime.utcnow().replace(hour=0, minute=0, second=0)}})
-        pending_inquiries = pending_orders + recent_ai_inquiries
+        # Pending Inquiries and Issues
+        pending_inquiries = await inquiry_collection.count_documents({"intent": "support_request", **villa_filter})
+        reported_issues = await issue_collection.count_documents({"status": "open", **villa_filter})
 
-        # Reported Issues (Recent issues)
-        reported_issues = await issue_collection.count_documents({"status": {"$ne": "resolved"}})
-
-        # Recent activity - fetch latest 5 orders
-        recent_orders = await order_collection.find().sort("updated_at", -1).limit(5).to_list(5)
+        # Recent activity slice
+        o_short = await order_collection.find(villa_filter).sort("updated_at", -1).limit(5).to_list(5)
+        inq_short = await inquiry_collection.find(villa_filter).sort("timestamp", -1).limit(5).to_list(5)
+        iss_short = await issue_collection.find(villa_filter).sort("timestamp", -1).limit(5).to_list(5)
         
-        recent_activity = []
-        for order in recent_orders:
-            # Map database status to UI status
-            db_status = order.get("status", "pending")
-            if db_status == "PAID":
-                ui_status = "confirmed"
-            elif db_status in ["init", "payment_pending", "pending"]:
-                ui_status = "pending"
-            else:
-                ui_status = "resolved" # fallback for expired/failed etc
-                
-            time_val = order.get("updated_at") or order.get("created_at")
-            time_str = time_val.strftime("%H:%M %d/%m") if hasattr(time_val, "strftime") else "Recently"
-            
-            recent_activity.append({
-                "id": order.get("order_number", str(order.get("_id"))),
-                "guest": f"Guest ({str(order.get('sender_id', 'Unknown'))[-4:]})",
-                "action": f"Requested {order.get('service_name', 'Service')}",
-                "time": time_str,
-                "status": ui_status
+        combined_recent = []
+        for o in o_short:
+            combined_recent.append({
+                "id": str(o["_id"]),
+                "guest": f"Guest {str(o.get('sender_id', ''))[-4:]}",
+                "action": f"Booked {o.get('service_name', 'Service')}",
+                "time": (o.get("updated_at") or o.get("created_at")),
+                "status": "confirmed" if o.get("status") == "PAID" else "pending"
+            })
+        for i in inq_short:
+            combined_recent.append({
+                "id": str(i["_id"]),
+                "guest": f"Guest {str(i.get('sender_id', ''))[-4:]}",
+                "action": "Messaged AI",
+                "time": i.get("timestamp"),
+                "status": "resolved"
+            })
+        for s in iss_short:
+            combined_recent.append({
+                "id": str(s["_id"]),
+                "guest": f"Guest {str(s.get('sender_id', ''))[-4:]}",
+                "action": "Reported Issue",
+                "time": s.get("timestamp"),
+                "status": "pending" if s.get("status") == "open" else "completed"
             })
             
-        # Add fallback empty activity gracefully
-        if not recent_activity:
-            recent_activity = [
-                { "id": "1", "guest": "System", "action": "Dashboard Initialized", "time": "Just now", "status": "confirmed" }
-            ]
+        combined_recent.sort(key=lambda x: x["time"] if isinstance(x["time"], datetime) else datetime.utcnow(), reverse=True)
+        for item in combined_recent:
+            if isinstance(item["time"], datetime):
+                item["time"] = item["time"].strftime("%H:%M %d/%m")
+            else:
+                item["time"] = "Recently"
 
         return {
             "success": True,
@@ -68,76 +78,73 @@ async def get_dashboard_stats() -> Dict[str, Any]:
                 "activeGuests": active_guests,
                 "totalBookings": total_bookings,
                 "revenue": revenue,
-                "pendingInquiries": pending_inquiries,
+                "pendingInquiries": pending_inquiries + reported_issues,
                 "reportedIssues": reported_issues
             },
-            "recentActivity": recent_activity
+            "recentActivity": combined_recent[:5]
         }
     except Exception as e:
         print(f"Error fetching dashboard stats: {e}")
-        # Return fallback metrics so the UI doesn't break
         return {
             "success": False,
-            "stats": {
-                "activeGuests": 12,
-                "totalBookings": 48,
-                "revenue": 14500000,
-                "pendingInquiries": 3
-            },
-            "recentActivity": [
-                { "id": 1, "guest": "John Doe", "action": "Booked Massage", "time": "10 mins ago", "status": "pending" }
-            ]
+            "stats": { "activeGuests": 0, "totalBookings": 0, "revenue": 0, "pendingInquiries": 0 },
+            "recentActivity": []
         }
 
 @router.get("/activity")
-async def get_guest_activity() -> Dict[str, Any]:
+async def get_guest_activity(user: dict = Depends(requires_role("read_only"))) -> Dict[str, Any]:
     try:
-        # Fetch up to 50 latest orders to represent guest activity timeline
-        recent_orders = await order_collection.find().sort("updated_at", -1).limit(50).to_list(50)
-        
+        villa_filter = {}
+        if "*" not in user.get("villa_codes", ["*"]):
+            villa_filter = {"villa_code": {"$in": user["villa_codes"]}}
+        recent_orders = await order_collection.find(villa_filter).sort("updated_at", -1).limit(20).to_list(20)
+        recent_inquiries = await inquiry_collection.find(villa_filter).sort("timestamp", -1).limit(20).to_list(20)
+        recent_issues = await issue_collection.find(villa_filter).sort("timestamp", -1).limit(20).to_list(20)
         activity_list = []
         for order in recent_orders:
             db_status = order.get("status", "pending")
-            if db_status == "PAID":
-                ui_status = "completed"
-                action_text = f"Paid for {order.get('service_name', 'Service')}"
-                icon_type = "payment"
-            elif db_status in ["init", "payment_pending", "pending"]:
-                ui_status = "pending"
-                action_text = f"Requested {order.get('service_name', 'Service')}"
-                icon_type = "request"
-            else:
-                ui_status = "resolved"
-                action_text = f"Update on {order.get('service_name', 'Service')}"
-                icon_type = "info"
-                
-            time_val = order.get("updated_at") or order.get("created_at")
-            time_str = time_val.strftime("%Y-%m-%d %H:%M:%S") if hasattr(time_val, "strftime") else "Recently"
-            
             activity_list.append({
                 "id": str(order.get("_id")),
-                "order_number": order.get("order_number", "N/A"),
-                "guest_id": str(order.get("sender_id", "Unknown")),
+                "type": "order",
                 "guest_name": f"Guest {str(order.get('sender_id', ''))[-4:]}",
-                "action": action_text,
+                "action": f"Paid for {order.get('service_name')}" if db_status == "PAID" else f"Requested {order.get('service_name')}",
                 "service": order.get("service_name", "Service"),
                 "amount": order.get("payment", {}).get("paid_amount", 0),
-                "time": time_str,
-                "status": ui_status,
-                "icon": icon_type
+                "time": order.get("updated_at") or order.get("created_at") or datetime.utcnow(),
+                "status": "completed" if db_status == "PAID" else "pending",
+                "icon": "payment" if db_status == "PAID" else "request"
             })
-
-        return {
-            "success": True,
-            "activity": activity_list
-        }
+        for inq in recent_inquiries:
+            activity_list.append({
+                "id": str(inq.get("_id")),
+                "type": "inquiry",
+                "guest_name": f"Guest {str(inq.get('sender_id', ''))[-4:]}",
+                "action": "Messaged AI",
+                "service": f"Topic: {inq.get('intent', 'General')}",
+                "amount": 0,
+                "time": inq.get("timestamp") or datetime.utcnow(),
+                "status": "resolved",
+                "icon": "info"
+            })
+        for issue in recent_issues:
+            activity_list.append({
+                "id": str(issue.get("_id")),
+                "type": "issue",
+                "guest_name": f"Guest {str(issue.get('sender_id', ''))[-4:]}",
+                "action": "Reported Issue",
+                "service": (issue.get("description", "Maintenance")[:30] + "...") if issue.get("description") else "Maintenance",
+                "amount": 0,
+                "time": issue.get("timestamp") or datetime.utcnow(),
+                "status": "pending" if issue.get("status") == "open" else "completed",
+                "icon": "request"
+            })
+        activity_list.sort(key=lambda x: x["time"] if isinstance(x["time"], datetime) else datetime.utcnow(), reverse=True)
+        for act in activity_list:
+            if isinstance(act["time"], datetime): act["time"] = act["time"].strftime("%Y-%m-%d %H:%M:%S")
+            else: act["time"] = "Recently"
+        return {"success": True, "activity": activity_list[:50]}
     except Exception as e:
-        print(f"Error fetching guest activity: {e}")
-        return {
-            "success": False,
-            "error": "Failed to fetch activity timeline",
-            "activity": []
-        }
+        return {"success": False, "error": str(e), "activity": []}
 
 @router.get("/chats")
 async def get_concierge_chats() -> Dict[str, Any]:
@@ -145,152 +152,95 @@ async def get_concierge_chats() -> Dict[str, Any]:
     try:
         chat_sessions = []
         for user_id, messages in chat_memory.items():
-            # Calculate simple metrics for the UI
-            user_messages = [m for m in messages if m.get("role") == "user"]
-            last_message_time = "Recently" # Since memory is volatile, we assume active
-            
             chat_sessions.append({
                 "guest_id": user_id,
                 "guest_name": f"Guest {str(user_id)[-4:]}",
                 "message_count": len(messages),
-                "last_active": last_message_time,
+                "last_active": "Recently",
                 "transcript": messages
             })
-            
-        return {
-            "success": True,
-            "sessions": chat_sessions
-        }
+        return {"success": True, "sessions": chat_sessions}
     except Exception as e:
-        print(f"Error fetching chat memory: {e}")
-        return {
-            "success": False,
-            "error": "Failed to fetch chat logs",
-            "sessions": []
-        }
+        return {"success": False, "error": str(e), "sessions": []}
 
 @router.get("/passports")
 async def get_passport_submissions() -> Dict[str, Any]:
     try:
-        # Fetch latest passports
         recent_passports = await passport_collection.find().sort("uploaded_at", -1).limit(50).to_list(50)
-        
         from app.routes.passport_routes import get_presigned_url
-        
         passport_list = []
         for passport in recent_passports:
             time_val = passport.get("uploaded_at")
             time_str = time_val.strftime("%Y-%m-%d %H:%M:%S") if hasattr(time_val, "strftime") else "Recently"
             user_id = str(passport.get("user_id", "Unknown"))
-            guest_name = passport.get("guest_name", f"Guest {user_id[-4:]}")
-            
-            # Use safe presigned URL instead of raw link
             s3_key_raw = passport.get("s3_key") or passport.get("passport_url", "")
             if s3_key_raw.startswith("http"):
                 parsed_key = s3_key_raw.split(".amazonaws.com/")[-1]
             else:
                 parsed_key = s3_key_raw
-                
             secure_url = get_presigned_url(parsed_key) if parsed_key else passport.get("passport_url")
-            
             passport_list.append({
                 "id": str(passport.get("_id")),
                 "guest_id": user_id,
-                "guest_name": guest_name,
+                "guest_name": passport.get("guest_name", f"Guest {user_id[-4:]}"),
                 "villa_code": passport.get("villa_code", "N/A"),
                 "passport_url": secure_url,
-                "status": passport.get("status", "pending_verification"),
+                "status": passport.get("status", "verified" if passport.get("status") == "verified" else "pending_verification"),
                 "time": time_str
             })
-
-        return {
-            "success": True,
-            "passports": passport_list
-        }
+        return {"success": True, "passports": passport_list}
     except Exception as e:
-        print(f"Error fetching passports: {e}")
-        return {
-            "success": False,
-            "error": "Failed to fetch passport submissions",
-            "passports": []
-        }
+        return {"success": False, "error": str(e), "passports": []}
 
 @router.get("/checkins")
 async def get_checkins() -> Dict[str, Any]:
     try:
-        # Fetch latest 50 check-ins
         recent_checkins = await checkin_collection.find().sort("checkin_time", -1).limit(50).to_list(50)
-        
         checkin_list = []
         for c in recent_checkins:
             time_val = c.get("checkin_time")
-            time_str = time_val.strftime("%Y-%m-%d %H:%M:%S") if hasattr(time_val, "strftime") else "Recently"
-            
+            checkout_val = c.get("estimated_checkout")
             checkin_list.append({
                 "id": str(c.get("_id")),
                 "guest_id": c.get("sender_id"),
                 "villa_code": c.get("villa_code", "N/A"),
                 "villa_name": c.get("villa_name", "N/A"),
                 "status": c.get("status", "active"),
-                "time": time_str
+                "time": time_val.strftime("%Y-%m-%d %H:%M:%S") if hasattr(time_val, "strftime") else "Recently",
+                "checkout_time": checkout_val.strftime("%Y-%m-%d %H:%M") if hasattr(checkout_val, "strftime") else "Pending"
             })
-
-        return {
-            "success": True,
-            "checkins": checkin_list
-        }
+        return {"success": True, "checkins": checkin_list}
     except Exception as e:
-        print(f"Error fetching check-ins: {e}")
-        return {
-            "success": False,
-            "error": "Failed to fetch check-ins",
-            "checkins": []
-        }
+        return {"success": False, "error": str(e), "checkins": []}
 
 @router.get("/issues")
 async def get_issues() -> Dict[str, Any]:
     try:
-        # Fetch latest 50 issues
         recent_issues = await issue_collection.find().sort("timestamp", -1).limit(50).to_list(50)
-        
         issue_list = []
         for i in recent_issues:
             time_val = i.get("timestamp")
-            time_str = time_val.strftime("%Y-%m-%d %H:%M:%S") if hasattr(time_val, "strftime") else "Recently"
-            
             issue_list.append({
                 "id": str(i.get("_id")),
                 "guest_id": i.get("sender_id"),
                 "villa_code": i.get("villa_code", "N/A"),
                 "description": i.get("description", ""),
                 "media_type": i.get("media_type", "text"),
+                "media_url": i.get("media_url"),
                 "status": i.get("status", "pending"),
-                "time": time_str
+                "time": time_val.strftime("%Y-%m-%d %H:%M:%S") if hasattr(time_val, "strftime") else "Recently"
             })
-
-        return {
-            "success": True,
-            "issues": issue_list
-        }
+        return {"success": True, "issues": issue_list}
     except Exception as e:
-        print(f"Error fetching issues: {e}")
-        return {
-            "success": False,
-            "error": "Failed to fetch issues",
-            "issues": []
-        }
+        return {"success": False, "error": str(e), "issues": []}
 
 @router.get("/inquiries")
 async def get_inquiries() -> Dict[str, Any]:
     try:
-        # Fetch latest 50 AI inquiries
         recent_inquiries = await inquiry_collection.find().sort("timestamp", -1).limit(50).to_list(50)
-        
         inquiry_list = []
         for i in recent_inquiries:
             time_val = i.get("timestamp")
-            time_str = time_val.strftime("%Y-%m-%d %H:%M:%S") if hasattr(time_val, "strftime") else "Recently"
-            
             inquiry_list.append({
                 "id": str(i.get("_id")),
                 "guest_id": i.get("sender_id"),
@@ -298,71 +248,90 @@ async def get_inquiries() -> Dict[str, Any]:
                 "query": i.get("query", ""),
                 "response": i.get("response", ""),
                 "status": i.get("status", "responded"),
-                "time": time_str
+                "time": time_val.strftime("%Y-%m-%d %H:%M:%S") if hasattr(time_val, "strftime") else "Recently"
             })
-
-        return {
-            "success": True,
-            "inquiries": inquiry_list
-        }
+        return {"success": True, "inquiries": inquiry_list}
     except Exception as e:
-        print(f"Error fetching inquiries: {e}")
-        return {
-            "success": False,
-            "error": "Failed to fetch inquiries",
-            "inquiries": []
-        }
+        return {"success": False, "error": str(e), "inquiries": []}
+
+@router.get("/feedback")
+async def get_feedback(user: dict = Depends(requires_role("read_only"))) -> Dict[str, Any]:
+    try:
+        villa_filter = {}
+        if "*" not in user.get("villa_codes", ["*"]):
+            villa_filter = {"villa_code": {"$in": user["villa_codes"]}}
+        recent_feedback = await feedback_collection.find(villa_filter).sort("timestamp", -1).limit(100).to_list(100)
+        feedback_list = []
+        for f in recent_feedback:
+            time_val = f.get("timestamp")
+            feedback_list.append({
+                "id": str(f.get("_id")),
+                "guest_id": f.get("sender_id"),
+                "villa_code": f.get("villa_code", "N/A"),
+                "rating": f.get("rating"),
+                "time": time_val.strftime("%Y-%m-%d %H:%M:%S") if hasattr(time_val, "strftime") else "Recently"
+            })
+        return {"success": True, "feedback": feedback_list}
+    except Exception as e:
+        return {"success": False, "error": str(e), "feedback": []}
+
+@router.get("/bookings")
+async def get_all_bookings(
+    user: dict = Depends(requires_role("read_only")),
+    status: Optional[str] = Query(None),
+    villa: Optional[str] = Query(None)
+) -> Dict[str, Any]:
+    try:
+        query = {}
+        # Multi-tenant filtering
+        if "*" not in user.get("villa_codes", ["*"]):
+            query["villa_code"] = {"$in": user["villa_codes"]}
+        
+        # Additional filters
+        if status:
+            query["status"] = status
+        if villa:
+            query["villa_code"] = villa
+            
+        bookings = await order_collection.find(query).sort("created_at", -1).limit(100).to_list(100)
+        formatted = []
+        for b in bookings:
+            formatted.append({
+                "id": str(b["_id"]),
+                "order_number": b.get("order_number"),
+                "guest_id": b.get("sender_id"),
+                "service": b.get("service_name"),
+                "villa": b.get("villa_code", "N/A"),
+                "amount": b.get("payment", {}).get("paid_amount", 0),
+                "status": b.get("status", "pending"),
+                "time": b.get("created_at").strftime("%Y-%m-%d %H:%M:%S") if isinstance(b.get("created_at"), datetime) else "Recently"
+            })
+        return {"success": True, "bookings": formatted}
+    except Exception as e:
+        return {"success": False, "error": str(e), "bookings": []}
 
 @router.put("/passports/{passport_id}/verify")
 async def verify_passport(passport_id: str) -> Dict[str, Any]:
     from bson.objectid import ObjectId
     from app.utils.whatsapp_func import send_whatsapp_message
-    
     try:
-        # 1. Find the document
         passport = await passport_collection.find_one({"_id": ObjectId(passport_id)})
-        if not passport:
-            return {"success": False, "error": "Passport submission not found"}
-            
-        # 2. Update status
-        await passport_collection.update_one(
-            {"_id": ObjectId(passport_id)},
-            {"$set": {"status": "verified"}}
-        )
-        
-        # 3. Notify Customer
+        if not passport: return {"success": False, "error": "Passport submission not found"}
+        await passport_collection.update_one({"_id": ObjectId(passport_id)}, {"$set": {"status": "verified"}})
         user_id = passport.get("user_id")
-        guest_name = passport.get("guest_name", "Guest")
         if user_id:
-            msg_customer = f"✅ *Verification Complete!*\n\nHi {guest_name}, your passport has been successfully verified. Welcome to Easy-Bali!"
+            msg_customer = f"✅ *Verification Complete!*\n\nHi {passport.get('guest_name', 'Guest')}, your passport has been successfully verified. Welcome to Easy-Bali!"
             await send_whatsapp_message(user_id, msg_customer)
-            
-        # 4. Notify Villa 
-        villa_code = passport.get("villa_code")
-        if villa_code:
-            msg_villa = f"✅ *Guest Verified!*\n\nThe passport for {guest_name} ({user_id}) has been officially verified by the Admin dashboard."
-            await send_whatsapp_message(villa_code, msg_villa)
-            
         return {"success": True, "message": "Passport verified successfully"}
     except Exception as e:
-        print(f"Error verifying passport {passport_id}: {e}")
         return {"success": False, "error": str(e)}
-
-
-# ──────────────────────────────────────────────────────────────
-# THE "BUCKET" ANALYTICS SYSTEM
-# ──────────────────────────────────────────────────────────────
 
 @router.get("/buckets/customers")
 async def get_customer_bucket(start_date: Optional[str] = None, end_date: Optional[str] = None):
     try:
         match_query = {}
         if start_date and end_date:
-            match_query["created_at"] = {
-                "$gte": datetime.fromisoformat(start_date),
-                "$lte": datetime.fromisoformat(end_date)
-            }
-        
+            match_query["created_at"] = {"$gte": datetime.fromisoformat(start_date), "$lte": datetime.fromisoformat(end_date)}
         pipeline = [
             {"$match": match_query},
             {"$group": {
@@ -375,7 +344,6 @@ async def get_customer_bucket(start_date: Optional[str] = None, end_date: Option
             {"$sort": {"total_spent": -1}},
             {"$limit": 50}
         ]
-        
         results = await order_collection.aggregate(pipeline).to_list(50)
         return {"success": True, "data": results}
     except Exception as e:
@@ -386,11 +354,7 @@ async def get_villa_bucket(start_date: Optional[str] = None, end_date: Optional[
     try:
         match_query = {}
         if start_date and end_date:
-            match_query["created_at"] = {
-                "$gte": datetime.fromisoformat(start_date),
-                "$lte": datetime.fromisoformat(end_date)
-            }
-            
+            match_query["created_at"] = {"$gte": datetime.fromisoformat(start_date), "$lte": datetime.fromisoformat(end_date)}
         pipeline = [
             {"$match": match_query},
             {"$group": {
@@ -411,32 +375,20 @@ async def get_payment_bucket(start_date: Optional[str] = None, end_date: Optiona
     try:
         match_query = {"status": "PAID"}
         if start_date and end_date:
-            match_query["updated_at"] = {
-                "$gte": datetime.fromisoformat(start_date),
-                "$lte": datetime.fromisoformat(end_date)
-            }
-            
-        # Detail view of payments with their split distribution
+            match_query["updated_at"] = {"$gte": datetime.fromisoformat(start_date), "$lte": datetime.fromisoformat(end_date)}
         payments = await order_collection.find(match_query).sort("updated_at", -1).limit(100).to_list(100)
-        
         formatted_payments = []
         for p in payments:
             payment_info = p.get("payment", {})
             dist = payment_info.get("distribution_data", {})
-            
             formatted_payments.append({
                 "order_id": p.get("order_number"),
                 "service": p.get("service_name"),
                 "total_paid": payment_info.get("paid_amount"),
                 "currency": payment_info.get("currency", "IDR"),
-                "splits": {
-                    "sp_share": dist.get("sp_share"),
-                    "villa_share": dist.get("villa_share"),
-                    "eb_share": dist.get("eb_share")
-                },
+                "splits": {"sp_share": dist.get("sp_share"), "villa_share": dist.get("villa_share"), "eb_share": dist.get("eb_share")},
                 "time": p.get("updated_at")
             })
-            
         return {"success": True, "data": formatted_payments}
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -446,11 +398,7 @@ async def get_service_bucket(start_date: Optional[str] = None, end_date: Optiona
     try:
         match_query = {}
         if start_date and end_date:
-            match_query["created_at"] = {
-                "$gte": datetime.fromisoformat(start_date),
-                "$lte": datetime.fromisoformat(end_date)
-            }
-            
+            match_query["created_at"] = {"$gte": datetime.fromisoformat(start_date), "$lte": datetime.fromisoformat(end_date)}
         pipeline = [
             {"$match": match_query},
             {"$group": {
@@ -466,28 +414,83 @@ async def get_service_bucket(start_date: Optional[str] = None, end_date: Optiona
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+@router.get("/villa/profile")
+async def get_villa_profile(user: dict = Depends(requires_role("read_only")), code: Optional[str] = Query(None)) -> Dict[str, Any]:
+    try:
+        # Resolve target villa code
+        target_code = code
+        if not target_code:
+            # Default to first villa in user's restricted list if not provided
+            if "*" not in user.get("villa_codes", ["*"]):
+                target_code = user["villa_codes"][0]
+            else:
+                return {"success": False, "error": "Please specify a villa code"}
+
+        # Security check: Does user have access to this code?
+        if "*" not in user.get("villa_codes", ["*"]) and target_code not in user["villa_codes"]:
+            return {"success": False, "error": "Access denied to this villa"}
+
+        profile = await db["villa_profiles"].find_one({"villa_code": target_code})
+        if not profile:
+            return {
+                "success": True, 
+                "profile": {
+                    "villa_code": target_code,
+                    "manager_phone": "",
+                    "wifi_name": "",
+                    "wifi_password": "",
+                    "house_rules": "",
+                    "orientation_link": "",
+                    "docs": []
+                }
+            }
+        
+        profile["_id"] = str(profile["_id"])
+        return {"success": True, "profile": profile}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@router.post("/villa/profile")
+async def update_villa_profile(profile_data: Dict[str, Any], user: dict = Depends(requires_role("staff"))) -> Dict[str, Any]:
+    try:
+        villa_code = profile_data.get("villa_code")
+        if not villa_code:
+            return {"success": False, "error": "Villa code is required"}
+
+        # Security check
+        if "*" not in user.get("villa_codes", ["*"]) and villa_code not in user["villa_codes"]:
+            return {"success": False, "error": "Access denied to this villa"}
+
+        await db["villa_profiles"].update_one(
+            {"villa_code": villa_code},
+            {"$set": {
+                "manager_phone": profile_data.get("manager_phone", ""),
+                "wifi_name": profile_data.get("wifi_name", ""),
+                "wifi_password": profile_data.get("wifi_password", ""),
+                "house_rules": profile_data.get("house_rules", ""),
+                "orientation_link": profile_data.get("orientation_link", ""),
+                "docs": profile_data.get("docs", []),
+                "updated_at": datetime.utcnow()
+            }},
+            upsert=True
+        )
+        return {"success": True, "message": "Villa profile updated successfully"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 @router.get("/history/{entity_type}/{entity_id}")
 async def get_detailed_history(entity_type: str, entity_id: str):
-    """Drill-down endpoint for history"""
     try:
         query = {}
-        if entity_type == "customer":
-            query = {"sender_id": entity_id}
-        elif entity_type == "villa":
-            query = {"villa_code": entity_id}
-        elif entity_type == "service":
-            query = {"service_name": entity_id}
-        elif entity_type == "provider":
-            query = {"service_provider_code": entity_id}
-            
+        if entity_type == "customer": query = {"sender_id": entity_id}
+        elif entity_type == "villa": query = {"villa_code": entity_id}
+        elif entity_type == "service": query = {"service_name": entity_id}
+        elif entity_type == "provider": query = {"service_provider_code": entity_id}
         history = await order_collection.find(query).sort("created_at", -1).to_list(100)
-        
-        # Clean history for response
         for item in history:
             item["_id"] = str(item["_id"])
             if "created_at" in item: item["created_at"] = item["created_at"].isoformat()
             if "updated_at" in item: item["updated_at"] = item["updated_at"].isoformat()
-            
         return {"success": True, "history": history}
     except Exception as e:
         return {"success": False, "error": str(e)}

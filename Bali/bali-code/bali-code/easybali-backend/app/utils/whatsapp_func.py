@@ -13,14 +13,13 @@ from app.services.invoice_generator import generate_and_upload_invoice
 from app.services.menu_services import get_service_provider_by_whatsapp, get_villa_code_by_name, get_service_base_price, get_villa_info_by_code
 from app.services.order_summary import initiate_chat_session, active_chat_sessions, save_order_to_db, format_order_summary, check_order_confirmation,order_sessions, update_order_confirmation, get_sender_id_by_order, get_order_by_number
 from app.settings.config import settings
-from app.db.session import order_collection, villa_code_collection, checkin_collection, inquiry_collection
+from app.utils.media_upload import process_whatsapp_passport, process_whatsapp_issue
+from app.db.session import order_collection, villa_code_collection, checkin_collection, inquiry_collection, issue_collection, feedback_collection
 from app.models.order_summary import Order
-from typing import Dict
 from app.services.websocket_managerr import ConnectionManager
 from app.services.website_sess import website_sessions
 from app.utils.language_lesson_whatsapp_fucntions import language_starting_message, language_yes_message, language_lesson_response, language_no_message
 from app.services.payment_service import create_xendit_payment_with_distribution, update_order_with_payment_info
-from app.utils.media_upload import process_whatsapp_passport
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +27,7 @@ manager = ConnectionManager()
 
 villa_code_sessions = {}
 issue_reporting_sessions = {}
+feedback_sessions = {}
 
 local_order_store: Dict[str, str] = {}
 
@@ -947,6 +947,13 @@ async def starting_message(recipient_number: str):
                         {
                             "type": "reply",
                             "reply": {
+                                "id": "issue_button",
+                                "title": "Report Issue"
+                            }
+                        },
+                        {
+                            "type": "reply",
+                            "reply": {
                                 "id": "chat_button",
                                 "title": "Chat with Us"
                             }
@@ -970,6 +977,7 @@ async def starting_message(recipient_number: str):
 async def perform_arrival_confirmation(sender_id: str, villa_code: str):
     """Logs check-in, notifies manager, and activates guest profile."""
     try:
+        from app.db.session import db
         villa_info = await get_villa_info_by_code(villa_code)
         villa_name = villa_info.get("name") if villa_info else f"Villa {villa_code}"
         
@@ -981,16 +989,18 @@ async def perform_arrival_confirmation(sender_id: str, villa_code: str):
             "checkin_time": datetime.datetime.now(),
             "status": "active"
         }
-        await checkin_collection.update_one(
+        await db["checkins"].update_one(
             {"sender_id": sender_id, "status": "active"},
             {"$set": checkin_data},
             upsert=True
         )
         
-        # 2. Notify Manager
+        # 2. Fetch Rich Profile from MongoDB (Added for Task 18/19/24)
+        rich_profile = await db["villa_profiles"].find_one({"villa_code": villa_code})
+        
+        # 3. Notify Manager
         if villa_info and villa_info.get("manager_number"):
             manager_num = str(villa_info["manager_number"]).strip()
-            # Ensure manager_num is clean (no +, just digits)
             clean_mgr = "".join(filter(str.isdigit, manager_num))
             
             manager_msg = (
@@ -999,18 +1009,25 @@ async def perform_arrival_confirmation(sender_id: str, villa_code: str):
                 f"Access is now granted for concierge services."
             )
             await send_whatsapp_message(clean_mgr, manager_msg)
-            logger.info(f"Check-in notification sent to Manager {clean_mgr} for {villa_name}")
 
-        # 3. Activation confirmation to guest
-        wifi_info = ""
-        if villa_info and villa_info.get("wifi_name"):
-            wifi_info = f"\n\n📶 *WiFi Details:*\nName: `{villa_info['wifi_name']}`\nPass: `{villa_info.get('wifi_password', 'N/A')}`"
+        # 4. Activation confirmation to guest with rich info
+        wifi_msg = ""
+        # Merge info from Sheet and MongoDB (MongoDB takes priority for WiFi)
+        wifi_name = (rich_profile or {}).get("wifi_name") or villa_info.get("wifi_name", "N/A")
+        wifi_pass = (rich_profile or {}).get("wifi_password") or villa_info.get("wifi_password", "N/A")
+        
+        if wifi_name and wifi_name != "N/A":
+            wifi_msg = f"\n\n📶 *WiFi Details:*\nName: `{wifi_name}`\nPass: `{wifi_pass}`"
+            
+        orientation_msg = ""
+        if rich_profile and rich_profile.get("orientation_link"):
+            orientation_msg = f"\n🎬 *Digital Orientation:* {rich_profile['orientation_link']}"
             
         map_link = f"\n📍 *Villa Location:* {villa_info['map_link']}" if villa_info and villa_info.get("map_link") else ""
 
         guest_conf = (
             f"✅ *Arrival Confirmed!*\n\n"
-            f"Hi {sender_id[-4:]}, welcome to *{villa_name}*. Your profile is now active.{wifi_info}{map_link}\n\n"
+            f"Hi {sender_id[-4:]}, welcome to *{villa_name}*. Your profile is now active.{wifi_msg}{orientation_msg}{map_link}\n\n"
             f"I am your virtual concierge. Type *Order Services* to see what I can do for you, or ask me anything about the villa!"
         )
         await send_whatsapp_message(sender_id, guest_conf)
@@ -1640,6 +1657,17 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                         await send_whatsapp_menu_list_message(recipient_id=sender_id, card_data=menu_data)
                     return
 
+                if button_id == "issue_button":
+                    issue_reporting_sessions[sender_id] = {"timestamp": datetime.datetime.now()}
+                    await send_whatsapp_message(
+                        sender_id,
+                        "⚠️ *Issue Reporting Mode*\n\n"
+                        "I'm sorry to hear you're experiencing an issue. Please describe the problem in detail.\n\n"
+                        "You can also send a **Photo** or **Voice Note** to help us understand the situation better. 📸 🎤\n\n"
+                        "_Type *CANCEL* to exit issue reporting._"
+                    )
+                    return
+
                 if button_id == "chat_button":
                     await send_whatsapp_message(
                         sender_id,
@@ -2095,45 +2123,114 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                 # Logic to process text, image, or voice note as an issue
                 media_id = None
                 media_type = "text"
+                attachment_url = None
+                description = message_text or "See attachment"
+
                 if "image" in message_payload:
                     media_id = message_payload["image"]["id"]
                     media_type = "image"
+                    description = message_payload["image"].get("caption", description)
                 elif "audio" in message_payload:
                     media_id = message_payload["audio"]["id"]
                     media_type = "voice_note"
+                elif "video" in message_payload:
+                    media_id = message_payload["video"]["id"]
+                    media_type = "video"
                 
-                # Log the issue
-                issue_data = {
-                    "sender_id": sender_id,
-                    "villa_code": user_villa_code,
-                    "description": message_text if media_type == "text" else f"Media issue: {media_type}",
-                    "media_id": media_id,
-                    "media_type": media_type,
-                    "timestamp": datetime.datetime.now(),
-                    "status": "pending"
-                }
-                await issue_collection.insert_one(issue_data)
+                if media_id:
+                    success, attachment_url = await process_whatsapp_issue(
+                        sender_id, media_id, user_villa_code, description, media_type
+                    )
+                    if not success:
+                        await send_whatsapp_message(sender_id, "⚠️ Sorry, there was an issue processing your media. Please try sending a text description instead.")
+                        return
+                else:
+                    # Log plain text issue
+                    issue_data = {
+                        "sender_id": sender_id,
+                        "villa_code": user_villa_code,
+                        "description": description,
+                        "media_type": "text",
+                        "status": "pending",
+                        "timestamp": datetime.datetime.now()
+                    }
+                    await issue_collection.insert_one(issue_data)
                 
                 # Notify Villa Manager
+                from app.db.session import db
+                rich_profile = await db["villa_profiles"].find_one({"villa_code": user_villa_code})
                 villa_info = await get_villa_info_by_code(user_villa_code)
-                if villa_info and villa_info.get("manager_number"):
-                    mgr_num = "".join(filter(str.isdigit, str(villa_info["manager_number"])))
+                
+                # Fetch manager number (MongoDB profile takes priority, then Google Sheet)
+                manager_num = (rich_profile or {}).get("manager_phone") or (villa_info or {}).get("manager_number")
+
+                if manager_num:
+                    clean_mgr = "".join(filter(str.isdigit, str(manager_num)))
+                    media_info = f"\n🖼️ *Attachment:* [View Media]({attachment_url})" if attachment_url else ""
+                    
                     mgr_msg = (
-                        f"🚨 *New Issue Reported!*\n\n"
-                        f"Villa: *{villa_info.get('name')}* ({user_villa_code})\n"
-                        f"Guest ID: `{sender_id[-4:]}`\n"
-                        f"Issue: {issue_data['description']}\n"
-                        f"Type: {media_type.capitalize()}"
+                        f"🚨 *NEW ISSUE REPORTED!*\n\n"
+                        f"Villa: *{(villa_info or {}).get('name', user_villa_code)}*\n"
+                        f"Guest ID: `...{sender_id[-4:]}`\n"
+                        f"Issue: {description}{media_info}\n\n"
+                        f"Please check the dashboard for details."
                     )
-                    await send_whatsapp_message(mgr_num, mgr_msg)
+                    await send_whatsapp_message(clean_mgr, mgr_msg)
                 
                 issue_reporting_sessions.pop(sender_id, None)
                 await send_whatsapp_message(
                     sender_id,
                     "✅ *Issue Received*\n\n"
-                    "Thank you for reporting this. Our team and the villa manager have been notified and will address this as soon as possible."
+                    "Thank you for reporting this. Our maintenance team and the villa manager have been notified and will address this as soon as possible."
                 )
                 return
+
+            # Task 22/23: Feedback Collection Detector
+            if message_text and message_text.strip() in ["1", "2", "3", "4", "5"]:
+                checkin = await checkin_collection.find_one(
+                    {"sender_id": sender_id, "automations_sent.feedback_request": True},
+                    sort=[("checkin_time", -1)]
+                )
+                if checkin:
+                    rating = int(message_text.strip())
+                    await feedback_collection.insert_one({
+                        "sender_id": sender_id,
+                        "villa_code": user_villa_code,
+                        "rating": rating,
+                        "timestamp": datetime.datetime.now()
+                    })
+                    
+                    if rating >= 4:
+                        # Task 23: Positive Feedback
+                        review_msg = (
+                            "💖 *Thank you so much!* We are thrilled you had a great stay.\n\n"
+                            "It would mean a lot to us if you could share your experience with other travelers on Google or TripAdvisor:\n"
+                            "👉 [Leave a Review](https://g.page/r/easybali/review)\n\n"
+                            "Have a safe flight! ✈️"
+                        )
+                        await send_whatsapp_message(sender_id, review_msg)
+                    else:
+                        # Task 23: Critical Feedback - Notify Manager
+                        sorry_msg = (
+                            "😔 *We are truly sorry to hear that.*\n\n"
+                            "We strive for 5-star experiences and it seems we missed the mark. Our manager has been notified and we will review your feedback to improve.\n\n"
+                            "Was there something specific we could have done better?"
+                        )
+                        await send_whatsapp_message(sender_id, sorry_msg)
+                        
+                        # Notify Manager
+                        rich_profile = await db["villa_profiles"].find_one({"villa_code": user_villa_code})
+                        mgr_num = (rich_profile or {}).get("manager_phone") or (await get_villa_info_by_code(user_villa_code) or {}).get("manager_number")
+                        if mgr_num:
+                            alert = (
+                                f"⚠️ *Low Rating Alert!*\n\n"
+                                f"Villa: *{user_villa_code}*\n"
+                                f"Guest ID: `...{sender_id[-4:]}`\n"
+                                f"Rating: {rating}/5 Stars\n\n"
+                                f"Please follow up to address any grievances."
+                            )
+                            await send_whatsapp_message("".join(filter(str.isdigit, str(mgr_num))), alert)
+                    return
 
             if message_text and message_text.lower() in ["hello", "hi", "hey", "good morning", "good afternoon", "good evening", "hey there", "hi there", "hello there", "howdy", "what's up?", "how are you?", "how's it going?", "yo", "greetings", "bonjour"]:
                 await starting_message(sender_id)

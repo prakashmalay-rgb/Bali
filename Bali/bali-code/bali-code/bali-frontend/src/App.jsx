@@ -25,6 +25,11 @@ import PassportVerification from "./page/dashboard/PassportVerification";
 import PromoManagement from "./page/dashboard/PromoManagement";
 import FAQManagement from "./page/dashboard/FAQManagement";
 import MessageAutomations from "./page/dashboard/MessageAutomations";
+import BookingsView from "./page/dashboard/BookingsView";
+import IssuesView from "./page/dashboard/IssuesView";
+import CheckinsView from "./page/dashboard/CheckinsView";
+import VillaProfile from "./page/dashboard/VillaProfile";
+import FeedbackView from "./page/dashboard/FeedbackView";
 import CustomerBucket from "./page/dashboard/CustomerBucket";
 import VillaBucket from "./page/dashboard/VillaBucket";
 import PaymentBucket from "./page/dashboard/PaymentBucket";
@@ -136,6 +141,26 @@ const appRouter = createBrowserRouter([
       {
         path: "passports",
         element: <PassportVerification />,
+      },
+      {
+        path: "bookings",
+        element: <BookingsView />,
+      },
+      {
+        path: "issues",
+        element: <IssuesView />,
+      },
+      {
+        path: "checkins",
+        element: <CheckinsView />,
+      },
+      {
+        path: "feedback",
+        element: <FeedbackView />,
+      },
+      {
+        path: "villa-profile",
+        element: <VillaProfile />,
       },
       {
         path: "promos",

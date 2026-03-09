@@ -1,0 +1,77 @@
+import logging
+import uuid
+import httpx
+import boto3
+from botocore.config import Config
+from app.settings.config import settings
+from app.db.session import db
+from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
+passport_collection = db["passports"]
+issue_collection = db.get_collection("issues")
+
+_s3 = boto3.client(
+    's3',
+    aws_access_key_id=settings.AWS_ACCESS_KEY,
+    aws_secret_access_key=settings.AWS_SECRET_KEY,
+    region_name=settings.AWS_REGION,
+    config=Config(signature_version='s3v4')
+)
+
+async def download_whatsapp_media(media_id: str):
+    """Downloads media from WhatsApp given its Media ID."""
+    url = f"https://graph.facebook.com/v21.0/{media_id}"
+    headers = {"Authorization": f"Bearer {settings.access_token}"}
+    
+    async with httpx.AsyncClient() as client:
+        res = await client.get(url, headers=headers)
+        res.raise_for_status()
+        media_url = res.json()["url"]
+        
+        media_res = await client.get(media_url, headers=headers)
+        media_res.raise_for_status()
+        
+        return media_res.content, media_res.headers.get("content-type", "image/jpeg")
+
+def upload_bytes_to_s3(file_bytes: bytes, content_type: str, folder: str = "passports") -> tuple:
+    """Uploads file bytes directly to S3 without ACLs."""
+    ext = ".jpg"
+    if "image/png" in content_type: ext = ".png"
+    elif "image/webp" in content_type: ext = ".webp"
+    elif "application/pdf" in content_type: ext = ".pdf"
+        
+    key = f"{folder}/{uuid.uuid4()}{ext}"
+    
+    _s3.put_object(
+        Bucket=settings.AWS_BUCKET_NAME,
+        Key=key,
+        Body=file_bytes,
+        ContentType=content_type
+    )
+    url = f"https://{settings.AWS_BUCKET_NAME}.s3.{settings.AWS_REGION}.amazonaws.com/{key}"
+    return key, url
+
+async def process_whatsapp_passport(sender_id: str, media_id: str, villa_code: str = "UNKNOWN"):
+    """Downloads WA media, uploads to S3, and saves as a pending passport."""
+    try:
+        file_bytes, content_type = await download_whatsapp_media(media_id)
+        s3_key, s3_url = upload_bytes_to_s3(file_bytes, content_type, folder="passports")
+        
+        passport_data = {
+            "user_id": sender_id,
+            "villa_code": villa_code,
+            "guest_name": f"WhatsApp Guest {sender_id[-4:]}",
+            "passport_url": s3_url,
+            "s3_key": s3_key,
+            "status": "pending_verification",
+            "uploaded_at": datetime.utcnow(),
+            "expires_at": datetime.utcnow() + timedelta(days=90),
+            "source": "whatsapp"
+        }
+        await passport_collection.insert_one(passport_data)
+        logger.info(f"Passport for {sender_id} saved from WhatsApp. URL: {s3_url}")
+        return True, "Your passport has been submitted successfully and is pending verification. Welcome!"
+    except Exception as e:
+        logger.error(f"Failed to process WhatsApp passport {media_id}: {e}")
+        return False, "Sorry, there was an issue processing your document. Please try again later."

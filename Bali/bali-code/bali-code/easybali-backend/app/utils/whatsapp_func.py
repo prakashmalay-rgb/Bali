@@ -20,7 +20,7 @@ from app.services.websocket_managerr import ConnectionManager
 from app.services.website_sess import website_sessions
 from app.utils.language_lesson_whatsapp_fucntions import language_starting_message, language_yes_message, language_lesson_response, language_no_message
 from app.services.payment_service import create_xendit_payment_with_distribution, update_order_with_payment_info
-
+from app.utils.media_upload import process_whatsapp_passport
 
 logger = logging.getLogger(__name__)
 
@@ -1477,6 +1477,15 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
 
         if "text" in message_payload:
             message_text = message_payload["text"]["body"].strip()
+        elif "image" in message_payload or "document" in message_payload:
+            # Handle media uploads for passport/document submission
+            media_info = message_payload.get("image") or message_payload.get("document")
+            media_id = media_info.get("id")
+            if media_id:
+                user_villa_code = await get_user_villa_code(sender_id) or "UNKNOWN"
+                success, msg = await process_whatsapp_passport(sender_id, media_id, user_villa_code)
+                await send_whatsapp_message(sender_id, msg)
+                return
         elif "interactive" in message_payload:
             persistent_mode_sessions.pop(sender_id, None)
             language_lesson_sessions.pop(sender_id, None)

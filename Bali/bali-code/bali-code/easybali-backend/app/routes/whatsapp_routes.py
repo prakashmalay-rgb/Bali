@@ -98,6 +98,10 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                         message_payload["interactive"] = message["interactive"]
                     elif "text" in message:
                         message_payload["text"] = message["text"]
+                    elif "image" in message:
+                        message_payload["image"] = message["image"]
+                    elif "document" in message:
+                        message_payload["document"] = message["document"]
                     
                     # Process message asynchronously
                     background_tasks.add_task(process_message, sender_id, message_payload, message_id)

@@ -326,7 +326,7 @@ const PassportVerification = () => {
                             </button>
                         </div>
 
-                        <div className="flex-1 overflow-auto bg-gray-50 p-8 flex items-center justify-center min-h-[400px]">
+                        <div className="flex-1 overflow-auto bg-gray-50 p-4 md:p-8 flex items-center justify-center min-h-0">
                             {!selectedPassport.passport_url || imgError ? (
                                 <div className="text-center space-y-3">
                                     <FiFileText className="w-16 h-16 text-gray-300 mx-auto" />
@@ -334,12 +334,12 @@ const PassportVerification = () => {
                                     <p className="text-xs text-lightneutral">The file could not be loaded. It may have been deleted or not yet uploaded.</p>
                                 </div>
                             ) : selectedPassport.passport_url?.toLowerCase().split('?')[0].endsWith('.pdf') ? (
-                                <iframe src={selectedPassport.passport_url} className="w-full h-[500px] rounded-2xl shadow-xl border-0" title="PDF Viewer" />
+                                <iframe src={selectedPassport.passport_url} className="w-full h-[50vh] md:h-[500px] rounded-2xl shadow-xl border-0" title="PDF Viewer" />
                             ) : (
                                 <img
                                     src={selectedPassport.passport_url}
                                     alt="Document"
-                                    className="max-w-full max-h-full object-contain rounded-2xl shadow-xl"
+                                    className="max-w-full max-h-[60vh] object-contain rounded-2xl shadow-xl"
                                     onError={() => setImgError(true)}
                                 />
                             )}

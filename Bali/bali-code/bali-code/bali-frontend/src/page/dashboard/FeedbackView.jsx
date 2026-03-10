@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { FiStar, FiSearch, FiFilter, FiUser, FiHome, FiMessageSquare } from 'react-icons/fi';
+import { useState, useEffect } from 'react';
+import { FiStar, FiSearch, FiUser, FiHome, FiMessageSquare } from 'react-icons/fi';
 import { API_BASE_URL, apiRequest } from '../../api/apiClient';
 import axios from 'axios';
 
@@ -31,6 +31,12 @@ const FeedbackView = () => {
         f.villa_code?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    const avgRating = feedback.length > 0
+        ? (feedback.reduce((sum, f) => sum + (f.rating || 0), 0) / feedback.length).toFixed(1)
+        : null;
+    const positive = feedback.filter(f => f.rating >= 4).length;
+    const critical = feedback.filter(f => f.rating < 4).length;
+
     const renderStars = (rating) => {
         return (
             <div className="flex gap-1">
@@ -53,6 +59,23 @@ const FeedbackView = () => {
                     <p className="text-sm font-medium text-lightneutral mt-1">Review management and satisfaction tracking.</p>
                 </div>
             </div>
+
+            {feedback.length > 0 && (
+                <div className="grid grid-cols-3 gap-4">
+                    <div className="bg-white/70 backdrop-blur-xl border border-white rounded-[2rem] p-5 text-center shadow-sm">
+                        <p className="text-3xl font-black text-amber-500">{avgRating}</p>
+                        <p className="text-[10px] font-black uppercase text-lightneutral tracking-widest mt-1">Avg Rating</p>
+                    </div>
+                    <div className="bg-white/70 backdrop-blur-xl border border-white rounded-[2rem] p-5 text-center shadow-sm">
+                        <p className="text-3xl font-black text-emerald-500">{positive}</p>
+                        <p className="text-[10px] font-black uppercase text-lightneutral tracking-widest mt-1">Positive</p>
+                    </div>
+                    <div className="bg-white/70 backdrop-blur-xl border border-white rounded-[2rem] p-5 text-center shadow-sm">
+                        <p className="text-3xl font-black text-rose-500">{critical}</p>
+                        <p className="text-[10px] font-black uppercase text-lightneutral tracking-widest mt-1">Critical</p>
+                    </div>
+                </div>
+            )}
 
             <div className="flex flex-col md:flex-row gap-4 bg-white/60 backdrop-blur-md p-4 rounded-[2rem] border border-white shadow-sm">
                 <div className="flex-1 relative group">
@@ -92,9 +115,15 @@ const FeedbackView = () => {
                                         <FiUser size={12} className="text-secondary" />
                                         <span>Guest: ...{item.guest_id ? item.guest_id.slice(-4) : 'Unknown'}</span>
                                     </div>
+                                    {item.comment && (
+                                        <div className="mt-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                            <p className="text-[10px] font-black uppercase text-lightneutral mb-1">Guest Comment</p>
+                                            <p className="text-xs text-neutral italic">"{item.comment}"</p>
+                                        </div>
+                                    )}
                                     <div className="flex items-center gap-2 text-[10px] font-black uppercase text-lightneutral">
                                         <FiMessageSquare size={12} className="text-secondary" />
-                                        <span>Response: {item.rating >= 4 ? 'Automated Review Prompt' : 'Manager Notified'}</span>
+                                        <span>{item.rating >= 4 ? 'Review prompt sent' : 'Manager notified'}</span>
                                     </div>
                                 </div>
                             </div>

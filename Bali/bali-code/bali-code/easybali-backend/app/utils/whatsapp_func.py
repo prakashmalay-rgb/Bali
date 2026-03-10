@@ -2237,26 +2237,43 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                 )
                 return
 
+            # Feedback comment collection (awaiting text after rating)
+            if sender_id in feedback_sessions:
+                session = feedback_sessions[sender_id]
+                comment = message_text.strip() if message_text else ""
+                await feedback_collection.update_one(
+                    {"_id": session["feedback_id"]},
+                    {"$set": {"comment": comment}}
+                )
+                feedback_sessions.pop(sender_id, None)
+                await send_whatsapp_message(sender_id, "Thank you for your comment! We really appreciate it. 🙏")
+                return
+
             # Task 22/23: Feedback Collection Detector
+            # Accept ratings from any guest who has a checkin record (not just after automation)
             if message_text and message_text.strip() in ["1", "2", "3", "4", "5"]:
                 checkin = await checkin_collection.find_one(
-                    {"sender_id": sender_id, "automations_sent.feedback_request": True},
+                    {"sender_id": sender_id},
                     sort=[("checkin_time", -1)]
                 )
                 if checkin:
                     rating = int(message_text.strip())
-                    await feedback_collection.insert_one({
+                    result = await feedback_collection.insert_one({
                         "sender_id": sender_id,
                         "villa_code": user_villa_code,
                         "rating": rating,
+                        "comment": "",
                         "timestamp": datetime.datetime.now()
                     })
-                    
+                    # Open a session to optionally collect a text comment
+                    feedback_sessions[sender_id] = {"feedback_id": result.inserted_id}
+
                     if rating >= 4:
                         # Task 23: Positive Feedback
                         review_msg = (
                             "💖 *Thank you so much!* We are thrilled you had a great stay.\n\n"
-                            "It would mean a lot to us if you could share your experience with other travelers on Google or TripAdvisor:\n"
+                            "Feel free to share any additional comments, or type *skip* to continue.\n\n"
+                            "You can also leave a review for other travelers:\n"
                             "👉 [Leave a Review](https://g.page/r/easybali/review)\n\n"
                             "Have a safe flight! ✈️"
                         )
@@ -2266,10 +2283,10 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                         sorry_msg = (
                             "😔 *We are truly sorry to hear that.*\n\n"
                             "We strive for 5-star experiences and it seems we missed the mark. Our manager has been notified and we will review your feedback to improve.\n\n"
-                            "Was there something specific we could have done better?"
+                            "Was there something specific we could have done better? Please share your comments:"
                         )
                         await send_whatsapp_message(sender_id, sorry_msg)
-                        
+
                         # Notify Manager
                         rich_profile = await db["villa_profiles"].find_one({"villa_code": user_villa_code})
                         mgr_num = (rich_profile or {}).get("manager_phone") or (await get_villa_info_by_code(user_villa_code) or {}).get("manager_number")

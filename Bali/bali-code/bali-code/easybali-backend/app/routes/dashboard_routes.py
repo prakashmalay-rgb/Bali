@@ -273,6 +273,7 @@ async def get_feedback(user: dict = Depends(requires_role("read_only"))) -> Dict
                 "guest_id": f.get("sender_id"),
                 "villa_code": f.get("villa_code", "N/A"),
                 "rating": f.get("rating"),
+                "comment": f.get("comment", ""),
                 "time": time_val.strftime("%Y-%m-%d %H:%M:%S") if hasattr(time_val, "strftime") else "Recently"
             })
         return {"success": True, "feedback": feedback_list}

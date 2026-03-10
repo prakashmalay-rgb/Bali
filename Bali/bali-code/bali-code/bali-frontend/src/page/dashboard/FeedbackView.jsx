@@ -31,11 +31,12 @@ const FeedbackView = () => {
         f.villa_code?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    const avgRating = feedback.length > 0
-        ? (feedback.reduce((sum, f) => sum + (f.rating || 0), 0) / feedback.length).toFixed(1)
+    const ratedEntries = feedback.filter(f => f.rating != null);
+    const avgRating = ratedEntries.length > 0
+        ? (ratedEntries.reduce((sum, f) => sum + f.rating, 0) / ratedEntries.length).toFixed(1)
         : null;
-    const positive = feedback.filter(f => f.rating >= 4).length;
-    const critical = feedback.filter(f => f.rating < 4).length;
+    const positive = ratedEntries.filter(f => f.rating >= 4).length;
+    const critical = ratedEntries.filter(f => f.rating < 4).length;
 
     const renderStars = (rating) => {
         return (
@@ -100,9 +101,15 @@ const FeedbackView = () => {
                         <div key={item.id} className="bg-white/70 backdrop-blur-xl border border-white rounded-[2.5rem] p-6 shadow-sm hover:shadow-md transition-all group flex flex-col justify-between">
                             <div>
                                 <div className="flex justify-between items-start mb-4">
-                                    {renderStars(item.rating)}
-                                    <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase border ${item.rating >= 4 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>
-                                        {item.rating >= 4 ? 'POSITIVE' : 'CRITICAL'}
+                                    {item.rating != null ? renderStars(item.rating) : (
+                                        <span className="text-xs font-bold text-lightneutral italic">Text feedback</span>
+                                    )}
+                                    <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase border ${
+                                        item.rating == null ? 'bg-blue-50 text-blue-600 border-blue-100'
+                                        : item.rating >= 4 ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                        : 'bg-rose-50 text-rose-600 border-rose-100'
+                                    }`}>
+                                        {item.rating == null ? 'COMMENT' : item.rating >= 4 ? 'POSITIVE' : 'CRITICAL'}
                                     </span>
                                 </div>
 

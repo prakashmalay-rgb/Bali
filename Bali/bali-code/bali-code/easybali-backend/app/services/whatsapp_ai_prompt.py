@@ -75,9 +75,9 @@ async def whatsapp_response(query: str, user_id: str, villa_code: str = "WEB_VIL
     try:
         from app.services.menu_services import get_villa_info_by_code
         villa_info = await get_villa_info_by_code(villa_code)
-        villa_context = f"VILLA: {villa_code}"
+        villa_context = f"VILLA: Easy Bali ({villa_code})"
         if villa_info:
-             villa_context = f"VILLA: {villa_info.get('name')} in {villa_info.get('location')}. Address: {villa_info.get('address')}"
+             villa_context = f"VILLA: Easy Bali in {villa_info.get('location')}. Address: {villa_info.get('address')}"
              if villa_info.get('directions'):
                  villa_context += f". Directions: {villa_info.get('directions')}"
 

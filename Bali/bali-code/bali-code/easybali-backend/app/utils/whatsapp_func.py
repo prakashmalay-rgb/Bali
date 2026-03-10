@@ -2249,6 +2249,20 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                 await send_whatsapp_message(sender_id, "Thank you for your comment! We really appreciate it. 🙏")
                 return
 
+            # Text-based feedback detector — catches messages like "my feedback is..." or "service was great"
+            _feedback_keywords = ["my feedback", "feedback:", "feedback is", "i want to give feedback",
+                                   "i'd like to give feedback", "overall experience", "service was",
+                                   "stay was", "experience was", "review:", "my review", "i want to review"]
+            if message_text and any(kw in message_text.lower() for kw in _feedback_keywords):
+                await feedback_collection.insert_one({
+                    "sender_id": sender_id,
+                    "villa_code": user_villa_code,
+                    "rating": None,
+                    "comment": message_text.strip(),
+                    "timestamp": datetime.datetime.now()
+                })
+                # Let the AI respond naturally — don't return here so the AI reply still goes out
+
             # Task 22/23: Feedback Collection Detector
             # Accept ratings from any guest who has a checkin record (not just after automation)
             if message_text and message_text.strip() in ["1", "2", "3", "4", "5"]:

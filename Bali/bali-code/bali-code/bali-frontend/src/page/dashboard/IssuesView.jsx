@@ -87,6 +87,17 @@ const ManageModal = ({ issue, onClose, onUpdated }) => {
                     </div>
                 )}
 
+                {issue.media_url && (
+                    <div>
+                        <p className="text-[10px] font-black uppercase text-lightneutral mb-2 tracking-widest">Attached Media</p>
+                        <div className="bg-gray-50 rounded-2xl p-2 border border-gray-100 flex items-center justify-center">
+                            <a href={issue.media_url} target="_blank" rel="noreferrer" title="Click to view full size">
+                                <img src={issue.media_url} alt="Issue Attachment" className="max-h-48 rounded-xl object-contain shadow-sm cursor-zoom-in hover:opacity-90 transition-opacity" />
+                            </a>
+                        </div>
+                    </div>
+                )}
+
                 <div className="space-y-3">
                     <div>
                         <label className="text-[10px] font-black uppercase text-lightneutral tracking-widest block mb-1">Update Status</label>
@@ -259,7 +270,11 @@ const IssuesView = () => {
                     <div className="col-span-full py-20 text-center font-bold text-lightneutral italic uppercase tracking-widest">No active issues found.</div>
                 ) : (
                     filteredIssues.map((issue) => (
-                        <div key={issue.id} className="bg-white/70 backdrop-blur-xl border border-white rounded-[2.5rem] p-6 shadow-sm hover:shadow-md transition-all group flex flex-col justify-between">
+                        <div
+                            key={issue.id}
+                            onClick={() => setManagingIssue(issue)}
+                            className="bg-white/70 backdrop-blur-xl border border-white rounded-[2.5rem] p-6 shadow-sm hover:shadow-md transition-all group flex flex-col justify-between cursor-pointer"
+                        >
                             <div>
                                 <div className="flex justify-between items-start mb-3">
                                     <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase border ${getStatusStyle(issue.status)}`}>

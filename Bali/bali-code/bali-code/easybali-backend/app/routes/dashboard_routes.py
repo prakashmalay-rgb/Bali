@@ -371,6 +371,7 @@ async def update_issue_status_dashboard(
     body: Dict[str, Any] = {}
 ) -> Dict[str, Any]:
     """Dashboard endpoint to update issue status with history tracking."""
+    from app.utils.whatsapp_func import send_whatsapp_message
     status = body.get("status")
     note = body.get("note", f"Status updated to {status}")
     if not status:
@@ -381,6 +382,11 @@ async def update_issue_status_dashboard(
             "timestamp": datetime.utcnow(),
             "note": note
         }
+        
+        issue = await issue_collection.find_one({"_id": ObjectId(issue_id)})
+        if not issue:
+            return {"success": False, "error": "Issue not found"}
+
         result = await issue_collection.update_one(
             {"_id": ObjectId(issue_id)},
             {
@@ -388,8 +394,17 @@ async def update_issue_status_dashboard(
                 "$push": {"history": history_entry}
             }
         )
-        if result.matched_count == 0:
-            return {"success": False, "error": "Issue not found"}
+        
+        user_id = issue.get("sender_id")
+        if user_id:
+            formatted_status = status.replace("_", " ").title()
+            msg = (
+                f"🔧 *Maintenance Update*\n\n"
+                f"The status of your reported issue has been updated to: *{formatted_status}*.\n\n"
+                f"*Note:* {note}"
+            )
+            await send_whatsapp_message(user_id, msg)
+        
         return {"success": True, "message": f"Issue updated to {status}"}
     except Exception as e:
         return {"success": False, "error": str(e)}

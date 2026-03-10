@@ -1,11 +1,15 @@
 from fastapi import APIRouter, HTTPException, Form, UploadFile, File
 from app.services import issue_service
+from app.db.session import issue_collection   # canonical collection: db["issues"]
 from app.utils.bucket import upload_to_s3
 from typing import Optional
+from bson import ObjectId
+from datetime import datetime
 import logging
 
 router = APIRouter(prefix="/issues", tags=["Maintenance Tracker"])
 logger = logging.getLogger(__name__)
+
 
 @router.post("/submit")
 async def submit_issue(
@@ -15,23 +19,21 @@ async def submit_issue(
     priority: str = Form("medium"),
     image: Optional[UploadFile] = File(None)
 ):
-    """
-    Submit a maintenance issue from a guest.
-    Optional image attachment is uploaded to public S3.
-    """
+    """Submit a maintenance issue from a guest (web channel)."""
     try:
         image_url = None
         if image:
             image_url = await upload_to_s3(image)
-        
+
         issue = await issue_service.create_issue(
             user_id=user_id,
             villa_code=villa_code,
             issue_text=description,
             priority=priority,
-            image_url=image_url
+            image_url=image_url,
+            source="web"
         )
-        
+
         return {
             "status": "success",
             "message": "Maintenance request submitted successfully",
@@ -40,6 +42,7 @@ async def submit_issue(
     except Exception as e:
         logger.error(f"Failed to submit issue: {e}")
         raise HTTPException(status_code=500, detail="Could not submit maintenance request")
+
 
 @router.get("/list/{villa_code}")
 async def list_issues(villa_code: str, status: Optional[str] = None):
@@ -50,37 +53,35 @@ async def list_issues(villa_code: str, status: Optional[str] = None):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.patch("/{issue_id}/status")
-async def update_issue_status(issue_id: str, status: str = Form(...), note: Optional[str] = Form(None)):
-    """Admin route to update issue status (e.g., in-progress, resolved)."""
-    from app.services.issue_service import issue_collection
-    from bson import ObjectId
-    from datetime import datetime
-    
+async def update_issue_status(
+    issue_id: str,
+    status: str = Form(...),
+    note: Optional[str] = Form(None)
+):
+    """Admin route to update issue status (open, in_progress, resolved, closed)."""
     try:
-        update_data = {
-            "status": status,
-            "updated_at": datetime.utcnow()
-        }
-        
         history_entry = {
             "status": status,
             "timestamp": datetime.utcnow(),
             "note": note or f"Status updated to {status}"
         }
-        
+
         result = await issue_collection.update_one(
             {"_id": ObjectId(issue_id)},
             {
-                "$set": update_data,
+                "$set": {"status": status, "updated_at": datetime.utcnow()},
                 "$push": {"history": history_entry}
             }
         )
-        
+
         if result.matched_count == 0:
             raise HTTPException(status_code=404, detail="Issue not found")
-            
+
         return {"status": "success", "message": f"Issue updated to {status}"}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to update issue: {e}")
         raise HTTPException(status_code=500, detail="Update failed")

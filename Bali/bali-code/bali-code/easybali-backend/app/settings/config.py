@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     WHATSAPP_PRIVATE_KEY: str = ""
     XENDIT_PUBLIC_KEY: str = ""
     XENDIT_CALLBACK_TOKEN: str = ""
+    JWT_SECRET_KEY: str = "fallback_secret_for_easybali"
 
     class Config:
         env_file = ".env"

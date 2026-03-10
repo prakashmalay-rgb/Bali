@@ -85,6 +85,7 @@ async def upload_passport(
             "passport_url": file_url,
             "s3_key": file_key,
             "status": "pending_verification",
+            "source": "web",
             "uploaded_at": datetime.utcnow(),
             "expires_at": datetime.utcnow() + timedelta(days=90)
         }

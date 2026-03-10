@@ -1,13 +1,13 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-import jwt
+from jose import jwt
 from datetime import datetime, timedelta
-import os
 import bcrypt
+from app.settings.config import settings
 
 router = APIRouter(prefix="/admin", tags=["Admin Authentication"])
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "fallback_secret_for_easybali")
+SECRET_KEY = settings.JWT_SECRET_KEY
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 24 hours
 

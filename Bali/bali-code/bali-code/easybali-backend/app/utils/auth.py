@@ -8,7 +8,7 @@ from typing import List
 
 security = HTTPBearer()
 
-SECRET_KEY = settings.OPENAI_API_KEY # Re-using key as secret for simplicity, ideally separate
+SECRET_KEY = settings.JWT_SECRET_KEY
 ALGORITHM = "HS256"
 
 # Roles definition

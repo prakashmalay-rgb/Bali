@@ -1,8 +1,11 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from app.db.session import order_collection, passport_collection, checkin_collection, inquiry_collection, issue_collection
 from app.utils.auth import requires_role
 from typing import Dict, Any, Optional, List
 from datetime import datetime
+from bson import ObjectId
+import csv
+import io
 
 router = APIRouter(prefix="/dashboard-api", tags=["Dashboard"], dependencies=[Depends(requires_role("read_only"))])
 
@@ -185,7 +188,8 @@ async def get_passport_submissions() -> Dict[str, Any]:
                 "guest_name": passport.get("guest_name", f"Guest {user_id[-4:]}"),
                 "villa_code": passport.get("villa_code", "N/A"),
                 "passport_url": secure_url,
-                "status": passport.get("status", "verified" if passport.get("status") == "verified" else "pending_verification"),
+                "status": passport.get("status", "pending_verification"),
+                "source": passport.get("source", "whatsapp"),
                 "time": time_str
             })
         return {"success": True, "passports": passport_list}
@@ -312,19 +316,145 @@ async def get_all_bookings(
 
 @router.put("/passports/{passport_id}/verify")
 async def verify_passport(passport_id: str) -> Dict[str, Any]:
-    from bson.objectid import ObjectId
     from app.utils.whatsapp_func import send_whatsapp_message
     try:
         passport = await passport_collection.find_one({"_id": ObjectId(passport_id)})
-        if not passport: return {"success": False, "error": "Passport submission not found"}
-        await passport_collection.update_one({"_id": ObjectId(passport_id)}, {"$set": {"status": "verified"}})
+        if not passport:
+            return {"success": False, "error": "Passport submission not found"}
+        await passport_collection.update_one(
+            {"_id": ObjectId(passport_id)},
+            {"$set": {"status": "verified", "verified_at": datetime.utcnow()}}
+        )
         user_id = passport.get("user_id")
         if user_id:
-            msg_customer = f"✅ *Verification Complete!*\n\nHi {passport.get('guest_name', 'Guest')}, your passport has been successfully verified. Welcome to Easy-Bali!"
-            await send_whatsapp_message(user_id, msg_customer)
-        return {"success": True, "message": "Passport verified successfully"}
+            msg = (
+                f"✅ *Verification Complete!*\n\n"
+                f"Hi {passport.get('guest_name', 'Guest')}, your passport has been successfully verified. "
+                f"Welcome to Easy-Bali! You're all set for your stay."
+            )
+            await send_whatsapp_message(user_id, msg)
+        return {"success": True, "message": "Passport verified and guest notified"}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+@router.put("/passports/{passport_id}/reject")
+async def reject_passport(passport_id: str, body: Dict[str, Any] = {}) -> Dict[str, Any]:
+    from app.utils.whatsapp_func import send_whatsapp_message
+    reason = body.get("reason", "The document could not be verified. Please resubmit a clearer copy.")
+    try:
+        passport = await passport_collection.find_one({"_id": ObjectId(passport_id)})
+        if not passport:
+            return {"success": False, "error": "Passport submission not found"}
+        await passport_collection.update_one(
+            {"_id": ObjectId(passport_id)},
+            {"$set": {"status": "rejected", "rejection_reason": reason, "rejected_at": datetime.utcnow()}}
+        )
+        user_id = passport.get("user_id")
+        if user_id:
+            msg = (
+                f"❌ *Verification Update*\n\n"
+                f"Hi {passport.get('guest_name', 'Guest')}, unfortunately your passport submission could not be verified.\n\n"
+                f"*Reason:* {reason}\n\n"
+                f"Please resubmit a clearer copy of your document. Thank you!"
+            )
+            await send_whatsapp_message(user_id, msg)
+        return {"success": True, "message": "Passport rejected and guest notified"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.patch("/issues/{issue_id}/status")
+async def update_issue_status_dashboard(
+    issue_id: str,
+    body: Dict[str, Any] = {}
+) -> Dict[str, Any]:
+    """Dashboard endpoint to update issue status with history tracking."""
+    status = body.get("status")
+    note = body.get("note", f"Status updated to {status}")
+    if not status:
+        return {"success": False, "error": "status field required"}
+    try:
+        history_entry = {
+            "status": status,
+            "timestamp": datetime.utcnow(),
+            "note": note
+        }
+        result = await issue_collection.update_one(
+            {"_id": ObjectId(issue_id)},
+            {
+                "$set": {"status": status, "updated_at": datetime.utcnow()},
+                "$push": {"history": history_entry}
+            }
+        )
+        if result.matched_count == 0:
+            return {"success": False, "error": "Issue not found"}
+        return {"success": True, "message": f"Issue updated to {status}"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/export/passports")
+async def export_passports() -> Response:
+    """Export all passport submissions as CSV."""
+    records = await passport_collection.find().sort("uploaded_at", -1).to_list(1000)
+    rows = []
+    for p in records:
+        uploaded = p.get("uploaded_at")
+        rows.append({
+            "ID": str(p.get("_id")),
+            "Guest Name": p.get("guest_name", ""),
+            "Villa Code": p.get("villa_code", ""),
+            "Source": p.get("source", ""),
+            "Status": p.get("status", ""),
+            "Uploaded At": uploaded.strftime("%Y-%m-%d %H:%M:%S") if hasattr(uploaded, "strftime") else "",
+        })
+
+    output = io.StringIO()
+    if rows:
+        writer = csv.DictWriter(output, fieldnames=rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+
+    csv_content = output.getvalue()
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=passports_export.csv"}
+    )
+
+
+@router.get("/export/issues")
+async def export_issues() -> Response:
+    """Export all maintenance issues as CSV."""
+    records = await issue_collection.find().sort("timestamp", -1).to_list(1000)
+    rows = []
+    for i in records:
+        ts = i.get("timestamp")
+        rows.append({
+            "ID": str(i.get("_id")),
+            "Guest ID": i.get("sender_id", ""),
+            "Villa Code": i.get("villa_code", ""),
+            "Description": i.get("description", ""),
+            "Priority": i.get("priority", ""),
+            "Status": i.get("status", ""),
+            "Source": i.get("source", ""),
+            "Has Media": "Yes" if i.get("media_url") else "No",
+            "Timestamp": ts.strftime("%Y-%m-%d %H:%M:%S") if hasattr(ts, "strftime") else "",
+        })
+
+    output = io.StringIO()
+    if rows:
+        writer = csv.DictWriter(output, fieldnames=rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+
+    csv_content = output.getvalue()
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=issues_export.csv"}
+    )
 
 @router.get("/buckets/customers")
 async def get_customer_bucket(start_date: Optional[str] = None, end_date: Optional[str] = None):

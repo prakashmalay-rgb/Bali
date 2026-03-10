@@ -907,13 +907,7 @@ async def send_calendar_flow(recipient_id: str):
 
 async def starting_message(recipient_number: str):
     try:
-        from app.services.menu_services import get_villa_info_by_code
-        villa_code = await get_user_villa_code(recipient_number)
-        villa_info = await get_villa_info_by_code(villa_code) if villa_code else None
-        
-        welcome_header = "🌴 Welcome to EASYBali! 🌴"
-        if villa_info:
-            welcome_header = f"🌴 Welcome to {villa_info.get('name', 'EASYBali')}! 🌴"
+        welcome_header = "🌴 Welcome to EasyBali! 🌴"
 
         headers = {
             "Authorization": f"Bearer {settings.access_token}",
@@ -2119,51 +2113,53 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                 )
                 return
 
-        if user_villa_code:
-            # Active Passport Submission Session
-            if sender_id in passport_sessions:
-                session = passport_sessions[sender_id]
-                
-                if message_text == "CANCEL":
-                    passport_sessions.pop(sender_id, None)
-                    await send_whatsapp_message(sender_id, "Passport submission cancelled.")
-                    await starting_message(sender_id)
+        # Active Passport Submission Session — handled regardless of villa code
+        if sender_id in passport_sessions:
+            session = passport_sessions[sender_id]
+
+            if message_text == "CANCEL":
+                passport_sessions.pop(sender_id, None)
+                await send_whatsapp_message(sender_id, "Passport submission cancelled.")
+                await starting_message(sender_id)
+                return
+
+            if session["step"] == "awaiting_name":
+                if not message_text or len(message_text) < 3:
+                    await send_whatsapp_message(sender_id, "Please enter your full name (at least 3 characters):")
                     return
 
-                if session["step"] == "awaiting_name":
-                    if not message_text or len(message_text) < 3:
-                        await send_whatsapp_message(sender_id, "Please enter your full name (at least 3 characters):")
-                        return
-                    
-                    session["guest_name"] = message_text
-                    session["step"] = "awaiting_file"
-                    await send_whatsapp_message(
-                        sender_id,
-                        f"Thank you, *{message_text}*.\n\n"
-                        "Now, please **upload a clear photo** or **PDF document** of your passport. 📸 📄"
+                session["guest_name"] = message_text
+                session["step"] = "awaiting_file"
+                await send_whatsapp_message(
+                    sender_id,
+                    f"Thank you, *{message_text}*.\n\n"
+                    "Now, please **upload a clear photo** or **PDF document** of your passport. 📸 📄"
+                )
+                return
+
+            elif session["step"] == "awaiting_file":
+                media_id = None
+                if "image" in message_payload:
+                    media_id = message_payload["image"]["id"]
+                elif "document" in message_payload:
+                    media_id = message_payload["document"]["id"]
+
+                if media_id:
+                    villa_for_passport = user_villa_code or await get_user_villa_code(sender_id) or "UNKNOWN"
+                    await send_whatsapp_message(sender_id, "⏳ Processing your document, please wait...")
+                    success, msg = await process_whatsapp_passport(
+                        sender_id, media_id, villa_for_passport, session.get("guest_name")
                     )
+                    await send_whatsapp_message(sender_id, msg)
+                    if success:
+                        passport_sessions.pop(sender_id, None)
+                        await starting_message(sender_id)
+                    return
+                else:
+                    await send_whatsapp_message(sender_id, "Please upload a passport image or PDF document. (Or type CANCEL to exit)")
                     return
 
-                elif session["step"] == "awaiting_file":
-                    media_id = None
-                    if "image" in message_payload:
-                        media_id = message_payload["image"]["id"]
-                    elif "document" in message_payload:
-                        media_id = message_payload["document"]["id"]
-                    
-                    if media_id:
-                        await send_whatsapp_message(sender_id, "⏳ Processing your document, please wait...")
-                        success, msg = await process_whatsapp_passport(
-                            sender_id, media_id, user_villa_code, session.get("guest_name")
-                        )
-                        await send_whatsapp_message(sender_id, msg)
-                        if success:
-                            passport_sessions.pop(sender_id, None)
-                            await starting_message(sender_id)
-                        return
-                    else:
-                        await send_whatsapp_message(sender_id, "Please upload a passport image or PDF document. (Or type CANCEL to exit)")
-                        return
+        if user_villa_code:
 
             # Task 22: Active Issue Reporting Session
             if sender_id in issue_reporting_sessions:

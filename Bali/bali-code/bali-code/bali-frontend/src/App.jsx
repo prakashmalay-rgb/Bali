@@ -80,6 +80,10 @@ const appRouter = createBrowserRouter([
         element: <Home />,
       },
       {
+        path: "/login",
+        element: <Navigate to="/admin/login" replace />
+      },
+      {
         path: "/admin/login",
         element: <DashboardLogin />
       },

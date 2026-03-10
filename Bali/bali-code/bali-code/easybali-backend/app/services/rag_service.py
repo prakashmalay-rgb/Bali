@@ -25,9 +25,12 @@ class RAGService:
             if chat_type == "local-cuisine" or any(kw in query.lower() for kw in ["food", "restaurant", "eat", "dining", "cuisine", "cafe"]):
                 indexes_to_search.append(("local-cuisine", None))
             
-            # Always check villa-faqs as it contains critical house rules and localized info
-            # Filtered by villa_code for privacy and accuracy
-            indexes_to_search.append(("villa-faqs", {"villa_code": villa_code}))
+            # Always check villa-faqs as it contains critical house rules and localized info.
+            # Use $in to match both villa-specific FAQs and globally-injected admin FAQs (WEB_VILLA_01).
+            villa_faq_codes = [villa_code]
+            if villa_code != "WEB_VILLA_01":
+                villa_faq_codes.append("WEB_VILLA_01")
+            indexes_to_search.append(("villa-faqs", {"villa_code": {"$in": villa_faq_codes}}))
 
             # De-duplicate while preserving order (some might have matched multiple keywords)
             seen = set()
@@ -56,11 +59,12 @@ class RAGService:
                 )
                 
                 matches = res.get("matches", [])
+                # Use a lower threshold for villa-faqs (admin-curated Q&A pairs are trusted)
+                threshold = 0.60 if index_name == "villa-faqs" else 0.70
                 for m in matches:
                     score = m.get("score", 0)
                     text = m.get("metadata", {}).get("text", "").strip()
-                    if text and score > 0.70: # Standard 70% threshold for RAG reliability
-                        # Prefix with source for AI clarity
+                    if text and score > threshold:
                         source_label = index_name.replace("-", " ").title()
                         all_context_pieces.append(f"[{source_label}]: {text}")
 

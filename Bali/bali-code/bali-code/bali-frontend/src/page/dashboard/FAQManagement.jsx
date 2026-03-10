@@ -8,7 +8,8 @@ const FAQManagement = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [formData, setFormData] = useState({
         question: '',
-        answer: ''
+        answer: '',
+        villa_code_override: ''
     });
     const [errorMsg, setErrorMsg] = useState('');
     const [successMsg, setSuccessMsg] = useState('');
@@ -61,7 +62,7 @@ const FAQManagement = () => {
         setSuccessMsg('');
         setIsSubmitting(true);
 
-        const targetVilla = user.villa_code || 'WEB_VILLA_01';
+        const targetVilla = formData.villa_code_override.trim() || user.villa_code || 'WEB_VILLA_01';
 
         try {
             await axios.post(`${baseUrl}/faq-admin/add`, {
@@ -73,7 +74,7 @@ const FAQManagement = () => {
             });
 
             setSuccessMsg('Successfully injected FAQ into AI Memory.');
-            setFormData({ question: '', answer: '' });
+            setFormData({ question: '', answer: '', villa_code_override: '' });
             fetchFaqs();
         } catch (err) {
             setErrorMsg(err.response?.data?.detail || 'Failed to create FAQ rule.');
@@ -116,6 +117,17 @@ const FAQManagement = () => {
                 </div>
                 <div className="p-6 bg-primary/5">
                     <form onSubmit={handleCreate} className="space-y-4">
+                        {user?.role === 'admin' && (
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">Villa Code <span className="text-gray-400 font-normal">(e.g. V1, V2 — leave blank to apply globally)</span></label>
+                                <input
+                                    type="text" placeholder="e.g. V1"
+                                    className="w-full p-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary uppercase"
+                                    value={formData.villa_code_override}
+                                    onChange={e => setFormData({ ...formData, villa_code_override: e.target.value.toUpperCase() })}
+                                />
+                            </div>
+                        )}
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-1">Trigger Question or Topic</label>
                             <input

@@ -1000,7 +1000,7 @@ async def perform_arrival_confirmation(sender_id: str, villa_code: str):
             
             manager_msg = (
                 f"🔔 *New Guest Arrival!*\n\n"
-                f"Guest `{sender_id}` has just checked into *{villa_name}* ({villa_code}).\n\n"
+                f"Guest `{sender_id}` has just checked into *Easy Bali* ({villa_code}).\n\n"
                 f"Access is now granted for concierge services."
             )
             await send_whatsapp_message(clean_mgr, manager_msg)
@@ -1022,7 +1022,7 @@ async def perform_arrival_confirmation(sender_id: str, villa_code: str):
 
         guest_conf = (
             f"✅ *Arrival Confirmed!*\n\n"
-            f"Hi {sender_id[-4:]}, welcome to *{villa_name}*. Your profile is now active.{wifi_msg}{orientation_msg}{map_link}\n\n"
+            f"Hi {sender_id[-4:]}, welcome to *Easy Bali*. Your profile is now active.{wifi_msg}{orientation_msg}{map_link}\n\n"
             f"I am your virtual concierge. Type *Order Services* to see what I can do for you, or ask me anything about the villa!"
         )
         await send_whatsapp_message(sender_id, guest_conf)
@@ -1055,7 +1055,7 @@ async def log_guest_inquiry(sender_id: str, villa_code: str, query: str, respons
                 mgr_num = "".join(filter(str.isdigit, str(villa_info["manager_number"])))
                 mgr_msg = (
                     f"🆘 *Support Requested!*\n\n"
-                    f"Villa: *{villa_info.get('name')}*\n"
+                    f"Villa: *Easy Bali* ({villa_code})\n"
                     f"Guest ID: `{sender_id[-4:]}`\n"
                     f"The guest has requested to speak with us. Please respond as soon as possible."
                 )

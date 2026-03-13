@@ -172,6 +172,26 @@ class ConciergeAI:
                 resp = await self._call_openai(query, PERSONAS["maintenance-issue"], "", "", language, formatted_history, villa_code)
                 save_message(user_id, "user", query)
                 save_message(user_id, "assistant", resp)
+                # Save to issues DB so it's visible in Maintenance Issues dashboard
+                _issue_kw = ["broken", "not working", "issue", "problem", "leaking", "leak",
+                             "complain", "repair", "fix", "stuck", "noise", "smell", "dirty",
+                             "ac", "wifi", "tv", "shower", "toilet", "door", "window", "lock",
+                             "water", "electric", "power", "pool", "bed", "sofa", "fridge"]
+                if len(query.strip()) > 10 and any(kw in query.lower() for kw in _issue_kw):
+                    try:
+                        from app.db.session import db as _issue_db
+                        from datetime import datetime as _dt
+                        await _issue_db["issues"].insert_one({
+                            "sender_id": user_id,
+                            "villa_code": villa_code or "WEB_VILLA_01",
+                            "description": query,
+                            "media_type": "text",
+                            "status": "open",
+                            "source": "web",
+                            "timestamp": _dt.utcnow()
+                        })
+                    except Exception as _ie:
+                        logger.error(f"Failed to save web maintenance issue to DB: {_ie}")
                 return {"response": resp}
 
             # ─── VOICE TRANSLATOR ──────────────────────────────────────────────────

@@ -1575,8 +1575,23 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
         if "text" in message_payload:
             message_text = message_payload["text"]["body"].strip()
         elif "audio" in message_payload:
-            message_text = "VOICE_NOTE" # Signal it's a voice note for processing
             audio_id = message_payload["audio"]["id"]
+            try:
+                from app.utils.media_upload import download_whatsapp_media
+                from app.services.openai_client import client as _oai_client
+                import io as _io
+                _vn_bytes, _vn_ct = await download_whatsapp_media(audio_id)
+                _vn_file = _io.BytesIO(_vn_bytes)
+                _vn_file.name = "voice_note.ogg"
+                _vn_resp = await _oai_client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=_vn_file
+                )
+                message_text = _vn_resp.text
+                logger.info(f"Voice note transcribed for {sender_id}: '{message_text[:80]}'")
+            except Exception as _vn_err:
+                logger.error(f"Voice note transcription failed for {sender_id}: {_vn_err}")
+                message_text = None
         elif "image" in message_payload or "document" in message_payload or "audio" in message_payload:
             # Handle media uploads for passport/document submission OR issues
             media_info = message_payload.get("image") or message_payload.get("document") or message_payload.get("audio")
@@ -2326,14 +2341,50 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
 
             # Task 22: Issue Reporting Detection
             if message_text and any(word in message_text.lower() for word in ["issue", "problem", "report", "broken", "not working", "complain", "help me"]):
-                issue_reporting_sessions[sender_id] = {"step": "awaiting_description", "timestamp": datetime.datetime.now()}
-                await send_whatsapp_message(
-                    sender_id,
-                    "⚠️ *Issue Reporting Mode*\n\n"
-                    "I'm sorry to hear you're experiencing an issue. Please describe the problem in detail.\n\n"
-                    "You can also send a **Photo** or **Voice Note** to help us understand the situation better. 📸 🎤"
-                )
-                return
+                if "audio" in message_payload:
+                    # Voice note already contains the description — save immediately, no second message needed
+                    issue_data = {
+                        "sender_id": sender_id,
+                        "villa_code": user_villa_code,
+                        "description": f"🎙️ (Voice Note): {message_text}",
+                        "media_type": "voice_note",
+                        "status": "open",
+                        "source": "whatsapp",
+                        "timestamp": datetime.datetime.now()
+                    }
+                    await issue_collection.insert_one(issue_data)
+                    from app.db.session import db as _issue_db
+                    _rich = await _issue_db["villa_profiles"].find_one({"villa_code": user_villa_code})
+                    _villa_info = await get_villa_info_by_code(user_villa_code)
+                    _mgr_num = (_rich or {}).get("manager_phone") or (_villa_info or {}).get("manager_number")
+                    if _mgr_num:
+                        _clean_mgr = "".join(filter(str.isdigit, str(_mgr_num)))
+                        _mgr_msg = (
+                            f"🚨 *NEW ISSUE REPORTED!*\n\n"
+                            f"Villa: *{(_villa_info or {}).get('name', user_villa_code)}*\n"
+                            f"Guest ID: `...{sender_id[-4:]}`\n"
+                            f"Issue: {message_text}\n\n"
+                            f"Please check the dashboard for details."
+                        )
+                        try:
+                            await send_whatsapp_message(_clean_mgr, _mgr_msg)
+                        except Exception as _e:
+                            logger.error(f"Failed to notify manager about voice note issue: {_e}")
+                    await send_whatsapp_message(
+                        sender_id,
+                        "✅ *Issue Received*\n\n"
+                        "Thank you for reporting this. Our maintenance team and the villa manager have been notified and will address this as soon as possible."
+                    )
+                    return
+                else:
+                    issue_reporting_sessions[sender_id] = {"step": "awaiting_description", "timestamp": datetime.datetime.now()}
+                    await send_whatsapp_message(
+                        sender_id,
+                        "⚠️ *Issue Reporting Mode*\n\n"
+                        "I'm sorry to hear you're experiencing an issue. Please describe the problem in detail.\n\n"
+                        "You can also send a **Photo** or **Voice Note** to help us understand the situation better. 📸 🎤"
+                    )
+                    return
 
             if message_text and sender_id in persistent_mode_sessions and not serviceitems_text and not category_text:
                 mode = persistent_mode_sessions.get(sender_id)

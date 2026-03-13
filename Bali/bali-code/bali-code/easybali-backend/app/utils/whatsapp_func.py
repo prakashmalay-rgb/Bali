@@ -2173,26 +2173,30 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                 media_id = None
                 media_type = "text"
                 attachment_url = None
-                description = message_text or "See attachment"
+                description = message_text or "Maintenance issue reported"
 
                 if "image" in message_payload:
                     media_id = message_payload["image"]["id"]
                     media_type = "image"
-                    description = message_payload["image"].get("caption", description)
+                    description = message_payload["image"].get("caption") or f"📸 Photo of issue reported by Guest {sender_id[-4:]}"
                 elif "audio" in message_payload:
                     media_id = message_payload["audio"]["id"]
                     media_type = "voice_note"
+                    description = "🎙️ Voice note report (transcribing...)"
                 elif "video" in message_payload:
                     media_id = message_payload["video"]["id"]
                     media_type = "video"
+                    description = message_payload["video"].get("caption") or f"🎥 Video of issue reported by Guest {sender_id[-4:]}"
                 
                 if media_id:
-                    success, attachment_url = await process_whatsapp_issue(
+                    success, attachment_url, transcript = await process_whatsapp_issue(
                         sender_id, media_id, user_villa_code, description, media_type
                     )
                     if not success:
                         await send_whatsapp_message(sender_id, "⚠️ Sorry, there was an issue processing your media. Please try sending a text description instead.")
                         return
+                    if transcript:
+                        description = transcript
                 else:
                     # Log plain text issue
                     issue_data = {
@@ -2200,7 +2204,8 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                         "villa_code": user_villa_code,
                         "description": description,
                         "media_type": "text",
-                        "status": "pending",
+                        "status": "open",
+                        "source": "whatsapp",
                         "timestamp": datetime.datetime.now()
                     }
                     await issue_collection.insert_one(issue_data)

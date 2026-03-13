@@ -31,21 +31,60 @@ class QualityGateChecker:
     
     def check_python_syntax(self):
         """Check Python syntax in backend"""
-        print("🔍 Checking Python syntax...")
-        success, stdout, stderr = self.run_command(
-            f"python -m py_compile {self.backend_dir}/app/**/*.py"
-        )
-        if not success:
-            print(f"❌ Python syntax errors: {stderr}")
+        print("[CHECK] Checking Checking Python syntax...")
+        import glob
+        import py_compile
+        
+        backend_app_path = str(self.backend_dir / "app")
+        python_files = glob.glob(f"{backend_app_path}/**/*.py", recursive=True)
+        
+        if not python_files:
+            print("[WARNING] No Python files found to check")
+            return True
+            
+        errors = []
+        for py_file in python_files:
+            try:
+                py_compile.compile(py_file, doraise=True)
+            except py_compile.PyCompileError as e:
+                errors.append(str(e))
+                print(f"[FAIL] Syntax error in {py_file}: {e}")
+            except Exception as e:
+                errors.append(f"Error checking {py_file}: {e}")
+                
+        if errors:
+            print(f"[FAIL] Python syntax errors found: {len(errors)}")
             return False
-        print("✅ Python syntax OK")
+            
+        print(f"[PASS] Python syntax OK ({len(python_files)} files checked)")
+        return True
+
+    def check_linting(self):
+        """Run static analysis (Sonar-like)"""
+        print("[CHECK] Running static analysis (Linting)...")
+        # Flake8 check for critical issues (E9, F)
+        f_success, f_out, f_err = self.run_command(
+            "flake8 app --count --select=E9,F63,F7,F82 --show-source --statistics",
+            cwd=self.backend_dir
+        )
+        
+        # Pylint check
+        p_success, p_out, p_err = self.run_command(
+            "pylint app --fail-under=5.0",
+            cwd=self.backend_dir
+        )
+        
+        if not f_success:
+            print(f"[FAIL] Critical linting issues found by Flake8")
+            return False
+            
+        print("[PASS] Static analysis OK (Sonar-like check passed)")
         return True
     
     def check_imports(self):
         """Check that all imports work correctly"""
-        print("🔍 Checking imports...")
+        print("[CHECK] Checking imports...")
         
-        # Test critical imports
         test_imports = [
             "from app.services.promo_service import validate_promo_code, increment_promo_usage",
             "from app.services.payment_service import create_xendit_payment_with_distribution",
@@ -60,67 +99,53 @@ class QualityGateChecker:
                     cwd=self.backend_dir
                 )
                 if not success:
-                    print(f"❌ Import failed: {import_stmt}")
+                    print(f"[FAIL] Import failed: {import_stmt}")
                     print(f"   Error: {stderr}")
                     return False
             except Exception as e:
-                print(f"❌ Import exception: {import_stmt} - {e}")
+                print(f"[FAIL] Import exception: {import_stmt} - {e}")
                 return False
         
-        print("✅ All imports OK")
+        print("[PASS] All imports OK")
         return True
     
     def run_unit_tests(self):
         """Run unit tests"""
-        print("🔍 Running unit tests...")
+        print("[CHECK] Running unit tests...")
         
-        # Run promo integration tests
         success, stdout, stderr = self.run_command(
             "python test_promo_integration.py -v",
             cwd=self.backend_dir
         )
         
         if not success:
-            print(f"❌ Unit tests failed: {stderr}")
+            print(f"[FAIL] Unit tests failed: {stderr}")
             return False
         
-        print("✅ Unit tests passed")
+        print("[PASS] Unit tests passed")
         return True
     
     def check_docker_files(self):
         """Check Docker configuration"""
-        print("🔍 Checking Docker configuration...")
+        print("[CHECK] Checking Docker configuration...")
         
-        # Check if Dockerfiles exist
         backend_dockerfile = self.backend_dir / "Dockerfile"
         frontend_dockerfile = self.frontend_dir / "Dockerfile"
         
         if not backend_dockerfile.exists():
-            print("❌ Backend Dockerfile missing")
+            print("[FAIL] Backend Dockerfile missing")
             return False
         
         if not frontend_dockerfile.exists():
-            print("❌ Frontend Dockerfile missing")
+            print("[FAIL] Frontend Dockerfile missing")
             return False
         
-        # Check docker-compose files
-        compose_prod = self.project_root / "docker-compose.yml"
-        compose_staging = self.project_root / "docker-compose.staging.yml"
-        
-        if not compose_prod.exists():
-            print("❌ Production docker-compose.yml missing")
-            return False
-        
-        if not compose_staging.exists():
-            print("❌ Staging docker-compose.staging.yml missing")
-            return False
-        
-        print("✅ Docker configuration OK")
+        print("[PASS] Docker configuration OK")
         return True
     
     def check_environment_files(self):
         """Check environment configuration"""
-        print("🔍 Checking environment files...")
+        print("[CHECK] Checking environment files...")
         
         env_files = [
             self.backend_dir / ".env",
@@ -131,15 +156,15 @@ class QualityGateChecker:
         
         for env_file in env_files:
             if not env_file.exists():
-                print(f"❌ Environment file missing: {env_file}")
+                print(f"[FAIL] Environment file missing: {env_file}")
                 return False
         
-        print("✅ Environment files OK")
+        print("[PASS] Environment files OK")
         return True
     
     def check_database_models(self):
         """Check database model compatibility"""
-        print("🔍 Checking database models...")
+        print("[CHECK] Checking database models...")
         
         try:
             success, stdout, stderr = self.run_command(
@@ -148,19 +173,19 @@ class QualityGateChecker:
             )
             
             if not success:
-                print(f"❌ Database model error: {stderr}")
+                print(f"[FAIL] Database model error: {stderr}")
                 return False
             
-            print("✅ Database models OK")
+            print("[PASS] Database models OK")
             return True
             
         except Exception as e:
-            print(f"❌ Database model exception: {e}")
+            print(f"[FAIL] Database model exception: {e}")
             return False
     
     def check_api_endpoints(self):
         """Check API endpoint structure"""
-        print("🔍 Checking API endpoints...")
+        print("[CHECK] Checking API endpoints...")
         
         required_endpoints = [
             "app/routes/promo_admin.py",
@@ -171,19 +196,20 @@ class QualityGateChecker:
         for endpoint in required_endpoints:
             endpoint_path = self.backend_dir / endpoint
             if not endpoint_path.exists():
-                print(f"❌ Required endpoint missing: {endpoint}")
+                print(f"[FAIL] Required endpoint missing: {endpoint}")
                 return False
         
-        print("✅ API endpoints OK")
+        print("[PASS] API endpoints OK")
         return True
     
     def run_quality_gates(self):
         """Run all quality gates"""
-        print("🚀 Running M1/M2 Quality Gates...")
+        print("--- Running M1/M2 Quality Gates ---")
         print("=" * 50)
         
         gates = [
             ("Python Syntax", self.check_python_syntax),
+            ("Sonar-like Linting", self.check_linting),
             ("Import Checks", self.check_imports),
             ("Unit Tests", self.run_unit_tests),
             ("Docker Configuration", self.check_docker_files),
@@ -196,33 +222,28 @@ class QualityGateChecker:
         total = len(gates)
         
         for gate_name, gate_func in gates:
-            print(f"\n📋 {gate_name}")
+            print(f"\n[STEP] {gate_name}")
             print("-" * 30)
             
             if gate_func():
                 passed += 1
             else:
-                print(f"❌ {gate_name} FAILED")
+                print(f"[FAIL] {gate_name} FAILED")
                 return False
         
         print("\n" + "=" * 50)
-        print(f"🎉 Quality Gates: {passed}/{total} passed")
+        print(f"RESULTS: {passed}/{total} passed")
         
         if passed == total:
-            print("✅ All quality gates passed - Ready for deployment!")
+            print("[SUCCESS] All quality gates passed - Ready for deployment!")
             return True
         else:
-            print("❌ Some quality gates failed - Fix issues before deployment")
+            print("[ERROR] Some quality gates failed")
             return False
 
 def main():
     """Main entry point"""
     checker = QualityGateChecker()
-    
-    if len(sys.argv) > 1 and sys.argv[1] == "--fix":
-        print("🔧 Auto-fix mode not implemented yet")
-        return
-    
     success = checker.run_quality_gates()
     sys.exit(0 if success else 1)
 

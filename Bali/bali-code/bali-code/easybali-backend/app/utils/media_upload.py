@@ -53,6 +53,10 @@ def upload_bytes_to_s3(file_bytes: bytes, content_type: str, folder: str = "pass
     if "image/png" in content_type: ext = ".png"
     elif "image/webp" in content_type: ext = ".webp"
     elif "application/pdf" in content_type: ext = ".pdf"
+    elif "audio/" in content_type:
+        ext = ".ogg"
+        if "mpeg" in content_type: ext = ".mp3"
+        elif "wav" in content_type: ext = ".wav"
         
     key = f"{folder}/{uuid.uuid4()}{ext}"
     
@@ -92,9 +96,31 @@ async def process_whatsapp_passport(sender_id: str, media_id: str, villa_code: s
         return False, "Sorry, there was an issue processing your document. Please try again later."
 
 async def process_whatsapp_issue(sender_id: str, media_id: str, villa_code: str, description: str, media_type: str = "image"):
-    """Handles issue reporting with media attachments."""
+    """Handles issue reporting with media attachments. Transcribes if voice note."""
     try:
         file_bytes, content_type = await download_whatsapp_media(media_id)
+        
+        # New: Transcription for Voice Notes
+        transcript = None
+        if media_type == "voice_note":
+            try:
+                from app.services.openai_client import client
+                import io
+                
+                logger.info(f"Transcribing voice note for {sender_id}...")
+                audio_file = io.BytesIO(file_bytes)
+                audio_file.name = "voice_note.ogg"
+                
+                response = await client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file
+                )
+                transcript = f"🎙️ (Voice Note): {response.text}"
+                description = transcript
+                logger.info(f"Transcription complete: {transcript[:50]}...")
+            except Exception as te:
+                logger.error(f"Transcription failed for {sender_id}: {te}")
+
         s3_key, s3_url = upload_bytes_to_s3(file_bytes, content_type, folder="issues")
         
         issue_data = {
@@ -104,12 +130,13 @@ async def process_whatsapp_issue(sender_id: str, media_id: str, villa_code: str,
             "media_url": s3_url,
             "s3_key": s3_key,
             "media_type": media_type,
-            "status": "pending",
+            "status": "open",
+            "source": "whatsapp",
             "timestamp": datetime.utcnow()
         }
         await issue_collection.insert_one(issue_data)
-        logger.info(f"Issue for villa {villa_code} reported with {media_type}. URL: {s3_url}")
-        return True, s3_url
+        logger.info(f"Issue for villa {villa_code} reported with {media_type}. Source: whatsapp. URL: {s3_url}")
+        return True, s3_url, transcript
     except Exception as e:
         logger.error(f"Failed to process WhatsApp issue {media_id}: {e}")
-        return False, None
+        return False, None, None

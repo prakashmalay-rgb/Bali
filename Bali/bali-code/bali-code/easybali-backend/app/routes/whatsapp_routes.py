@@ -102,6 +102,10 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                         message_payload["image"] = message["image"]
                     elif "document" in message:
                         message_payload["document"] = message["document"]
+                    elif "audio" in message:
+                        message_payload["audio"] = message["audio"]
+                    elif "video" in message:
+                        message_payload["video"] = message["video"]
                     
                     # Process message asynchronously
                     background_tasks.add_task(process_message, sender_id, message_payload, message_id)
@@ -142,10 +146,10 @@ try:
             private_key_path="private.pem", 
             password=PRIVATE_KEY_PASSWORD
         )
-    print("🚀 Crypto handler initialized successfully!")
+    print("SUCCESS: Crypto handler initialized successfully!")
     
 except Exception as e:
-    print(f"❌ Failed to initialize crypto handler: {e}")
+    print(f"ERROR: Failed to initialize crypto handler: {e}")
     crypto_handler = None
 
 

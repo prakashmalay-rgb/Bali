@@ -91,9 +91,21 @@ const ManageModal = ({ issue, onClose, onUpdated }) => {
                     <div>
                         <p className="text-[10px] font-black uppercase text-lightneutral mb-2 tracking-widest">Attached Media</p>
                         <div className="bg-gray-50 rounded-2xl p-2 border border-gray-100 flex items-center justify-center">
-                            <a href={issue.media_url} target="_blank" rel="noreferrer" title="Click to view full size">
-                                <img src={issue.media_url} alt="Issue Attachment" className="max-h-48 rounded-xl object-contain shadow-sm cursor-zoom-in hover:opacity-90 transition-opacity" />
-                            </a>
+                            {issue.media_type === 'voice_note' || issue.media_url.includes('.ogg') || issue.media_url.includes('.mp3') || issue.media_url.includes('.wav') ? (
+                                <audio controls className="w-full">
+                                    <source src={issue.media_url} type="audio/ogg" />
+                                    Your browser does not support the audio element.
+                                </audio>
+                            ) : issue.media_type === 'video' || issue.media_url.includes('.mp4') ? (
+                                <video controls className="max-h-64 rounded-xl">
+                                    <source src={issue.media_url} type="video/mp4" />
+                                    Your browser does not support the video element.
+                                </video>
+                            ) : (
+                                <a href={issue.media_url} target="_blank" rel="noreferrer" title="Click to view full size">
+                                    <img src={issue.media_url} alt="Issue Attachment" className="max-h-48 rounded-xl object-contain shadow-sm cursor-zoom-in hover:opacity-90 transition-opacity" />
+                                </a>
+                            )}
                         </div>
                     </div>
                 )}

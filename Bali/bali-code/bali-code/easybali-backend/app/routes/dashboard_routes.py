@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query, Response
-from app.db.session import order_collection, passport_collection, checkin_collection, inquiry_collection, issue_collection
-from app.utils.auth import requires_role
-from typing import Dict, Any, Optional, List
+from app.db.session import db, order_collection, passport_collection, checkin_collection, inquiry_collection, issue_collection, feedback_collection
+from app.utils.auth import requires_role, get_current_user
+from typing import Dict, Any, Optional, List, Annotated
 from datetime import datetime
 from bson import ObjectId
 import csv
@@ -10,7 +10,7 @@ import io
 router = APIRouter(prefix="/dashboard-api", tags=["Dashboard"], dependencies=[Depends(requires_role("read_only"))])
 
 @router.get("/stats")
-async def get_dashboard_stats(user: dict = Depends(requires_role("read_only"))) -> Dict[str, Any]:
+async def get_dashboard_stats(user: Annotated[dict, Depends(requires_role("read_only"))]) -> Dict[str, Any]:
     try:
         # Check if user is restricted to specific villas
         villa_filter = {}
@@ -95,7 +95,7 @@ async def get_dashboard_stats(user: dict = Depends(requires_role("read_only"))) 
         }
 
 @router.get("/activity")
-async def get_guest_activity(user: dict = Depends(requires_role("read_only"))) -> Dict[str, Any]:
+async def get_guest_activity(user: Annotated[dict, Depends(requires_role("read_only"))]) -> Dict[str, Any]:
     try:
         villa_filter = {}
         if "*" not in user.get("villa_codes", ["*"]):
@@ -218,9 +218,13 @@ async def get_checkins() -> Dict[str, Any]:
         return {"success": False, "error": str(e), "checkins": []}
 
 @router.get("/issues")
-async def get_issues() -> Dict[str, Any]:
+async def get_issues(user: Annotated[dict, Depends(get_current_user)]) -> Dict[str, Any]:
     try:
-        recent_issues = await issue_collection.find().sort("timestamp", -1).limit(50).to_list(50)
+        villa_filter = {}
+        if "*" not in user.get("villa_codes", ["*"]):
+            villa_filter = {"villa_code": {"$in": user["villa_codes"]}}
+
+        recent_issues = await issue_collection.find(villa_filter).sort("timestamp", -1).limit(50).to_list(50)
         issue_list = []
         for i in recent_issues:
             time_val = i.get("timestamp")
@@ -231,7 +235,8 @@ async def get_issues() -> Dict[str, Any]:
                 "description": i.get("description", ""),
                 "media_type": i.get("media_type", "text"),
                 "media_url": i.get("media_url"),
-                "status": i.get("status", "pending"),
+                "status": i.get("status", "open"),
+                "source": i.get("source", "web"),
                 "time": time_val.strftime("%Y-%m-%d %H:%M:%S") if hasattr(time_val, "strftime") else "Recently"
             })
         return {"success": True, "issues": issue_list}
@@ -259,7 +264,7 @@ async def get_inquiries() -> Dict[str, Any]:
         return {"success": False, "error": str(e), "inquiries": []}
 
 @router.get("/feedback")
-async def get_feedback(user: dict = Depends(requires_role("read_only"))) -> Dict[str, Any]:
+async def get_feedback(user: Annotated[dict, Depends(requires_role("read_only"))]) -> Dict[str, Any]:
     try:
         villa_filter = {}
         if "*" not in user.get("villa_codes", ["*"]):
@@ -282,7 +287,7 @@ async def get_feedback(user: dict = Depends(requires_role("read_only"))) -> Dict
 
 @router.get("/bookings")
 async def get_all_bookings(
-    user: dict = Depends(requires_role("read_only")),
+    user: Annotated[dict, Depends(requires_role("read_only"))],
     status: Optional[str] = Query(None),
     villa: Optional[str] = Query(None)
 ) -> Dict[str, Any]:
@@ -561,7 +566,7 @@ async def get_service_bucket(start_date: Optional[str] = None, end_date: Optiona
         return {"success": False, "error": str(e)}
 
 @router.get("/villa/profile")
-async def get_villa_profile(user: dict = Depends(requires_role("read_only")), code: Optional[str] = Query(None)) -> Dict[str, Any]:
+async def get_villa_profile(user: Annotated[dict, Depends(requires_role("read_only"))], code: Optional[str] = Query(None)) -> Dict[str, Any]:
     try:
         # Resolve target villa code
         target_code = code

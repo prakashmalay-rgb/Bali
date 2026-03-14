@@ -641,6 +641,7 @@ async def get_villa_profile(user: Annotated[dict, Depends(requires_role("read_on
                     "wifi_password": "",
                     "house_rules": "",
                     "orientation_link": "",
+                    "review_link": "",
                     "docs": []
                 }
             }
@@ -669,6 +670,7 @@ async def update_villa_profile(profile_data: Dict[str, Any], user: dict = Depend
                 "wifi_password": profile_data.get("wifi_password", ""),
                 "house_rules": profile_data.get("house_rules", ""),
                 "orientation_link": profile_data.get("orientation_link", ""),
+                "review_link": profile_data.get("review_link", ""),
                 "docs": profile_data.get("docs", []),
                 "updated_at": datetime.utcnow()
             }},
@@ -692,5 +694,100 @@ async def get_detailed_history(entity_type: str, entity_id: str):
             if "created_at" in item: item["created_at"] = item["created_at"].isoformat()
             if "updated_at" in item: item["updated_at"] = item["updated_at"].isoformat()
         return {"success": True, "history": history}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# ── Expected Arrivals (pre-registration for pre-arrival automation) ────────────
+
+guest_reg_collection = db["guest_registrations"]
+
+
+@router.get("/arrivals/expected")
+async def list_expected_arrivals(user: Annotated[dict, Depends(requires_role("staff"))]) -> Dict[str, Any]:
+    try:
+        villa_filter = {}
+        if "*" not in user.get("villa_codes", ["*"]):
+            villa_filter = {"villa_code": {"$in": user["villa_codes"]}}
+        docs = await guest_reg_collection.find(villa_filter).sort("checkin_date", 1).to_list(200)
+        results = []
+        for d in docs:
+            d["id"] = str(d.pop("_id"))
+            for f in ("checkin_date", "checkout_date", "created_at"):
+                if isinstance(d.get(f), datetime):
+                    d[f] = d[f].isoformat()
+            results.append(d)
+        return {"success": True, "arrivals": results}
+    except Exception as e:
+        return {"success": False, "error": str(e), "arrivals": []}
+
+
+@router.post("/arrivals/expected")
+async def create_expected_arrival(
+    body: Dict[str, Any],
+    user: Annotated[dict, Depends(requires_role("staff"))]
+) -> Dict[str, Any]:
+    guest_name  = (body.get("guest_name") or "").strip()
+    sender_id   = (body.get("sender_id") or "").strip()
+    villa_code  = (body.get("villa_code") or "").strip().upper()
+    checkin_str = (body.get("checkin_date") or "").strip()
+    checkout_str = (body.get("checkout_date") or "").strip()
+    eta         = (body.get("eta") or "").strip()
+
+    if not sender_id:
+        return {"success": False, "error": "WhatsApp number (sender_id) is required"}
+    if not sender_id.isdigit():
+        return {"success": False, "error": "sender_id must be digits only (e.g. 628123456789)"}
+    if not villa_code:
+        return {"success": False, "error": "villa_code is required"}
+    if not checkin_str:
+        return {"success": False, "error": "checkin_date is required (YYYY-MM-DD)"}
+
+    # Multi-tenant check
+    if "*" not in user.get("villa_codes", ["*"]) and villa_code not in user["villa_codes"]:
+        return {"success": False, "error": "Access denied to this villa"}
+
+    try:
+        checkin_date  = datetime.fromisoformat(checkin_str)
+        checkout_date = datetime.fromisoformat(checkout_str) if checkout_str else None
+    except ValueError:
+        return {"success": False, "error": "Invalid date format. Use YYYY-MM-DD."}
+
+    now = datetime.utcnow()
+    doc = {
+        "guest_name":       guest_name,
+        "sender_id":        sender_id,
+        "villa_code":       villa_code,
+        "checkin_date":     checkin_date,
+        "checkout_date":    checkout_date,
+        "eta":              eta,
+        "status":           "expected",
+        "pre_arrival_sent": False,
+        "awaiting_eta":     False,
+        "created_by":       user.get("email", "admin"),
+        "created_at":       now,
+    }
+    result = await guest_reg_collection.insert_one(doc)
+    doc["id"] = str(result.inserted_id)
+    doc.pop("_id", None)
+    for f in ("checkin_date", "checkout_date", "created_at"):
+        if isinstance(doc.get(f), datetime):
+            doc[f] = doc[f].isoformat()
+    return {"success": True, "arrival": doc}
+
+
+@router.delete("/arrivals/expected/{arrival_id}")
+async def delete_expected_arrival(
+    arrival_id: str,
+    user: Annotated[dict, Depends(requires_role("staff"))]
+) -> Dict[str, Any]:
+    try:
+        doc = await guest_reg_collection.find_one({"_id": ObjectId(arrival_id)})
+        if not doc:
+            return {"success": False, "error": "Not found"}
+        if "*" not in user.get("villa_codes", ["*"]) and doc.get("villa_code") not in user["villa_codes"]:
+            return {"success": False, "error": "Access denied"}
+        await guest_reg_collection.delete_one({"_id": ObjectId(arrival_id)})
+        return {"success": True}
     except Exception as e:
         return {"success": False, "error": str(e)}

@@ -2257,6 +2257,22 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                 )
                 return
 
+            # ETA capture — guest replies to pre-arrival message with their arrival time
+            if message_text and len(message_text.strip()) <= 40:
+                guest_reg = await db["guest_registrations"].find_one(
+                    {"sender_id": sender_id, "status": "expected", "awaiting_eta": True}
+                )
+                if guest_reg:
+                    await db["guest_registrations"].update_one(
+                        {"_id": guest_reg["_id"]},
+                        {"$set": {"eta": message_text.strip(), "awaiting_eta": False}}
+                    )
+                    await send_whatsapp_message(
+                        sender_id,
+                        f"✅ Got it! We've noted your arrival time as *{message_text.strip()}*. See you soon! 🌴"
+                    )
+                    return
+
             # Feedback comment collection (awaiting text after rating)
             if sender_id in feedback_sessions:
                 session = feedback_sessions[sender_id]
@@ -2302,13 +2318,17 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     # Open a session to optionally collect a text comment
                     feedback_sessions[sender_id] = {"feedback_id": result.inserted_id}
 
+                    # Fetch villa profile once — used for review_link (positive) and manager_phone (negative)
+                    rich_profile = await db["villa_profiles"].find_one({"villa_code": user_villa_code})
+
                     if rating >= 4:
-                        # Task 23: Positive Feedback
+                        # Task 23: Positive Feedback — use villa-specific review link if configured
+                        review_link = (rich_profile or {}).get("review_link") or "https://g.page/r/easybali/review"
                         review_msg = (
                             "💖 *Thank you so much!* We are thrilled you had a great stay.\n\n"
                             "Feel free to share any additional comments, or type *skip* to continue.\n\n"
                             "You can also leave a review for other travelers:\n"
-                            "👉 [Leave a Review](https://g.page/r/easybali/review)\n\n"
+                            f"👉 [Leave a Review]({review_link})\n\n"
                             "Have a safe flight! ✈️"
                         )
                         await send_whatsapp_message(sender_id, review_msg)
@@ -2321,8 +2341,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                         )
                         await send_whatsapp_message(sender_id, sorry_msg)
 
-                        # Notify Manager
-                        rich_profile = await db["villa_profiles"].find_one({"villa_code": user_villa_code})
+                        # Notify Manager (rich_profile already fetched above)
                         mgr_num = (rich_profile or {}).get("manager_phone") or (await get_villa_info_by_code(user_villa_code) or {}).get("manager_number")
                         if mgr_num:
                             alert = (

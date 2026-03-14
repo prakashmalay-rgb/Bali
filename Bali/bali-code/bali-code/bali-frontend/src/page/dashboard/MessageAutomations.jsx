@@ -77,9 +77,16 @@ const MessageAutomations = () => {
     };
 
     const triggerInfo = {
-        "welcome": "Sent to WhatsApp exactly 1 hour after booking confirmation or pending Check-In today.",
-        "pre_checkout": "Sent 18 hours before registered Check-Out date.",
-        "post_checkout": "Sent 6 hours after Check-Out sequence is complete."
+        "passport_reminder":  "Sent 1 hour after check-in if no passport has been submitted.",
+        "day_1_welcome":      "Sent 24 hours after check-in.",
+        "mid_stay_concierge": "Sent 72 hours (3 days) after check-in.",
+        "pre_checkout_remind":"Sent 20 hours before estimated checkout date.",
+        "feedback_request":   "Sent 4 hours after estimated checkout. Captures guest rating 1–5 and triggers review or manager alert.",
+        "pre_arrival":        "Sent 24–48 hours before a pre-registered guest arrival date. Prompts guest for ETA. Use {name} for guest name.",
+        // Legacy keys kept for backwards compatibility
+        "welcome":            "Sent 1 hour after booking confirmation or pending check-in today.",
+        "pre_checkout":       "Sent 18 hours before registered check-out date.",
+        "post_checkout":      "Sent 6 hours after check-out sequence is complete.",
     };
 
     const formatTypeName = (type) => {

@@ -34,6 +34,7 @@ import CustomerBucket from "./page/dashboard/CustomerBucket";
 import VillaBucket from "./page/dashboard/VillaBucket";
 import PaymentBucket from "./page/dashboard/PaymentBucket";
 import ServiceBucket from "./page/dashboard/ServiceBucket";
+import ContentLibrary from "./page/dashboard/ContentLibrary";
 import { Navigate } from "react-router-dom";
 import { LanguageProvider } from "./context/LanguageContext";
 import PageTransition from "./components/layout/PageTransition";
@@ -193,6 +194,10 @@ const appRouter = createBrowserRouter([
       {
         path: "services",
         element: <ServiceBucket />
+      },
+      {
+        path: "content",
+        element: <ContentLibrary />
       }
     ],
   },

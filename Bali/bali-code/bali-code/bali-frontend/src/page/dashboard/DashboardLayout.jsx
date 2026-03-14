@@ -16,7 +16,8 @@ import {
     FiAlertCircle,
     FiSettings,
     FiPlusSquare,
-    FiStar
+    FiStar,
+    FiSend
 } from 'react-icons/fi';
 
 const DashboardLayout = () => {
@@ -65,6 +66,7 @@ const DashboardLayout = () => {
         { path: '/dashboard/villas', icon: <FiHome className="text-xl" />, label: 'Villas', roles: ['admin'] },
         { path: '/dashboard/payments', icon: <FiDollarSign className="text-xl" />, label: 'Payments', roles: ['admin'] },
         { path: '/dashboard/services', icon: <FiActivity className="text-xl" />, label: 'Services', roles: ['admin'] },
+        { path: '/dashboard/content', icon: <FiSend className="text-xl" />, label: 'Content & Broadcasts', roles: ['admin', 'staff'] },
     ];
 
     if (user) {

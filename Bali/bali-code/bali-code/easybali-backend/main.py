@@ -115,6 +115,13 @@ try:
 except Exception as e:
     logger.error(f"❌ automation_admin_router failed: {e}")
 
+try:
+    from app.routes.content_routes import router as content_router
+    app.include_router(content_router)
+    logger.info("✅ content_router loaded")
+except Exception as e:
+    logger.error(f"❌ content_router failed: {e}")
+
 # ── Startup / Shutdown ────────────────────────────────────────────────────────
 @app.on_event("startup")
 async def startup_event():

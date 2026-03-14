@@ -289,20 +289,27 @@ async def get_feedback(user: Annotated[dict, Depends(requires_role("read_only"))
 async def get_all_bookings(
     user: Annotated[dict, Depends(requires_role("read_only"))],
     status: Optional[str] = Query(None),
-    villa: Optional[str] = Query(None)
+    villa: Optional[str] = Query(None),
+    search: Optional[str] = Query(None)
 ) -> Dict[str, Any]:
     try:
         query = {}
         # Multi-tenant filtering
         if "*" not in user.get("villa_codes", ["*"]):
             query["villa_code"] = {"$in": user["villa_codes"]}
-        
+
         # Additional filters
         if status:
             query["status"] = status
         if villa:
             query["villa_code"] = villa
-            
+        if search:
+            query["$or"] = [
+                {"order_number": {"$regex": search, "$options": "i"}},
+                {"sender_id": {"$regex": search, "$options": "i"}},
+                {"service_name": {"$regex": search, "$options": "i"}},
+            ]
+
         bookings = await order_collection.find(query).sort("created_at", -1).limit(100).to_list(100)
         formatted = []
         for b in bookings:
@@ -319,6 +326,48 @@ async def get_all_bookings(
         return {"success": True, "bookings": formatted}
     except Exception as e:
         return {"success": False, "error": str(e), "bookings": []}
+
+
+@router.get("/bookings/{booking_ref}")
+async def get_booking_detail(
+    booking_ref: str,
+    user: Annotated[dict, Depends(requires_role("read_only"))]
+) -> Dict[str, Any]:
+    try:
+        # Try by order_number first, then by ObjectId
+        booking = await order_collection.find_one({"order_number": booking_ref})
+        if not booking:
+            try:
+                booking = await order_collection.find_one({"_id": ObjectId(booking_ref)})
+            except Exception:
+                pass
+
+        if not booking:
+            return {"success": False, "error": "Booking not found"}
+
+        # Multi-tenant check
+        if "*" not in user.get("villa_codes", ["*"]):
+            if booking.get("villa_code") not in user["villa_codes"]:
+                return {"success": False, "error": "Access denied"}
+
+        # Serialize ObjectId and datetimes
+        booking["_id"] = str(booking["_id"])
+        for field in ["created_at", "updated_at", "confirmed_at", "provider_confirmed_at"]:
+            if field in booking and isinstance(booking[field], datetime):
+                booking[field] = booking[field].isoformat()
+
+        payment = booking.get("payment", {})
+        for pfield in ["paid_at", "expired_at", "failed_at"]:
+            if isinstance(payment.get(pfield), datetime):
+                payment[pfield] = payment[pfield].isoformat()
+
+        invoice = booking.get("invoice", {})
+        if isinstance(invoice.get("generated_at"), datetime):
+            invoice["generated_at"] = invoice["generated_at"].isoformat()
+
+        return {"success": True, "booking": booking}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 @router.put("/passports/{passport_id}/verify")
 async def verify_passport(passport_id: str) -> Dict[str, Any]:

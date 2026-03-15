@@ -12,6 +12,7 @@ const VillaProfile = () => {
         house_rules: '',
         orientation_link: '',
         review_link: '',
+        maps_link: '',
         docs: []
     });
     const [isLoading, setIsLoading] = useState(true);
@@ -173,6 +174,17 @@ const VillaProfile = () => {
                             onChange={(e) => setProfile({ ...profile, review_link: e.target.value })}
                         />
                         <p className="text-[10px] text-lightneutral mt-1 px-1">Sent to guests who rate 4★ or 5★ after checkout.</p>
+                    </div>
+                    <div>
+                        <label className="text-[10px] font-black text-lightneutral uppercase tracking-widest block mb-2 px-1">Directions Link (Google Maps)</label>
+                        <input
+                            type="text"
+                            className="w-full bg-secondarywhite/30 border border-gray-100 rounded-2xl px-5 py-4 font-bold text-neutral focus:ring-4 focus:ring-secondary/10 outline-none transition-all"
+                            placeholder="e.g., https://maps.google.com/?q=your+villa"
+                            value={profile.maps_link}
+                            onChange={(e) => setProfile({ ...profile, maps_link: e.target.value })}
+                        />
+                        <p className="text-[10px] text-lightneutral mt-1 px-1">Included in the pre-arrival welcome message to help guests find the villa.</p>
                     </div>
                 </div>
 

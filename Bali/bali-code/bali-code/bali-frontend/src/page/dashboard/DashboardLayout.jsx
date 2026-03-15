@@ -17,7 +17,8 @@ import {
     FiSettings,
     FiPlusSquare,
     FiStar,
-    FiSend
+    FiSend,
+    FiRotateCcw
 } from 'react-icons/fi';
 
 const DashboardLayout = () => {
@@ -67,6 +68,7 @@ const DashboardLayout = () => {
         { path: '/dashboard/payments', icon: <FiDollarSign className="text-xl" />, label: 'Payments', roles: ['admin'] },
         { path: '/dashboard/services', icon: <FiActivity className="text-xl" />, label: 'Services', roles: ['admin'] },
         { path: '/dashboard/content', icon: <FiSend className="text-xl" />, label: 'Content & Broadcasts', roles: ['admin', 'staff'] },
+        { path: '/dashboard/refunds', icon: <FiRotateCcw className="text-xl" />, label: 'Refunds', roles: ['admin'] },
     ];
 
     if (user) {

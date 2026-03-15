@@ -24,6 +24,7 @@ import DashboardChats from "./page/dashboard/DashboardChats";
 import PassportVerification from "./page/dashboard/PassportVerification";
 import PromoManagement from "./page/dashboard/PromoManagement";
 import FAQManagement from "./page/dashboard/FAQManagement";
+import ResetPasswordAdmin from "./page/dashboard/ResetPassword";
 import MessageAutomations from "./page/dashboard/MessageAutomations";
 import BookingsView from "./page/dashboard/BookingsView";
 import IssuesView from "./page/dashboard/IssuesView";
@@ -35,6 +36,7 @@ import VillaBucket from "./page/dashboard/VillaBucket";
 import PaymentBucket from "./page/dashboard/PaymentBucket";
 import ServiceBucket from "./page/dashboard/ServiceBucket";
 import ContentLibrary from "./page/dashboard/ContentLibrary";
+import RefundsView from "./page/dashboard/RefundsView";
 import { Navigate } from "react-router-dom";
 import { LanguageProvider } from "./context/LanguageContext";
 import PageTransition from "./components/layout/PageTransition";
@@ -91,6 +93,10 @@ const appRouter = createBrowserRouter([
       {
         path: "/welcome",
         element: <Welcome />
+      },
+      {
+        path: "/reset-password",
+        element: <ResetPasswordAdmin />
       },
       {
         path: "/categories",
@@ -198,6 +204,10 @@ const appRouter = createBrowserRouter([
       {
         path: "content",
         element: <ContentLibrary />
+      },
+      {
+        path: "refunds",
+        element: <RefundsView />
       }
     ],
   },

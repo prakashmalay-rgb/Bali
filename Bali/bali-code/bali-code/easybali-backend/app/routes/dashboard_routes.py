@@ -211,11 +211,39 @@ async def get_checkins() -> Dict[str, Any]:
                 "villa_name": c.get("villa_name", "N/A"),
                 "status": c.get("status", "active"),
                 "time": time_val.strftime("%Y-%m-%d %H:%M:%S") if hasattr(time_val, "strftime") else "Recently",
-                "checkout_time": checkout_val.strftime("%Y-%m-%d %H:%M") if hasattr(checkout_val, "strftime") else "Pending"
+                "checkout_time": checkout_val.strftime("%Y-%m-%d %H:%M") if hasattr(checkout_val, "strftime") else "Pending",
+                "keys_returned": c.get("keys_returned", False),
+                "keys_returned_at": c.get("keys_returned_at").isoformat() if hasattr(c.get("keys_returned_at"), "isoformat") else None,
             })
         return {"success": True, "checkins": checkin_list}
     except Exception as e:
         return {"success": False, "error": str(e), "checkins": []}
+
+
+@router.post("/checkins/{checkin_id}/keys-returned")
+async def mark_keys_returned(
+    checkin_id: str,
+    user: Annotated[dict, Depends(requires_role("staff"))]
+) -> Dict[str, Any]:
+    """Staff confirms that keys have been returned at checkout."""
+    try:
+        doc = await checkin_collection.find_one({"_id": ObjectId(checkin_id)})
+        if not doc:
+            return {"success": False, "error": "Check-in not found"}
+        if "*" not in user.get("villa_codes", ["*"]) and doc.get("villa_code") not in user["villa_codes"]:
+            return {"success": False, "error": "Access denied"}
+        await checkin_collection.update_one(
+            {"_id": ObjectId(checkin_id)},
+            {"$set": {
+                "keys_returned": True,
+                "keys_returned_at": datetime.utcnow(),
+                "keys_returned_by": user.get("email", "staff"),
+            }}
+        )
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 
 @router.get("/issues")
 async def get_issues(user: Annotated[dict, Depends(get_current_user)]) -> Dict[str, Any]:
@@ -642,6 +670,7 @@ async def get_villa_profile(user: Annotated[dict, Depends(requires_role("read_on
                     "house_rules": "",
                     "orientation_link": "",
                     "review_link": "",
+                    "maps_link": "",
                     "docs": []
                 }
             }
@@ -671,6 +700,7 @@ async def update_villa_profile(profile_data: Dict[str, Any], user: dict = Depend
                 "house_rules": profile_data.get("house_rules", ""),
                 "orientation_link": profile_data.get("orientation_link", ""),
                 "review_link": profile_data.get("review_link", ""),
+                "maps_link": profile_data.get("maps_link", ""),
                 "docs": profile_data.get("docs", []),
                 "updated_at": datetime.utcnow()
             }},
@@ -791,3 +821,220 @@ async def delete_expected_arrival(
         return {"success": True}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+# ── Refund Management ─────────────────────────────────────────────────────────
+
+@router.get("/refunds")
+async def list_refund_requests(
+    user: Annotated[dict, Depends(requires_role("read_only"))]
+) -> Dict[str, Any]:
+    """List all refund requests."""
+    try:
+        villa_filter = {}
+        if "*" not in user.get("villa_codes", ["*"]):
+            villa_filter = {"villa_code": {"$in": user["villa_codes"]}}
+
+        refund_collection = db["refund_requests"]
+        docs = await refund_collection.find(villa_filter).sort("created_at", -1).to_list(200)
+        results = []
+        for d in docs:
+            d["id"] = str(d.pop("_id"))
+            for f in ("created_at", "reviewed_at"):
+                if isinstance(d.get(f), datetime):
+                    d[f] = d[f].isoformat()
+            results.append(d)
+        return {"success": True, "refunds": results}
+    except Exception as e:
+        return {"success": False, "error": str(e), "refunds": []}
+
+
+@router.post("/refunds")
+async def request_refund(
+    body: Dict[str, Any],
+    user: Annotated[dict, Depends(requires_role("staff"))]
+) -> Dict[str, Any]:
+    """Admin/staff submits a refund request for a PAID order. Requires admin approval before processing."""
+    order_number = (body.get("order_number") or "").strip()
+    reason       = (body.get("reason") or "").strip()
+
+    if not order_number:
+        return {"success": False, "error": "order_number is required"}
+    if not reason:
+        return {"success": False, "error": "reason is required"}
+
+    order = await order_collection.find_one({"order_number": order_number})
+    if not order:
+        return {"success": False, "error": "Order not found"}
+    if order.get("status") != "PAID":
+        return {"success": False, "error": "Only PAID orders can be refunded"}
+
+    # Multi-tenant check
+    if "*" not in user.get("villa_codes", ["*"]) and order.get("villa_code") not in user["villa_codes"]:
+        return {"success": False, "error": "Access denied to this order"}
+
+    refund_collection = db["refund_requests"]
+    existing = await refund_collection.find_one({"order_number": order_number, "status": {"$in": ["pending", "approved"]}})
+    if existing:
+        return {"success": False, "error": "A refund request for this order already exists"}
+
+    paid_amount = order.get("payment", {}).get("paid_amount", 0)
+    invoice_id  = order.get("payment", {}).get("xendit_invoice_id", "")
+
+    doc = {
+        "order_number":     order_number,
+        "xendit_invoice_id": invoice_id,
+        "guest_id":         order.get("sender_id", ""),
+        "service_name":     order.get("service_name", ""),
+        "villa_code":       order.get("villa_code", ""),
+        "paid_amount":      paid_amount,
+        "reason":           reason,
+        "status":           "pending",
+        "requested_by":     user.get("email", "staff"),
+        "created_at":       datetime.utcnow(),
+        "reviewed_at":      None,
+        "reviewed_by":      None,
+        "xendit_refund_id": None,
+    }
+    result = await refund_collection.insert_one(doc)
+    return {"success": True, "refund_id": str(result.inserted_id), "message": "Refund request submitted. Awaiting admin approval."}
+
+
+@router.post("/refunds/{refund_id}/approve")
+async def approve_refund(
+    refund_id: str,
+    user: Annotated[dict, Depends(requires_role("admin"))]
+) -> Dict[str, Any]:
+    """Admin approves refund — calls Xendit refund API and notifies guest via WhatsApp."""
+    import httpx, base64, os
+    from app.settings.config import settings
+
+    refund_collection = db["refund_requests"]
+    try:
+        doc = await refund_collection.find_one({"_id": ObjectId(refund_id)})
+    except Exception:
+        return {"success": False, "error": "Invalid refund ID"}
+
+    if not doc:
+        return {"success": False, "error": "Refund request not found"}
+    if doc.get("status") != "pending":
+        return {"success": False, "error": f"Refund is already {doc.get('status')}"}
+
+    invoice_id  = doc.get("xendit_invoice_id", "")
+    paid_amount = doc.get("paid_amount", 0)
+    guest_id    = doc.get("guest_id", "")
+    order_number = doc.get("order_number", "")
+    service_name = doc.get("service_name", "")
+
+    if not invoice_id:
+        return {"success": False, "error": "No Xendit invoice ID on record — cannot process refund automatically"}
+
+    # Call Xendit Refund API
+    try:
+        token = base64.b64encode(f"{settings.XENDIT_SECRET_KEY}:".encode()).decode()
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                "https://api.xendit.co/refunds",
+                headers={
+                    "Authorization": f"Basic {token}",
+                    "Content-Type": "application/json",
+                    "idempotency-key": f"refund_{order_number}",
+                },
+                json={
+                    "invoice_id": invoice_id,
+                    "reason": doc.get("reason", "requested_by_customer"),
+                }
+            )
+            resp.raise_for_status()
+            xendit_result = resp.json()
+    except httpx.HTTPStatusError as e:
+        error_detail = e.response.text
+        await refund_collection.update_one(
+            {"_id": ObjectId(refund_id)},
+            {"$set": {"status": "failed", "error": error_detail, "reviewed_at": datetime.utcnow(), "reviewed_by": user.get("email")}}
+        )
+        return {"success": False, "error": f"Xendit refund failed: {error_detail}"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+    xendit_refund_id = xendit_result.get("id", "")
+
+    # Mark order as refunded
+    await order_collection.update_one(
+        {"order_number": order_number},
+        {"$set": {"status": "REFUNDED", "payment.refund_id": xendit_refund_id}}
+    )
+
+    # Mark refund request as approved
+    await refund_collection.update_one(
+        {"_id": ObjectId(refund_id)},
+        {"$set": {
+            "status": "approved",
+            "xendit_refund_id": xendit_refund_id,
+            "reviewed_at": datetime.utcnow(),
+            "reviewed_by": user.get("email"),
+        }}
+    )
+
+    # Notify guest via WhatsApp
+    if guest_id:
+        try:
+            from app.utils.whatsapp_func import send_whatsapp_message
+            await send_whatsapp_message(
+                guest_id,
+                f"✅ *Refund Processed*\n\n"
+                f"Your refund for *{service_name}* (Order {order_number}) of "
+                f"IDR {paid_amount:,.0f} has been approved and is being processed.\n\n"
+                f"Funds typically arrive within 3–5 business days depending on your bank."
+            )
+        except Exception as e:
+            pass  # Don't fail the refund if WhatsApp notification fails
+
+    return {"success": True, "xendit_refund_id": xendit_refund_id, "message": "Refund approved and processed."}
+
+
+@router.post("/refunds/{refund_id}/reject")
+async def reject_refund(
+    refund_id: str,
+    body: Dict[str, Any],
+    user: Annotated[dict, Depends(requires_role("admin"))]
+) -> Dict[str, Any]:
+    """Admin rejects a refund request."""
+    refund_collection = db["refund_requests"]
+    try:
+        doc = await refund_collection.find_one({"_id": ObjectId(refund_id)})
+    except Exception:
+        return {"success": False, "error": "Invalid refund ID"}
+
+    if not doc:
+        return {"success": False, "error": "Refund request not found"}
+    if doc.get("status") != "pending":
+        return {"success": False, "error": f"Refund is already {doc.get('status')}"}
+
+    rejection_note = (body.get("note") or "").strip()
+    await refund_collection.update_one(
+        {"_id": ObjectId(refund_id)},
+        {"$set": {
+            "status": "rejected",
+            "rejection_note": rejection_note,
+            "reviewed_at": datetime.utcnow(),
+            "reviewed_by": user.get("email"),
+        }}
+    )
+
+    # Notify guest
+    guest_id = doc.get("guest_id", "")
+    if guest_id:
+        try:
+            from app.utils.whatsapp_func import send_whatsapp_message
+            await send_whatsapp_message(
+                guest_id,
+                f"ℹ️ *Refund Update*\n\n"
+                f"Your refund request for *{doc.get('service_name', 'your booking')}* "
+                f"(Order {doc.get('order_number', '')}) was reviewed and could not be approved at this time.\n\n"
+                f"Please contact our support team if you have questions."
+            )
+        except Exception:
+            pass
+
+    return {"success": True, "message": "Refund request rejected."}

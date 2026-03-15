@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-    FiMapPin, FiClock, FiSearch, FiCheckCircle, FiPlus, FiX, FiCalendar, FiTrash2, FiUser
+    FiMapPin, FiClock, FiSearch, FiCheckCircle, FiPlus, FiX, FiCalendar, FiTrash2, FiUser, FiKey
 } from 'react-icons/fi';
 import { API_BASE_URL, apiRequest } from '../../api/apiClient';
 import axios from 'axios';
@@ -109,6 +109,15 @@ const CheckinsView = () => {
         } catch { /* ignore */ }
     };
 
+    const handleKeysReturned = async (id) => {
+        try {
+            await apiRequest(() =>
+                axios.post(`${API_BASE_URL}/dashboard-api/checkins/${id}/keys-returned`, {}, { headers: authHeader() })
+            );
+            setCheckins(prev => prev.map(c => c.id === id ? { ...c, keys_returned: true } : c));
+        } catch { /* ignore */ }
+    };
+
     const handleDelete = async (id) => {
         try {
             await apiRequest(() =>
@@ -182,14 +191,15 @@ const CheckinsView = () => {
                                     <th className="px-6 py-5">Guest Reference</th>
                                     <th className="px-6 py-5">Arrival Time</th>
                                     <th className="px-6 py-5">Est. Departure</th>
+                                    <th className="px-6 py-5 text-center">Keys</th>
                                     <th className="px-6 py-5 text-right">Status</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50/50">
                                 {isLoading ? (
-                                    <tr><td colSpan="5" className="py-20 text-center font-bold text-lightneutral italic uppercase">Syncing arrival data...</td></tr>
+                                    <tr><td colSpan="6" className="py-20 text-center font-bold text-lightneutral italic uppercase">Syncing arrival data...</td></tr>
                                 ) : filteredCheckins.length === 0 ? (
-                                    <tr><td colSpan="5" className="py-20 text-center font-bold text-lightneutral italic uppercase">No check-in logs recorded.</td></tr>
+                                    <tr><td colSpan="6" className="py-20 text-center font-bold text-lightneutral italic uppercase">No check-in logs recorded.</td></tr>
                                 ) : filteredCheckins.map((c) => (
                                     <tr key={c.id} className="hover:bg-white/80 transition-all">
                                         <td className="px-6 py-5">
@@ -213,6 +223,21 @@ const CheckinsView = () => {
                                             <div className="flex items-center gap-1.5 text-xs font-bold text-rose-500">
                                                 <FiClock className="text-lightneutral" />{c.checkout_time}
                                             </div>
+                                        </td>
+                                        <td className="px-6 py-5 text-center">
+                                            {c.keys_returned ? (
+                                                <span className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full text-[9px] font-black">
+                                                    <FiKey size={10} /> RETURNED
+                                                </span>
+                                            ) : (
+                                                <button
+                                                    onClick={() => handleKeysReturned(c.id)}
+                                                    className="inline-flex items-center gap-1 px-3 py-1 bg-amber-50 text-amber-600 border border-amber-100 rounded-full text-[9px] font-black hover:bg-amber-100 transition-colors"
+                                                    title="Mark keys as returned"
+                                                >
+                                                    <FiKey size={10} /> PENDING
+                                                </button>
+                                            )}
                                         </td>
                                         <td className="px-6 py-5 text-right">
                                             <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase inline-flex items-center gap-1 border

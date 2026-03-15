@@ -1063,6 +1063,68 @@ async def log_guest_inquiry(sender_id: str, villa_code: str, query: str, respons
     except Exception as e:
         logger.error(f"Failed to log inquiry: {e}")
 
+async def attempt_sp_reassignment(order_num: str):
+    """
+    After an SP declines, find the next available SP for the same service and re-offer.
+    If no SPs remain, notify the guest and admin.
+    """
+    try:
+        order = await order_collection.find_one({"order_number": order_num})
+        if not order:
+            return
+
+        service_name = order.get("service_name", "")
+        guest_id     = order.get("sender_id", "")
+        declined_by  = set(order.get("declined_by", []))
+
+        # Get all SPs for this service
+        all_sp_numbers = await fetch_whatsapp_numbers(service_name)
+        remaining = [n for n in all_sp_numbers if n not in declined_by]
+
+        if remaining:
+            # Reset order to pending and re-offer to remaining SPs
+            await order_collection.update_one(
+                {"order_number": order_num},
+                {"$set": {"status": "pending"}}
+            )
+            # Notify guest
+            if guest_id:
+                await send_whatsapp_message(
+                    guest_id,
+                    f"⏳ We're finding another provider for your *{service_name}* booking. "
+                    f"We'll confirm shortly!"
+                )
+            for sp_num in remaining:
+                try:
+                    await send_whatsapp_order_to_SP(sp_num, order)
+                except Exception as e:
+                    logger.error(f"Reassignment: failed to notify {sp_num}: {e}")
+            logger.info(f"Reassignment: order {order_num} re-offered to {remaining}")
+        else:
+            # No SPs left — mark unserviceable, notify guest and admin
+            await order_collection.update_one(
+                {"order_number": order_num},
+                {"$set": {"status": "no_providers"}}
+            )
+            if guest_id:
+                await send_whatsapp_message(
+                    guest_id,
+                    f"😔 We're sorry — no providers are currently available for your *{service_name}* request.\n\n"
+                    f"Our team has been alerted and will contact you shortly to assist."
+                )
+            admin_number = os.getenv("ADMIN_WHATSAPP_NUMBER", "62895627705139")
+            await send_whatsapp_message(
+                admin_number,
+                f"🚨 *Order {order_num} has no available SPs*\n\n"
+                f"Service: *{service_name}*\n"
+                f"Guest: `{guest_id[-4:] if guest_id else 'unknown'}`\n\n"
+                f"All providers have declined. Manual reassignment required."
+            )
+            logger.warning(f"Reassignment: order {order_num} — no providers left, admin notified")
+    except Exception as e:
+        logger.error(f"attempt_sp_reassignment error for {order_num}: {e}")
+
+
 async def send_decline_confirmation(recipient_number: str, order_num: str):
     try:
         headers = {
@@ -1628,11 +1690,13 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                         "Thank you for confirming. We've noted your unavailability for this request.\n"
                         "_Terima kasih telah mengonfirmasi. Kami telah mencatat ketidaksediaan Anda untuk permintaan ini._"
                     )
+                    # Add this SP to declined_by list and attempt reassignment
                     await order_collection.update_one(
                         {"order_number": order_num},
-                        {"$set": {"status": "declined"}}
+                        {"$addToSet": {"declined_by": sender_id}}
                     )
                     decline_sessions.pop(sender_id, None)
+                    await attempt_sp_reassignment(order_num)
                     return
 
                 if button_id.startswith("cancel_decline_"):

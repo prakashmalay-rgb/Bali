@@ -47,7 +47,8 @@ _DEFAULTS = {
         "Here's what to expect:\n"
         "• Scan the QR code at the villa entrance to check in\n"
         "• WiFi details and orientation guide will be shared on arrival\n"
-        "• Your AI concierge activates the moment you check in\n\n"
+        "• Your AI concierge activates the moment you check in\n"
+        "• Directions: {maps_link}\n\n"
         "What time do you expect to arrive? Reply with your ETA (e.g., *3 PM*). See you soon! 🥥"
     ),
 }
@@ -66,9 +67,14 @@ async def get_template(villa_code: str, trigger_type: str) -> str:
     return _DEFAULTS.get(trigger_type, "")
 
 
-def _apply_vars(msg: str, sender_id: str = "", guest_name: str = "") -> str:
+def _apply_vars(msg: str, sender_id: str = "", guest_name: str = "", maps_link: str = "") -> str:
     name = guest_name or f"Guest ...{sender_id[-4:]}" if sender_id else "Guest"
-    return msg.replace("{name}", name)
+    msg = msg.replace("{name}", name)
+    if maps_link:
+        msg = msg.replace("{maps_link}", maps_link)
+    else:
+        msg = msg.replace("\n• Directions: {maps_link}", "")
+    return msg
 
 
 # ── Main background loop ──────────────────────────────────────────────────────
@@ -109,7 +115,9 @@ async def check_pre_arrival_triggers(now: datetime):
         hours_until = (checkin_dt - now).total_seconds() / 3600
         if 0 < hours_until <= 48:
             msg = await get_template(villa_code, "pre_arrival")
-            msg = _apply_vars(msg, sender_id, guest_name)
+            villa_profile = await db["villa_profiles"].find_one({"villa_code": villa_code}) or {}
+            maps_link = villa_profile.get("maps_link", "")
+            msg = _apply_vars(msg, sender_id, guest_name, maps_link)
             await enqueue_whatsapp_message(sender_id, msg)
             await guest_reg_collection.update_one(
                 {"_id": reg["_id"]},
@@ -177,6 +185,19 @@ async def check_checkin_triggers(checkin: dict, now: datetime):
             msg = await get_template(villa_code, "pre_checkout_remind")
             await enqueue_whatsapp_message(sender_id, _apply_vars(msg, sender_id))
             await mark_checkin_sent(checkin["_id"], "pre_checkout_remind")
+
+    # 4b. Key return reminder — sent 2 hours before checkout
+    if "key_return_remind" not in sent:
+        time_left = estimated_checkout - now
+        if timedelta(hours=0) < time_left < timedelta(hours=2):
+            key_msg = (
+                "🔑 *Checkout Reminder*\n\n"
+                "Just a quick note — please remember to leave all villa keys at the front entrance "
+                "or in the key box before you depart.\n\n"
+                "Safe travels and we hope to see you again in Bali! 🌴"
+            )
+            await enqueue_whatsapp_message(sender_id, key_msg)
+            await mark_checkin_sent(checkin["_id"], "key_return_remind")
 
     # 5. Checkout summary — 1–4 hours after estimated checkout
     if "checkout_summary" not in sent:

@@ -413,12 +413,24 @@ async def get_fresh_invoice_url(
         return {"success": False, "error": "Access denied"}
 
     object_key = booking.get("invoice", {}).get("object_key", "")
+
+    # Legacy records: derive object_key from the stored S3 URL
     if not object_key:
-        # Fall back to stored URL if no key available (legacy records)
-        fallback = booking.get("invoice", {}).get("download_url", "")
-        if fallback:
-            return {"success": True, "url": fallback, "warning": "Using stored URL — may be expired"}
-        return {"success": False, "error": "No invoice found for this booking"}
+        stored_url = booking.get("invoice", {}).get("download_url", "")
+        if stored_url:
+            # URL format: https://<bucket>.s3.amazonaws.com/<key>?...
+            # or https://s3.amazonaws.com/<bucket>/<key>?...
+            from urllib.parse import urlparse
+            parsed = urlparse(stored_url)
+            path = parsed.path.lstrip("/")
+            # If path starts with bucket name (path-style), strip it
+            from app.settings.config import settings
+            bucket = getattr(settings, "AWS_BUCKET_NAME", "easybali")
+            if path.startswith(bucket + "/"):
+                path = path[len(bucket) + 1:]
+            object_key = path
+        if not object_key:
+            return {"success": False, "error": "No invoice found for this booking"}
 
     fresh_url = get_presigned_url(object_key, expiration=3600)
     return {"success": True, "url": fresh_url}

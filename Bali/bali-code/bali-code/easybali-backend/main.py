@@ -28,6 +28,7 @@ from app.routes.what_to_do import router as what_to_do_router
 from app.routes.onboarding import router as onboarding_router
 from app.routes.passport_routes import router as passport_router
 from app.routes.issue_routes import router as issue_router
+from app.routes.health import router as health_router
 
 # ── App Initialization ─────────────────────────────────────────────────────────
 app = FastAPI(
@@ -69,6 +70,7 @@ app.include_router(what_to_do_router)
 app.include_router(onboarding_router)
 app.include_router(passport_router)
 app.include_router(issue_router)
+app.include_router(health_router)
 
 # ── Register Optional Routers (safe imports) ──────────────────────────────────
 try:
@@ -125,6 +127,12 @@ except Exception as e:
 # ── Startup / Shutdown ────────────────────────────────────────────────────────
 @app.on_event("startup")
 async def startup_event():
+    try:
+        from app.db.ensure_indexes import ensure_indexes
+        await ensure_indexes()
+    except Exception as e:
+        logger.warning(f"Index creation skipped: {e}")
+
     logger.info("Starting cache refresh service...")
     start_cache_refresh()
 

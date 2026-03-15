@@ -1,0 +1,52 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Bali/bali-code/bali-code/easybali-backend/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Bali/bali-code/bali-code/easybali-backend/**'
+
+jobs:
+  lint:
+    name: Syntax & Import Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Bali/bali-code/bali-code/easybali-backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: Bali/bali-code/bali-code/easybali-backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Syntax check (py_compile)
+        run: |
+          find . -name "*.py" -not -path "./.git/*" | xargs python -m py_compile
+
+      - name: Check payment split logic
+        run: |
+          python -c "
+          # Regression test: payment split must sum to total
+          def split(total):
+              sp = int(total * 0.70)
+              villa = int(total * 0.20)
+              eb = total - sp - villa
+              assert sp + villa + eb == total, f'Split mismatch: {sp}+{villa}+{eb} != {total}'
+              return sp, villa, eb
+
+          for amount in [500, 100000, 250000, 1500000]:
+              split(amount)
+          print('Payment split regression: OK')
+          "

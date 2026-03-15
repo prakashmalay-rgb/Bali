@@ -1,0 +1,37 @@
+name: Frontend CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Bali/bali-code/bali-code/bali-frontend/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Bali/bali-code/bali-code/bali-frontend/**'
+
+jobs:
+  build:
+    name: Build Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Bali/bali-code/bali-code/bali-frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: Bali/bali-code/bali-code/bali-frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_API_BASE_URL: https://bali-v92r.onrender.com

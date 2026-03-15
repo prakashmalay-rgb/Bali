@@ -35,3 +35,21 @@ jobs:
         run: npm run build
         env:
           VITE_API_BASE_URL: https://bali-v92r.onrender.com
+
+  smoke:
+    name: Vercel Smoke Test
+    runs-on: ubuntu-latest
+    # Only on push to main after build passes
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+
+    steps:
+      - name: Wait for Vercel deploy (60s)
+        run: sleep 60
+
+      - name: Check frontend is reachable
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://bali-zeta.vercel.app)
+          echo "HTTP status: $STATUS"
+          [ "$STATUS" -eq 200 ] || (echo "Frontend smoke test FAILED" && exit 1)
+          echo "Frontend smoke test: PASS"

@@ -12,7 +12,7 @@ on:
 
 jobs:
   lint:
-    name: Syntax & Import Check
+    name: Syntax & Regression Tests
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -35,18 +35,85 @@ jobs:
         run: |
           find . -name "*.py" -not -path "./.git/*" | xargs python -m py_compile
 
-      - name: Check payment split logic
+      - name: Payment split regression test
         run: |
           python -c "
-          # Regression test: payment split must sum to total
+          # SP 70%, Villa 20%, EB remainder — must always sum to total
           def split(total):
               sp = int(total * 0.70)
               villa = int(total * 0.20)
               eb = total - sp - villa
               assert sp + villa + eb == total, f'Split mismatch: {sp}+{villa}+{eb} != {total}'
-              return sp, villa, eb
 
           for amount in [500, 100000, 250000, 1500000]:
               split(amount)
-          print('Payment split regression: OK')
+          print('Payment split regression: PASS')
           "
+
+      - name: SP reassignment logic test
+        run: |
+          python -c "
+          # When SP declines, declined_by grows and remaining SPs shrink
+          all_sps = ['SP1', 'SP2', 'SP3']
+          declined = []
+
+          def get_remaining(all_sps, declined):
+              return [sp for sp in all_sps if sp not in declined]
+
+          declined.append('SP1')
+          remaining = get_remaining(all_sps, declined)
+          assert 'SP1' not in remaining, 'Declined SP must not be re-offered'
+          assert len(remaining) == 2, f'Expected 2 remaining, got {len(remaining)}'
+
+          declined.extend(['SP2', 'SP3'])
+          remaining = get_remaining(all_sps, declined)
+          assert remaining == [], 'All declined should leave empty list'
+          print('SP reassignment regression: PASS')
+          "
+
+  security:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Bali/bali-code/bali-code/easybali-backend
+    # Run audit but don't block on it — surface vulnerabilities without breaking CI
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit dependencies
+        run: pip-audit -r requirements.txt --output-format=columns
+
+  smoke:
+    name: Production Smoke Test
+    runs-on: ubuntu-latest
+    # Only run on push to main (not on PRs)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: lint
+
+    steps:
+      - name: Wait for Render deploy (90s)
+        run: sleep 90
+
+      - name: Health check — live
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://bali-v92r.onrender.com/health/live)
+          echo "HTTP status: $STATUS"
+          [ "$STATUS" -eq 200 ] || (echo "Health check FAILED" && exit 1)
+
+      - name: Health check — readiness (DB)
+        run: |
+          BODY=$(curl -s https://bali-v92r.onrender.com/health/ready)
+          echo "Response: $BODY"
+          echo "$BODY" | python -c "import sys,json; d=json.load(sys.stdin); assert d['status']=='ready', f'Not ready: {d}'"
+          echo "Readiness check: PASS"

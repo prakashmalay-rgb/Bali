@@ -1,11 +1,26 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 import uvicorn
 import logging
+import sys
+from pythonjsonlogger import jsonlogger
 
-# ── Logging ────────────────────────────────────────────────────────────────────
-logging.basicConfig(level=logging.INFO)
+# ── Structured JSON Logging ────────────────────────────────────────────────────
+handler = logging.StreamHandler(sys.stdout)
+handler.setFormatter(jsonlogger.JsonFormatter(
+    fmt="%(asctime)s %(levelname)s %(name)s %(message)s",
+    datefmt="%Y-%m-%dT%H:%M:%S"
+))
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+root_logger.handlers = [handler]
 logger = logging.getLogger(__name__)
+
+# ── Rate Limiter ───────────────────────────────────────────────────────────────
+limiter = Limiter(key_func=get_remote_address, default_limits=["300/minute"])
 
 # ── Core services ──────────────────────────────────────────────────────────────
 from app.services.menu_services import start_cache_refresh, stop_cache_refresh
@@ -36,6 +51,8 @@ app = FastAPI(
     description="API for EASY Bali Chatbot, Host Dashboard, WhatsApp AI, and Xendit Integration",
     version="2.0.0"
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 app.add_middleware(

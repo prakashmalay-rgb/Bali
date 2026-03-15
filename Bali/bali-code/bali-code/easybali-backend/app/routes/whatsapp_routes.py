@@ -14,8 +14,11 @@ from app.models.chatbot_models import MenuRequest
 from app.services.order_summary import active_chat_sessions
 from app.routes.xendit_webhook import handle_xendit_webhook
 from app.services.flow_encrytion import FlowCrypto
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 router = APIRouter(tags=["whatsapp"])
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.get("/active-sessions")
@@ -71,6 +74,7 @@ async def verify_webhook(request: Request):
         raise HTTPException(status_code=500, detail=f"Error verifying webhook: {e}")
 
 @router.post("/whatsapp-webhook")
+@limiter.limit("60/minute")
 async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
     try:
         body = await request.json()
@@ -118,6 +122,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
     
 
 @router.post("/webhook/xendit-payment")
+@limiter.limit("30/minute")
 async def xendit_webhook_endpoint(request: Request):
     webhook_token = request.headers.get("x-callback-token")
     

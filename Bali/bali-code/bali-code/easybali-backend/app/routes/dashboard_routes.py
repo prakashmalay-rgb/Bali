@@ -397,6 +397,33 @@ async def get_booking_detail(
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+
+@router.get("/bookings/{booking_ref}/invoice-url")
+async def get_fresh_invoice_url(
+    booking_ref: str,
+    user: Annotated[dict, Depends(requires_role("read_only"))]
+) -> Dict[str, Any]:
+    """Generate a fresh pre-signed S3 URL for the invoice PDF (valid 1 hour)."""
+    from app.routes.passport_routes import get_presigned_url
+
+    booking = await order_collection.find_one({"order_number": booking_ref})
+    if not booking:
+        return {"success": False, "error": "Booking not found"}
+    if "*" not in user.get("villa_codes", ["*"]) and booking.get("villa_code") not in user["villa_codes"]:
+        return {"success": False, "error": "Access denied"}
+
+    object_key = booking.get("invoice", {}).get("object_key", "")
+    if not object_key:
+        # Fall back to stored URL if no key available (legacy records)
+        fallback = booking.get("invoice", {}).get("download_url", "")
+        if fallback:
+            return {"success": True, "url": fallback, "warning": "Using stored URL — may be expired"}
+        return {"success": False, "error": "No invoice found for this booking"}
+
+    fresh_url = get_presigned_url(object_key, expiration=3600)
+    return {"success": True, "url": fresh_url}
+
+
 @router.put("/passports/{passport_id}/verify")
 async def verify_passport(passport_id: str) -> Dict[str, Any]:
     from app.utils.whatsapp_func import send_whatsapp_message

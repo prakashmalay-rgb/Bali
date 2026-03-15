@@ -44,6 +44,7 @@ async def generate_and_upload_invoice(order_data: dict, payment_data: dict) -> d
             return {
                 'success': True,
                 'download_url': upload_result['download_url'],
+                'object_key': upload_result['object_key'],
                 'invoice_data': invoice_data
             }
         else:

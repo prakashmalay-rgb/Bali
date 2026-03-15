@@ -104,6 +104,7 @@ async def handle_xendit_webhook(webhook_data: dict):
                         {
                             "$set": {
                                 "invoice.download_url": invoice_result['download_url'],
+                                "invoice.object_key": invoice_result.get('object_key', ''),
                                 "invoice.generated_at": datetime.datetime.now(),
                                 "invoice.invoice_data": invoice_result['invoice_data']
                             }

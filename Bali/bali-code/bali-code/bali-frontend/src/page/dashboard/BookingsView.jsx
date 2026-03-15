@@ -26,6 +26,43 @@ const StatusBadge = ({ status }) => (
     </span>
 );
 
+const InvoiceDownloadButton = ({ orderNumber }) => {
+    const [loading, setLoading] = useState(false);
+    const [err, setErr] = useState('');
+
+    const handleClick = async () => {
+        setLoading(true);
+        setErr('');
+        try {
+            const res = await apiRequest(() =>
+                axios.get(`${API_BASE_URL}/dashboard-api/bookings/${orderNumber}/invoice-url`)
+            );
+            if (res.data.success) {
+                window.open(res.data.url, '_blank', 'noopener,noreferrer');
+            } else {
+                setErr(res.data.error || 'Failed to get invoice URL');
+            }
+        } catch {
+            setErr('Could not load invoice');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div>
+            <button
+                onClick={handleClick}
+                disabled={loading}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-xs font-black rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+                {loading ? 'Loading...' : <><FiExternalLink size={11} /> Download Invoice PDF</>}
+            </button>
+            {err && <p className="text-xs text-rose-500 mt-1">{err}</p>}
+        </div>
+    );
+};
+
 const DetailRow = ({ label, value }) => (
     <div className="flex justify-between items-start gap-4 py-2 border-b border-gray-50 last:border-0">
         <span className="text-[11px] font-black uppercase tracking-widest text-lightneutral whitespace-nowrap">{label}</span>
@@ -143,13 +180,10 @@ const BookingDetailDrawer = ({ bookingRef, onClose }) => {
                             )}
 
                             {/* Invoice */}
-                            {detail.invoice?.download_url && (
+                            {(detail.invoice?.download_url || detail.invoice?.object_key) && (
                                 <Section icon={FiExternalLink} title="Invoice">
                                     <div className="pt-1">
-                                        <a href={detail.invoice.download_url} target="_blank" rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-xs font-black rounded-xl hover:opacity-90 transition-opacity">
-                                            Download Invoice PDF <FiExternalLink size={11} />
-                                        </a>
+                                        <InvoiceDownloadButton orderNumber={detail.order_number} />
                                     </div>
                                 </Section>
                             )}

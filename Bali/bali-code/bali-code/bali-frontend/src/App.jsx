@@ -24,7 +24,7 @@ import DashboardChats from "./page/dashboard/DashboardChats";
 import PassportVerification from "./page/dashboard/PassportVerification";
 import PromoManagement from "./page/dashboard/PromoManagement";
 import FAQManagement from "./page/dashboard/FAQManagement";
-import ResetPasswordAdmin from "./page/dashboard/ResetPassword";
+const ResetPasswordAdmin = ResetPassword;
 import MessageAutomations from "./page/dashboard/MessageAutomations";
 import BookingsView from "./page/dashboard/BookingsView";
 import IssuesView from "./page/dashboard/IssuesView";

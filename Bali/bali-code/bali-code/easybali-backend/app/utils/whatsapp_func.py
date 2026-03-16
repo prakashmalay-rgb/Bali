@@ -44,6 +44,40 @@ TIME_SLOTS = [
     '06:00 PM - 8:00 PM'
 ]
 
+_CURRENCY_CODES = {"idr", "usd", "eur", "gbp", "sgd", "aud", "jpy", "cny", "myr", "thb", "chf"}
+_CURRENCY_WORDS = {"convert", "conversion", "exchange", "rate", "rupiah", "dollar", "euro", "pound", "yen", "yuan", "baht", "franc", "ringgit"}
+_CURRENCY_AMOUNT = re.compile(r'\d[\d,.]*\s*(idr|usd|eur|gbp|sgd|aud|jpy|cny|myr|thb|chf)', re.IGNORECASE)
+
+def _is_currency_query(text: str) -> bool:
+    """Return True if the message looks like a currency conversion request."""
+    if _CURRENCY_AMOUNT.search(text):
+        return True
+    words = set(re.findall(r'[a-z]+', text.lower()))
+    return len(words & (_CURRENCY_CODES | _CURRENCY_WORDS)) >= 2
+
+_WHATSAPP_TRACKED_CURRENCIES = ["IDR", "EUR", "GBP", "SGD", "AUD", "JPY", "CNY", "MYR", "THB", "CHF"]
+
+async def _fetch_live_rates_for_whatsapp() -> str:
+    """Fetch live USD exchange rates and return a compact string for AI context."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get("https://open.er-api.com/v6/latest/USD")
+            if resp.status_code == 200:
+                rates = resp.json().get("rates", {})
+                parts = [f"1 USD = {rates[cur]:,.2f} {cur}" for cur in _WHATSAPP_TRACKED_CURRENCIES if cur in rates]
+                if parts:
+                    return "Live rates: " + " | ".join(parts)
+    except Exception as e:
+        logger.warning(f"Live rate fetch failed: {e}")
+    return ""
+
+async def _enrich_currency_query(text: str) -> str:
+    """Prepend live exchange rates to a currency query so the AI can do exact math."""
+    live_rates = await _fetch_live_rates_for_whatsapp()
+    if live_rates:
+        return f"[{live_rates}]\n{text}"
+    return text
+
 async def fetch_explore_data(api_url: str, query: str, user_id: str):
     payload = {"query": query}
     params = {"user_id": user_id}
@@ -2595,7 +2629,8 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
 
             else:
                 if message_text:
-                    ai_result = await whatsapp_response(message_text, sender_id, user_villa_code or "WEB_VILLA_01")
+                    query_for_ai = await _enrich_currency_query(message_text) if _is_currency_query(message_text) else message_text
+                    ai_result = await whatsapp_response(query_for_ai, sender_id, user_villa_code or "WEB_VILLA_01")
 
                     print(ai_result)
                     

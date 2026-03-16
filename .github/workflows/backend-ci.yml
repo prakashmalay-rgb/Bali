@@ -102,6 +102,35 @@ jobs:
           print('Webhook handler structure check: PASS')
           "
 
+      - name: WhatsApp db scope regression test
+        run: |
+          python -c "
+          import ast, sys
+
+          with open('app/utils/whatsapp_func.py') as f:
+              source = f.read()
+
+          tree = ast.parse(source)
+
+          # Find the module-level imports and verify 'db' is imported at module level
+          # This prevents the UnboundLocalError bug where 'db' was only imported inside
+          # conditional blocks in process_message, causing NameError for simple messages like 'hi'
+          module_imports = []
+          for node in ast.iter_child_nodes(tree):
+              if isinstance(node, ast.ImportFrom) and node.module == 'app.db.session':
+                  for alias in node.names:
+                      module_imports.append(alias.asname or alias.name)
+
+          if 'db' not in module_imports:
+              print('FAIL: db must be imported at module level in whatsapp_func.py')
+              print('  Missing: from app.db.session import db')
+              print('  Without this, process_message raises UnboundLocalError for messages')
+              print('  that do not enter the issue_reporting_sessions branch')
+              sys.exit(1)
+
+          print('WhatsApp db scope check: PASS')
+          "
+
   security:
     name: Dependency Audit
     runs-on: ubuntu-latest

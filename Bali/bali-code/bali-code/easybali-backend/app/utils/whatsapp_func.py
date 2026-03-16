@@ -14,7 +14,7 @@ from app.services.menu_services import get_service_provider_by_whatsapp, get_vil
 from app.services.order_summary import initiate_chat_session, active_chat_sessions, save_order_to_db, format_order_summary, check_order_confirmation,order_sessions, update_order_confirmation, get_sender_id_by_order, get_order_by_number
 from app.settings.config import settings
 from app.utils.media_upload import process_whatsapp_passport, process_whatsapp_issue
-from app.db.session import order_collection, villa_code_collection, checkin_collection, inquiry_collection, issue_collection, feedback_collection
+from app.db.session import db, order_collection, villa_code_collection, checkin_collection, inquiry_collection, issue_collection, feedback_collection
 from app.models.order_summary import Order
 from app.services.websocket_managerr import ConnectionManager
 from app.services.website_sess import website_sessions
@@ -2290,7 +2290,6 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     await issue_collection.insert_one(issue_data)
                 
                 # Notify Villa Manager
-                from app.db.session import db
                 rich_profile = await db["villa_profiles"].find_one({"villa_code": user_villa_code})
                 villa_info = await get_villa_info_by_code(user_villa_code)
                 
@@ -2634,7 +2633,6 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
         logger.info(f"⏱️ Finished processing message {message_id}. Latency: {latency:.2f}s")
         # Log latency to DB for monitoring
         try:
-            from app.db.session import db
             await db["analytics_latency"].insert_one({
                 "message_id": message_id,
                 "sender_id": sender_id,

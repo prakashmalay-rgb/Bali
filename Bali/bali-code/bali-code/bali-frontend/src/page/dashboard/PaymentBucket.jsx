@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FiDollarSign, FiPieChart, FiTrendingUp, FiCheckCircle, FiSearch, FiArrowRight, FiActivity } from 'react-icons/fi';
+import { FiDollarSign, FiPieChart, FiArrowRight } from 'react-icons/fi';
 import { motion } from 'framer-motion';
+import { API_BASE_URL, apiRequest } from '../../api/apiClient';
 
 const PaymentBucket = () => {
     const [payments, setPayments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
-
-    const baseUrl = (import.meta.env.VITE_API_URL || 'https://bali-v92r.onrender.com');
 
     useEffect(() => {
         fetchPayments();
@@ -22,7 +21,7 @@ const PaymentBucket = () => {
             if (startDate) params.start_date = startDate;
             if (endDate) params.end_date = endDate;
 
-            const response = await axios.get(`${baseUrl}/dashboard-api/buckets/payments`, { params });
+            const response = await apiRequest(() => axios.get(`${API_BASE_URL}/dashboard-api/buckets/payments`, { params }));
             if (response.data.success) {
                 setPayments(response.data.data);
             }

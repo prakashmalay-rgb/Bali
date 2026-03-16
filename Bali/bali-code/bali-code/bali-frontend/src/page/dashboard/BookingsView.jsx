@@ -173,9 +173,9 @@ const BookingDetailDrawer = ({ bookingRef, onClose }) => {
                             {/* Payment Split */}
                             {detail.payment?.distribution_data && (
                                 <Section icon={FiMapPin} title="Payment Split">
-                                    <DetailRow label="SP Share" value={formatIDR(detail.payment.distribution_data.sp_share)} />
-                                    <DetailRow label="Villa Share" value={formatIDR(detail.payment.distribution_data.villa_share)} />
-                                    <DetailRow label="EasyBali Share" value={formatIDR(detail.payment.distribution_data.eb_share)} />
+                                    <DetailRow label="SP Share" value={formatIDR(detail.payment.distribution_data.service_provider?.amount)} />
+                                    <DetailRow label="Villa Share" value={formatIDR(detail.payment.distribution_data.villa?.amount)} />
+                                    <DetailRow label="EasyBali Share" value={formatIDR(detail.payment.distribution_data.easy_bali?.amount)} />
                                 </Section>
                             )}
 

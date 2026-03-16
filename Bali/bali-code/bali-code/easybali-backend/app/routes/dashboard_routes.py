@@ -684,7 +684,11 @@ async def get_payment_bucket(start_date: Optional[str] = None, end_date: Optiona
                 "service": p.get("service_name"),
                 "total_paid": payment_info.get("paid_amount"),
                 "currency": payment_info.get("currency", "IDR"),
-                "splits": {"sp_share": dist.get("sp_share"), "villa_share": dist.get("villa_share"), "eb_share": dist.get("eb_share")},
+                "splits": {
+                    "sp_share": dist.get("service_provider", {}).get("amount"),
+                    "villa_share": dist.get("villa", {}).get("amount"),
+                    "eb_share": dist.get("easy_bali", {}).get("amount")
+                },
                 "time": p.get("updated_at")
             })
         return {"success": True, "data": formatted_payments}

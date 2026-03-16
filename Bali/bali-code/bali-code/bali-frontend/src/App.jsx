@@ -1,7 +1,7 @@
 import { Outlet, RouterProvider, createBrowserRouter } from "react-router-dom";
 import NotFound from "./page/notFound";
 import Login from "./page/account/login";
-import ResetPassword from "./page/account/resetPassword";
+import ResetPassword from "./page/account/resetPassword"; // public account reset
 import Verify from "./page/account/verify";
 import Forget from "./page/account/forget";
 import Register from "./page/account/register";
@@ -20,11 +20,12 @@ import Welcome from "./page/welcome";
 import DashboardLayout from "./page/dashboard/DashboardLayout";
 import DashboardMain from "./page/dashboard/DashboardMain";
 import DashboardLogin from "./page/dashboard/Login";
+import DashboardResetPassword from "./page/dashboard/ResetPassword";
 import DashboardChats from "./page/dashboard/DashboardChats";
 import PassportVerification from "./page/dashboard/PassportVerification";
 import PromoManagement from "./page/dashboard/PromoManagement";
 import FAQManagement from "./page/dashboard/FAQManagement";
-const ResetPasswordAdmin = ResetPassword;
+import ChangePassword from "./page/dashboard/ChangePassword";
 import MessageAutomations from "./page/dashboard/MessageAutomations";
 import BookingsView from "./page/dashboard/BookingsView";
 import IssuesView from "./page/dashboard/IssuesView";
@@ -95,8 +96,8 @@ const appRouter = createBrowserRouter([
         element: <Welcome />
       },
       {
-        path: "/reset-password",
-        element: <ResetPasswordAdmin />
+        path: "/admin/reset-password",
+        element: <DashboardResetPassword />
       },
       {
         path: "/categories",
@@ -208,6 +209,10 @@ const appRouter = createBrowserRouter([
       {
         path: "refunds",
         element: <RefundsView />
+      },
+      {
+        path: "change-password",
+        element: <ChangePassword />
       }
     ],
   },

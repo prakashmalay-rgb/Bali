@@ -44,9 +44,9 @@ TIME_SLOTS = [
     '06:00 PM - 8:00 PM'
 ]
 
-_CURRENCY_CODES = {"idr", "usd", "eur", "gbp", "sgd", "aud", "jpy", "cny", "myr", "thb", "chf"}
-_CURRENCY_WORDS = {"convert", "conversion", "exchange", "rate", "rupiah", "dollar", "euro", "pound", "yen", "yuan", "baht", "franc", "ringgit"}
-_CURRENCY_AMOUNT = re.compile(r'\d[\d,.]*\s*(idr|usd|eur|gbp|sgd|aud|jpy|cny|myr|thb|chf)', re.IGNORECASE)
+_CURRENCY_CODES = {"idr", "usd", "eur", "gbp", "sgd", "aud", "jpy", "cny", "myr", "thb", "chf", "inr", "krw", "hkd", "twd", "php", "vnd", "brl", "rub", "cad"}
+_CURRENCY_WORDS = {"convert", "conversion", "exchange", "rate", "rupiah", "dollar", "euro", "pound", "yen", "yuan", "baht", "franc", "ringgit", "rupee", "won", "peso", "dong"}
+_CURRENCY_AMOUNT = re.compile(r'\d[\d,.]*\s*(idr|usd|eur|gbp|sgd|aud|jpy|cny|myr|thb|chf|inr|krw|hkd|twd|php|vnd|brl|rub|cad)', re.IGNORECASE)
 
 def _is_currency_query(text: str) -> bool:
     """Return True if the message looks like a currency conversion request."""
@@ -55,7 +55,7 @@ def _is_currency_query(text: str) -> bool:
     words = set(re.findall(r'[a-z]+', text.lower()))
     return len(words & (_CURRENCY_CODES | _CURRENCY_WORDS)) >= 2
 
-_WHATSAPP_TRACKED_CURRENCIES = ["IDR", "EUR", "GBP", "SGD", "AUD", "JPY", "CNY", "MYR", "THB", "CHF"]
+_WHATSAPP_TRACKED_CURRENCIES = ["IDR", "EUR", "GBP", "SGD", "AUD", "JPY", "CNY", "MYR", "THB", "CHF", "INR", "KRW", "HKD", "PHP", "VND", "CAD"]
 
 async def _fetch_live_rates_for_whatsapp() -> str:
     """Fetch live USD exchange rates and return a compact string for AI context."""

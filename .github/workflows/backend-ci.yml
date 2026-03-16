@@ -125,16 +125,30 @@ jobs:
       - name: Audit dependencies
         run: pip-audit -r requirements.txt --output-format=columns
 
-  smoke:
-    name: Production Smoke Test
+  deploy:
+    name: Deploy to Render
     runs-on: ubuntu-latest
-    # Only run on push to main (not on PRs)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: lint
 
     steps:
-      - name: Wait for Render deploy (90s)
-        run: sleep 90
+      - name: Trigger Render deploy
+        run: |
+          curl -s -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}" | python -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          print('Deploy triggered:', d.get('deploy', {}).get('id', 'unknown'))
+          "
+
+  smoke:
+    name: Production Smoke Test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: deploy
+
+    steps:
+      - name: Wait for Render deploy (120s)
+        run: sleep 120
 
       - name: Health check — live
         run: |

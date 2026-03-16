@@ -71,14 +71,14 @@ const PaymentBucket = () => {
             </div>
 
             {/* Split Breakdown Explained Card */}
-            <div className="bg-gradient-to-r from-purple-50 to-white p-6 rounded-3xl border border-purple-100 flex items-center gap-6">
-                <div className="p-4 bg-purple-100 rounded-2xl text-purple-600">
+            <div className="bg-purple-50 p-6 rounded-3xl border border-purple-100 flex items-center gap-6">
+                <div className="p-4 bg-purple-100 rounded-2xl text-purple-600 flex-shrink-0">
                     <FiPieChart size={32} />
                 </div>
                 <div>
                     <h3 className="text-lg font-bold text-neutral">Xendit Split Distribution Architecture</h3>
-                    <p className="text-sm text-lightneutral">
-                        Payments are automatically split at source: **ServiceProvider Share**, **Villa Commission**, and **Easy-Bali Profit**.
+                    <p className="text-sm text-lightneutral mt-1">
+                        Payments are automatically split at source: <strong>ServiceProvider Share</strong>, <strong>Villa Commission</strong>, and <strong>Easy-Bali Profit</strong>.
                     </p>
                 </div>
             </div>

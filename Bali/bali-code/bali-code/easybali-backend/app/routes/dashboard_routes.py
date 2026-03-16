@@ -671,7 +671,7 @@ async def get_villa_bucket(start_date: Optional[str] = None, end_date: Optional[
 @router.get("/buckets/payments")
 async def get_payment_bucket(start_date: Optional[str] = None, end_date: Optional[str] = None):
     try:
-        match_query = {"status": "PAID"}
+        match_query = {"$or": [{"status": "PAID"}, {"payment.payment_status": "completed"}]}
         if start_date and end_date:
             match_query["updated_at"] = {"$gte": datetime.fromisoformat(start_date), "$lte": datetime.fromisoformat(end_date)}
         payments = await order_collection.find(match_query).sort("updated_at", -1).limit(100).to_list(100)

@@ -29,6 +29,7 @@ villa_code_sessions = {}
 issue_reporting_sessions = {}
 feedback_sessions = {}
 passport_sessions = {}
+pending_media_sessions = {}   # sender_id -> {media_id, media_type, timestamp} — awaiting issue/passport choice
 
 local_order_store: Dict[str, str] = {}
 
@@ -1698,14 +1699,58 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                 if sender_id in issue_reporting_sessions or sender_id in passport_sessions:
                     pass 
                 else:
-                    # Default: Assume Passport for image/document
                     if "image" in message_payload or "document" in message_payload:
-                        user_villa_code = await get_user_villa_code(sender_id) or "UNKNOWN"
-                        success, msg = await process_whatsapp_passport(sender_id, media_id, user_villa_code)
-                        await send_whatsapp_message(sender_id, msg)
+                        # Option B: check for a recent open issue from this guest (last 20 mins)
+                        _cutoff = datetime.datetime.utcnow() - datetime.timedelta(minutes=20)
+                        _recent_issue = await issue_collection.find_one(
+                            {"sender_id": sender_id, "status": "open", "timestamp": {"$gte": _cutoff}},
+                            sort=[("timestamp", -1)]
+                        )
+                        if _recent_issue:
+                            _vc = _recent_issue.get("villa_code") or await get_user_villa_code(sender_id) or "UNKNOWN"
+                            _mtype = "image" if "image" in message_payload else "document"
+                            _ok, _att_url, _ = await process_whatsapp_issue(
+                                sender_id, media_id, _vc,
+                                _recent_issue.get("description", "Issue follow-up"), _mtype
+                            )
+                            if _ok:
+                                await issue_collection.update_one(
+                                    {"_id": _recent_issue["_id"]},
+                                    {"$set": {"photo_url": _att_url}}
+                                )
+                                await send_whatsapp_message(sender_id, "📎 *Photo added to your report.*\n\nThank you! Our team has been notified.")
+                            else:
+                                await send_whatsapp_message(sender_id, "⚠️ Couldn't attach your photo. Please try again.")
+                            return
+
+                        # Option C: no recent issue — ask the guest what the image is for
+                        pending_media_sessions[sender_id] = {
+                            "media_id": media_id,
+                            "media_type": "image" if "image" in message_payload else "document",
+                            "timestamp": datetime.datetime.now()
+                        }
+                        _buttons_payload = {
+                            "messaging_product": "whatsapp",
+                            "to": sender_id,
+                            "type": "interactive",
+                            "interactive": {
+                                "type": "button",
+                                "body": {"text": "What is this image for? Please choose:"},
+                                "action": {
+                                    "buttons": [
+                                        {"type": "reply", "reply": {"id": "pending_media_issue", "title": "Report an Issue"}},
+                                        {"type": "reply", "reply": {"id": "pending_media_passport", "title": "Submit Passport"}}
+                                    ]
+                                }
+                            }
+                        }
+                        import httpx as _httpx
+                        _headers = {"Authorization": f"Bearer {settings.access_token}", "Content-Type": "application/json"}
+                        async with _httpx.AsyncClient() as _c:
+                            await _c.post(settings.whatsapp_api_url, json=_buttons_payload, headers=_headers)
                         return
                     else:
-                        # Audio outside of session? Maybe just ignore or pass to AI
+                        # Audio outside of session — pass to AI
                         pass
         elif "interactive" in message_payload:
             persistent_mode_sessions.pop(sender_id, None)
@@ -1742,6 +1787,52 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     else:
                         await send_whatsapp_message(sender_id, "Order no longer available")
                     return
+
+                # ── Pending-media routing (Option B+C follow-up) ────────────
+                if button_id == "pending_media_issue":
+                    pending = pending_media_sessions.pop(sender_id, None)
+                    if not pending:
+                        await send_whatsapp_message(sender_id, "Sorry, your image session expired. Please send the photo again.")
+                        return
+                    _vc = await get_user_villa_code(sender_id) or "UNKNOWN"
+                    _ok, _att_url, _transcript = await process_whatsapp_issue(
+                        sender_id, pending["media_id"], _vc,
+                        f"📸 Issue photo submitted by Guest {sender_id[-4:]}", pending["media_type"]
+                    )
+                    if _ok:
+                        _description = _transcript or f"📸 Issue photo submitted by Guest {sender_id[-4:]}"
+                        _rich = await db["villa_profiles"].find_one({"villa_code": _vc})
+                        _vinfo = await get_villa_info_by_code(_vc)
+                        _mgr = (_rich or {}).get("manager_phone") or (_vinfo or {}).get("manager_number")
+                        if _mgr:
+                            _clean = "".join(filter(str.isdigit, str(_mgr)))
+                            try:
+                                await send_whatsapp_message(
+                                    _clean,
+                                    f"🚨 *NEW ISSUE REPORTED!*\n\nVilla: *{(_vinfo or {}).get('name', _vc)}*\n"
+                                    f"Guest ID: `...{sender_id[-4:]}`\n"
+                                    f"Issue: {_description}\n🖼️ *Attachment:* [View Media]({_att_url})\n\nPlease check the dashboard."
+                                )
+                            except Exception:
+                                pass
+                        await send_whatsapp_message(
+                            sender_id,
+                            "✅ *Issue Received*\n\nThank you for reporting this. Our maintenance team and the villa manager have been notified."
+                        )
+                    else:
+                        await send_whatsapp_message(sender_id, "⚠️ Couldn't process your photo. Please try again.")
+                    return
+
+                if button_id == "pending_media_passport":
+                    pending = pending_media_sessions.pop(sender_id, None)
+                    if not pending:
+                        await send_whatsapp_message(sender_id, "Sorry, your image session expired. Please send the photo again.")
+                        return
+                    _vc = await get_user_villa_code(sender_id) or "UNKNOWN"
+                    _ok, _msg = await process_whatsapp_passport(sender_id, pending["media_id"], _vc)
+                    await send_whatsapp_message(sender_id, _msg)
+                    return
+                # ────────────────────────────────────────────────────────────
 
                 if button_id == "language_yes":
                     await language_yes_message(sender_id)

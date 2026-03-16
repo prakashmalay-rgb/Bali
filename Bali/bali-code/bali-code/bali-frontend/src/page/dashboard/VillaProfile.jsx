@@ -19,23 +19,46 @@ const VillaProfile = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
     const [userData, setUserData] = useState(null);
+    const [villaList, setVillaList] = useState([]);
+    const [selectedVilla, setSelectedVilla] = useState('');
 
     useEffect(() => {
         const storedUser = localStorage.getItem('user_data');
         if (storedUser) {
             const user = JSON.parse(storedUser);
             setUserData(user);
-            fetchProfile(user);
+            initVillas(user);
         }
     }, []);
 
-    const fetchProfile = async (user) => {
+    const initVillas = async (user) => {
+        const isAdmin = user.villa_codes?.includes('*');
+        if (isAdmin) {
+            try {
+                const res = await apiRequest(() => axios.get(`${API_BASE_URL}/dashboard-api/villa/list`));
+                if (res.data.success && res.data.villas.length > 0) {
+                    setVillaList(res.data.villas);
+                    const firstCode = res.data.villas[0].villa_code;
+                    setSelectedVilla(firstCode);
+                    fetchProfile(firstCode);
+                } else {
+                    setIsLoading(false);
+                }
+            } catch (error) {
+                console.error('Failed to fetch villa list:', error);
+                setIsLoading(false);
+            }
+        } else {
+            const code = user.villa_codes?.[0] || '';
+            setSelectedVilla(code);
+            fetchProfile(code);
+        }
+    };
+
+    const fetchProfile = async (villaCode) => {
         setIsLoading(true);
         try {
-            // If restricted, specify the villa in query, otherwise use default
-            const villaCode = (!user.villa_codes.includes('*')) ? user.villa_codes[0] : '';
             const queryParam = villaCode ? `?code=${villaCode}` : '';
-
             const response = await apiRequest(() => axios.get(`${API_BASE_URL}/dashboard-api/villa/profile${queryParam}`));
             if (response.data.success) {
                 setProfile(response.data.profile);
@@ -45,6 +68,11 @@ const VillaProfile = () => {
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const handleVillaChange = (code) => {
+        setSelectedVilla(code);
+        fetchProfile(code);
     };
 
     const handleSave = async () => {
@@ -91,6 +119,19 @@ const VillaProfile = () => {
                 <div>
                     <h1 className="text-4xl font-black text-neutral uppercase tracking-tighter italic">Property <span className="text-primary underline decoration-4 decoration-primary/20">Profile</span></h1>
                     <p className="text-sm font-medium text-lightneutral mt-1">Configure property-specific information for AI context and guest orientation.</p>
+                    {villaList.length > 1 && (
+                        <select
+                            value={selectedVilla}
+                            onChange={(e) => handleVillaChange(e.target.value)}
+                            className="mt-3 bg-white border border-gray-200 rounded-2xl px-4 py-2 font-bold text-sm text-neutral focus:ring-4 focus:ring-primary/10 outline-none"
+                        >
+                            {villaList.map((v) => (
+                                <option key={v.villa_code} value={v.villa_code}>
+                                    {v.name ? `${v.name} (${v.villa_code})` : v.villa_code}
+                                </option>
+                            ))}
+                        </select>
+                    )}
                 </div>
                 <button
                     onClick={handleSave}

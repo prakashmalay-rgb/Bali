@@ -681,6 +681,17 @@ async def get_service_bucket(start_date: Optional[str] = None, end_date: Optiona
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+@router.get("/villa/list")
+async def list_accessible_villas(user: Annotated[dict, Depends(requires_role("read_only"))]) -> Dict[str, Any]:
+    try:
+        if "*" in user.get("villa_codes", ["*"]):
+            villas = await db["villas"].find({}, {"_id": 0, "villa_code": 1, "name": 1}).to_list(100)
+        else:
+            villas = [{"villa_code": code} for code in user.get("villa_codes", [])]
+        return {"success": True, "villas": villas}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 @router.get("/villa/profile")
 async def get_villa_profile(user: Annotated[dict, Depends(requires_role("read_only"))], code: Optional[str] = Query(None)) -> Dict[str, Any]:
     try:

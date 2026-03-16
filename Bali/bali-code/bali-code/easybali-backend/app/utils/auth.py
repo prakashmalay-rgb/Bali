@@ -1,6 +1,7 @@
 from fastapi import Security, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import JWTError, jwt
+import jwt
+from jwt.exceptions import InvalidTokenError
 from app.settings.config import settings
 from datetime import datetime
 from functools import wraps
@@ -26,7 +27,7 @@ async def get_current_user(auth: HTTPAuthorizationCredentials = Security(securit
     try:
         payload = jwt.decode(auth.credentials, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
-    except JWTError:
+    except InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 def requires_role(required_role: str):

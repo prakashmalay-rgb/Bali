@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from jose import jwt
+import jwt
 from datetime import datetime, timedelta
 import bcrypt
 from app.settings.config import settings

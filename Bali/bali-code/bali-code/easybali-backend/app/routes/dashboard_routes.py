@@ -677,19 +677,21 @@ async def get_payment_bucket(start_date: Optional[str] = None, end_date: Optiona
         payments = await order_collection.find(match_query).sort("updated_at", -1).limit(100).to_list(100)
         formatted_payments = []
         for p in payments:
-            payment_info = p.get("payment", {})
-            dist = payment_info.get("distribution_data", {})
+            payment_info = p.get("payment", {}) or {}
+            dist = payment_info.get("distribution_data", {}) or {}
+            raw_time = p.get("updated_at") or p.get("created_at")
+            time_str = raw_time.isoformat() if hasattr(raw_time, "isoformat") else str(raw_time or "")
             formatted_payments.append({
                 "order_id": p.get("order_number"),
                 "service": p.get("service_name"),
-                "total_paid": payment_info.get("paid_amount"),
+                "total_paid": float(payment_info.get("paid_amount") or 0),
                 "currency": payment_info.get("currency", "IDR"),
                 "splits": {
-                    "sp_share": dist.get("service_provider", {}).get("amount"),
-                    "villa_share": dist.get("villa", {}).get("amount"),
-                    "eb_share": dist.get("easy_bali", {}).get("amount")
+                    "sp_share": float(dist.get("service_provider", {}).get("amount") or 0),
+                    "villa_share": float(dist.get("villa", {}).get("amount") or 0),
+                    "eb_share": float(dist.get("easy_bali", {}).get("amount") or 0)
                 },
-                "time": p.get("updated_at")
+                "time": time_str
             })
         return {"success": True, "data": formatted_payments}
     except Exception as e:

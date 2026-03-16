@@ -7,6 +7,7 @@ import { API_BASE_URL, apiRequest } from '../../api/apiClient';
 const PaymentBucket = () => {
     const [payments, setPayments] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [fetchError, setFetchError] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
 
@@ -16,6 +17,7 @@ const PaymentBucket = () => {
 
     const fetchPayments = async () => {
         setLoading(true);
+        setFetchError('');
         try {
             const params = {};
             if (startDate) params.start_date = startDate;
@@ -24,9 +26,12 @@ const PaymentBucket = () => {
             const response = await apiRequest(() => axios.get(`${API_BASE_URL}/dashboard-api/buckets/payments`, { params }));
             if (response.data.success) {
                 setPayments(response.data.data);
+            } else {
+                setFetchError(response.data.error || 'Failed to load payments.');
             }
         } catch (error) {
             console.error('Error fetching payments:', error);
+            setFetchError('Could not reach server. Please try again.');
         }
         setLoading(false);
     };
@@ -78,10 +83,17 @@ const PaymentBucket = () => {
                 </div>
             </div>
 
+            {/* Error state */}
+            {fetchError && (
+                <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl text-rose-600 text-sm font-bold">
+                    {fetchError}
+                </div>
+            )}
+
             {/* Payments List */}
             <div className="grid grid-cols-1 gap-6">
                 {loading ? (
-                    [...Array(3)].map((_, i) => <div key={i} className="h-32 bg-gray-50 rounded-3xl animate-pulse" />)
+                    [0, 1, 2].map((i) => <div key={i} className="h-32 bg-gray-50 rounded-3xl animate-pulse" />)
                 ) : payments.length > 0 ? (
                     payments.map((p, idx) => (
                         <motion.div

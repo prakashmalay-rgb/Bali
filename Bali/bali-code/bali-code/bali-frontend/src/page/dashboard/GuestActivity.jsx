@@ -1,7 +1,130 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { API_BASE_URL, apiRequest, getUserFriendlyError } from '../../api/apiClient';
 import axios from 'axios';
-import { FiClock, FiCheck, FiInfo, FiSearch, FiFilter, FiUser, FiMessageSquare, FiAlertCircle } from 'react-icons/fi';
+import { FiClock, FiCheck, FiInfo, FiSearch, FiFilter, FiMessageSquare, FiAlertCircle, FiX, FiMapPin, FiPhone, FiTag } from 'react-icons/fi';
+
+// ── Detail slide-over panel ───────────────────────────────────────────────────
+
+const DetailPanel = ({ act, onClose }) => {
+    const [detail, setDetail] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [fetchError, setFetchError] = useState('');
+
+    useEffect(() => {
+        const load = async () => {
+            try {
+                const res = await apiRequest(() =>
+                    axios.get(`${API_BASE_URL}/dashboard-api/activity/${act.type}/${act.id}`)
+                );
+                if (res.data.success) setDetail(res.data.data);
+                else setFetchError(res.data.error || 'Failed to load details.');
+            } catch {
+                setFetchError('Could not load details.');
+            } finally {
+                setLoading(false);
+            }
+        };
+        load();
+    }, [act.id, act.type]);
+
+    const Row = ({ icon, label, value }) => value ? (
+        <div className="flex gap-3 items-start">
+            <span className="mt-0.5 text-lightneutral flex-shrink-0">{icon}</span>
+            <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-lightneutral">{label}</p>
+                <p className="text-sm font-medium text-neutral mt-0.5 break-words">{value}</p>
+            </div>
+        </div>
+    ) : null;
+
+    const renderContent = () => {
+        if (loading) return <p className="text-sm text-lightneutral italic">Loading...</p>;
+        if (fetchError) return <p className="text-sm text-rose-500">{fetchError}</p>;
+        if (!detail) return null;
+
+        if (act.type === 'issue') return (
+            <div className="space-y-4">
+                <Row icon={<FiAlertCircle />} label="Description" value={detail.description} />
+                <Row icon={<FiMapPin />} label="Villa" value={detail.villa_code} />
+                <Row icon={<FiPhone />} label="Guest Number" value={detail.sender_id} />
+                <Row icon={<FiTag />} label="Category" value={detail.category} />
+                <Row icon={<FiClock />} label="Reported" value={detail.timestamp ? new Date(detail.timestamp).toLocaleString() : null} />
+                {detail.photo_url && (
+                    <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-lightneutral mb-2">Photo</p>
+                        <img src={detail.photo_url} alt="Issue" className="rounded-2xl w-full object-cover max-h-48 border border-gray-100" />
+                    </div>
+                )}
+            </div>
+        );
+
+        if (act.type === 'inquiry') return (
+            <div className="space-y-4">
+                <Row icon={<FiMessageSquare />} label="Guest Query" value={detail.query} />
+                <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-lightneutral mb-1">AI Response</p>
+                    <p className="text-sm text-neutral bg-gray-50 rounded-2xl p-3 leading-relaxed">{detail.response}</p>
+                </div>
+                <Row icon={<FiMapPin />} label="Villa" value={detail.villa_code} />
+                <Row icon={<FiPhone />} label="Guest Number" value={detail.sender_id} />
+                <Row icon={<FiTag />} label="Intent" value={detail.intent} />
+                <Row icon={<FiClock />} label="Time" value={detail.timestamp ? new Date(detail.timestamp).toLocaleString() : null} />
+            </div>
+        );
+
+        if (act.type === 'order') return (
+            <div className="space-y-4">
+                <Row icon={<FiTag />} label="Service" value={detail.service_name} />
+                <Row icon={<FiMapPin />} label="Villa" value={detail.villa_code} />
+                <Row icon={<FiPhone />} label="Guest Number" value={detail.sender_id} />
+                <Row icon={<FiTag />} label="Status" value={detail.status} />
+                {detail.payment?.paid_amount > 0 && (
+                    <Row icon={<FiInfo />} label="Amount Paid" value={`IDR ${Number(detail.payment.paid_amount).toLocaleString('id-ID')}`} />
+                )}
+                <Row icon={<FiClock />} label="Created" value={detail.created_at ? new Date(detail.created_at).toLocaleString() : null} />
+                <Row icon={<FiClock />} label="Updated" value={detail.updated_at ? new Date(detail.updated_at).toLocaleString() : null} />
+            </div>
+        );
+
+        return null;
+    };
+
+    const typeLabel = { issue: 'Maintenance Issue', inquiry: 'AI Inquiry', order: 'Service Order' };
+    const typeBg = { issue: 'bg-rose-50 text-rose-600', inquiry: 'bg-blue-50 text-blue-600', order: 'bg-emerald-50 text-emerald-600' };
+
+    return (
+        <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
+            <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" />
+            <div
+                className="relative w-full max-w-md h-full bg-white shadow-2xl overflow-y-auto"
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="p-6 space-y-5">
+                    {/* Header */}
+                    <div className="flex items-start justify-between gap-3">
+                        <div>
+                            <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${typeBg[act.type] || 'bg-gray-50 text-gray-500'}`}>
+                                {typeLabel[act.type] || act.type}
+                            </span>
+                            <h2 className="text-lg font-black text-neutral mt-2">{act.guest_name}</h2>
+                            <p className="text-xs text-lightneutral">{act.time}</p>
+                        </div>
+                        <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100 text-lightneutral flex-shrink-0">
+                            <FiX size={18} />
+                        </button>
+                    </div>
+
+                    <hr className="border-gray-100" />
+
+                    {/* Detail content */}
+                    {renderContent()}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 const GuestActivity = () => {
     const [activities, setActivities] = useState([]);
@@ -9,6 +132,7 @@ const GuestActivity = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('all');
     const [error, setError] = useState('');
+    const [selectedAct, setSelectedAct] = useState(null);
 
     useEffect(() => {
         const fetchActivity = async () => {
@@ -28,34 +152,24 @@ const GuestActivity = () => {
         fetchActivity();
     }, []);
 
-    // Helper functions for UI
     const getStatusStyles = (status, type) => {
         if (type === 'issue' && status === 'pending') return 'bg-rose-50 text-rose-600 border-rose-100';
-
         switch (status) {
-            case 'completed':
-                return 'bg-emerald-50 text-emerald-600 border-emerald-100';
-            case 'pending':
-                return 'bg-amber-50 text-amber-600 border-amber-100';
-            default:
-                return 'bg-blue-50 text-primary border-blue-100';
+            case 'completed': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
+            case 'pending': return 'bg-amber-50 text-amber-600 border-amber-100';
+            default: return 'bg-blue-50 text-primary border-blue-100';
         }
     };
 
     const getIcon = (type, status) => {
         switch (type) {
-            case 'order':
-                return status === 'completed' ? <FiCheck className="w-4 h-4" /> : <FiClock className="w-4 h-4" />;
-            case 'inquiry':
-                return <FiMessageSquare className="w-4 h-4" />;
-            case 'issue':
-                return <FiAlertCircle className="w-4 h-4" />;
-            default:
-                return <FiInfo className="w-4 h-4" />;
+            case 'order': return status === 'completed' ? <FiCheck className="w-4 h-4" /> : <FiClock className="w-4 h-4" />;
+            case 'inquiry': return <FiMessageSquare className="w-4 h-4" />;
+            case 'issue': return <FiAlertCircle className="w-4 h-4" />;
+            default: return <FiInfo className="w-4 h-4" />;
         }
     };
 
-    // Filter Logic
     const filteredActivities = activities.filter(act => {
         const matchesSearch =
             act.guest_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -114,7 +228,7 @@ const GuestActivity = () => {
                 </div>
             )}
 
-            {/* Main Activity Board (Glassmorphism) */}
+            {/* Main Activity Board */}
             <div className="bg-white/60 backdrop-blur-xl border border-white rounded-[2rem] shadow-sm overflow-hidden">
                 <div className="overflow-x-auto p-2">
                     <table className="w-full text-left border-collapse">
@@ -146,7 +260,11 @@ const GuestActivity = () => {
                                 </tr>
                             ) : (
                                 filteredActivities.map((act) => (
-                                    <tr key={act.id} className="hover:bg-white/80 transition-all group cursor-pointer border-l-4 border-l-transparent hover:border-l-primary">
+                                    <tr
+                                        key={act.id}
+                                        onClick={() => setSelectedAct(act)}
+                                        className="hover:bg-white/80 transition-all group cursor-pointer border-l-4 border-l-transparent hover:border-l-primary"
+                                    >
                                         <td className="py-4 px-6">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-primary/10 to-primary/5 border border-primary/10 flex items-center justify-center text-primary font-black shadow-sm group-hover:scale-110 transition-transform">
@@ -186,6 +304,10 @@ const GuestActivity = () => {
                     </table>
                 </div>
             </div>
+
+            {selectedAct && (
+                <DetailPanel act={selectedAct} onClose={() => setSelectedAct(null)} />
+            )}
 
         </div>
     );

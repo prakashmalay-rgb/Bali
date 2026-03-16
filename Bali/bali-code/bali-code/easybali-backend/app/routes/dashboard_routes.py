@@ -149,6 +149,37 @@ async def get_guest_activity(user: Annotated[dict, Depends(requires_role("read_o
     except Exception as e:
         return {"success": False, "error": str(e), "activity": []}
 
+@router.get("/activity/{item_type}/{item_id}")
+async def get_activity_detail(item_type: str, item_id: str, _user: Annotated[dict, Depends(requires_role("read_only"))]) -> Dict[str, Any]:
+    try:
+        oid = ObjectId(item_id)
+        if item_type == "issue":
+            doc = await issue_collection.find_one({"_id": oid})
+            if not doc:
+                return {"success": False, "error": "Not found"}
+            doc["_id"] = str(doc["_id"])
+            if isinstance(doc.get("timestamp"), datetime): doc["timestamp"] = doc["timestamp"].isoformat()
+            return {"success": True, "type": "issue", "data": doc}
+        elif item_type == "inquiry":
+            doc = await inquiry_collection.find_one({"_id": oid})
+            if not doc:
+                return {"success": False, "error": "Not found"}
+            doc["_id"] = str(doc["_id"])
+            if isinstance(doc.get("timestamp"), datetime): doc["timestamp"] = doc["timestamp"].isoformat()
+            return {"success": True, "type": "inquiry", "data": doc}
+        elif item_type == "order":
+            doc = await order_collection.find_one({"_id": oid})
+            if not doc:
+                return {"success": False, "error": "Not found"}
+            doc["_id"] = str(doc["_id"])
+            for field in ("created_at", "updated_at"):
+                if isinstance(doc.get(field), datetime): doc[field] = doc[field].isoformat()
+            return {"success": True, "type": "order", "data": doc}
+        else:
+            return {"success": False, "error": "Unknown item type"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 @router.get("/chats")
 async def get_concierge_chats() -> Dict[str, Any]:
     from app.utils.chat_memory import chat_memory

@@ -12,6 +12,13 @@ const authHeader = () => {
 
 // ── Pre-register form modal ───────────────────────────────────────────────────
 
+const Field = ({ label, ...props }) => (
+    <div>
+        <label className="text-[10px] font-black uppercase tracking-widest text-lightneutral mb-1 block">{label}</label>
+        <input className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20" {...props} />
+    </div>
+);
+
 const RegisterArrivalModal = ({ onClose, onSaved }) => {
     const [form, setForm] = useState({
         guest_name: '', sender_id: '', villa_code: '',
@@ -36,13 +43,6 @@ const RegisterArrivalModal = ({ onClose, onSaved }) => {
         } catch { setError('Request failed.'); }
         finally { setSaving(false); }
     };
-
-    const Field = ({ label, ...props }) => (
-        <div>
-            <label className="text-[10px] font-black uppercase tracking-widest text-lightneutral mb-1 block">{label}</label>
-            <input className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20" {...props} />
-        </div>
-    );
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>

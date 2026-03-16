@@ -71,6 +71,37 @@ jobs:
           print('SP reassignment regression: PASS')
           "
 
+      - name: Webhook handler — no conflicting middleware decorators
+        run: |
+          python -c "
+          import ast, sys
+
+          with open('app/routes/whatsapp_routes.py') as f:
+              source = f.read()
+
+          tree = ast.parse(source)
+
+          # Find all decorated functions and check for @limiter.limit usage
+          # A second Limiter instance in a route file conflicts with app.state.limiter
+          for node in ast.walk(tree):
+              if isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef)):
+                  for dec in node.decorator_list:
+                      dec_str = ast.dump(dec)
+                      if 'limiter' in dec_str and 'limit' in dec_str:
+                          print(f'FAIL: @limiter.limit() decorator found on {node.name} — use global rate limiter only')
+                          sys.exit(1)
+
+          # Check no second Limiter() instantiation exists in route files
+          for node in ast.walk(tree):
+              if isinstance(node, ast.Assign):
+                  val_str = ast.dump(node.value)
+                  if 'Limiter' in val_str:
+                      print('FAIL: Limiter() instance created in route file — import from main or use global only')
+                      sys.exit(1)
+
+          print('Webhook handler structure check: PASS')
+          "
+
   security:
     name: Dependency Audit
     runs-on: ubuntu-latest

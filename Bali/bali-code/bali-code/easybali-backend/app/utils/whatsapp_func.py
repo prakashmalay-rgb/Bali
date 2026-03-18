@@ -165,6 +165,31 @@ async def _whatsapp_ai_chat(sender_id: str, query: str, chat_type: str) -> str |
         print(f"❌ _whatsapp_ai_chat error ({chat_type}): {e}")
         return None
 
+
+def _infer_chat_type(text: str) -> str:
+    """Infer the best AI chat_type from any menu item title."""
+    t = text.lower()
+    if any(w in t for w in ["currency", "convert", "exchange", "rate", "money", "rupiah", "usd", "idr"]):
+        return "currency-converter"
+    if any(w in t for w in ["plan", "trip", "itinerary", "schedule", "travel"]):
+        return "plan-my-trip"
+    if any(w in t for w in ["language", "translate", "lesson", "phrase", "speak", "bahasa"]):
+        return "voice-translator"
+    if any(w in t for w in ["cuisine", "food", "dining", "restaurant", "eat", "dish", "street food"]):
+        return "local-cuisine"
+    if any(w in t for w in ["event", "calendar", "festival", "happening", "concert"]):
+        return "event-calender"
+    if any(w in t for w in ["activity", "activities", "attraction", "experience", "adventure"]):
+        return "things-to-do-in-bali"
+    return "what-to-do"
+
+
+# Sub-menu parents: selecting these shows a list of sub-items from the sheet.
+_SUBMENU_PARENTS = {
+    "Local Guide", "Bali Handbook", "Recommendations",
+    "Discount & Promotions", "Find Dining Options", "Discover Spots",
+}
+
 from app.services.menu_services import get_main_menu_design
 
 async def fetch_menu_data(api_url: str, menu_type: str) -> list:
@@ -2712,115 +2737,63 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                 return
 
             elif serviceitems_text:
+                # ── 1. Hard-wired special flows ──────────────────────────────
                 if serviceitems_text == "Order Services":
                     token = f"order{sender_id}"
                     await send_whatsapp_order_flow_message(sender_id, flow_token=token)
                     return
-                elif serviceitems_text in ["Voice Translator", "Language Lesson"]:
+
+                if serviceitems_text in ["Voice Translator", "Language Lesson"]:
                     language_lesson_sessions[sender_id] = True
                     await language_starting_message(sender_id)
                     return
-                elif serviceitems_text in ["Local Guide", "Bali Handbook"]:
-                    # Show sub-menu from sheet (contains Things to Do in Bali, Local Cuisine Guide, etc.)
+
+                # ── 2. Sub-menu parents → show sheet list, AI fallback if empty ──
+                if serviceitems_text in _SUBMENU_PARENTS:
                     main_design = await fetch_menu_design(serviceitems_text)
                     if main_design and main_design.get("items"):
                         await send_whatsapp_menu_list_message(sender_id, main_design)
-                    else:
-                        # Sheet has no sub-items yet — fall back to AI chat
-                        persistent_mode_sessions[sender_id] = "what_to_do_today"
-                        data = await _whatsapp_ai_chat(sender_id, f"Give me Bali recommendations and local tips", "what-to-do")
-                        if data:
-                            await send_whatsapp_message(sender_id, data)
-                    return
-                elif serviceitems_text in ["Recommendations", "Discount & Promotions"]:
-                    # Try sheet sub-menu first; fall back to AI chat if no items configured yet
-                    main_design = await fetch_menu_design(serviceitems_text)
-                    if main_design and main_design.get("items"):
-                        await send_whatsapp_menu_list_message(sender_id, main_design)
-                    else:
-                        chat_type = "what-to-do" if serviceitems_text == "Recommendations" else "general"
-                        mode_key = re.sub(r'[^\w]', '', serviceitems_text.lower().replace(" ", "_"))
-                        persistent_mode_sessions[sender_id] = mode_key
-                        query = (
-                            "What are your top recommendations for activities, dining, and experiences in Bali?"
-                            if serviceitems_text == "Recommendations"
-                            else "What current discounts and promotions are available through EasyBali?"
-                        )
-                        data = await _whatsapp_ai_chat(sender_id, query, chat_type)
-                        if data:
-                            await send_whatsapp_message(sender_id, data)
-                        else:
-                            await send_whatsapp_message(sender_id, f"Sorry, I couldn't load {serviceitems_text} right now. Please try again.")
-                    return
-
-                elif serviceitems_text == "Read Safety Tips":
-                    link = "https://www.canva.com/design/DAGaNLT8Owc/gDSbEepIXK4OJxdOOtx92Q/view?utm_content=DAGaNLT8Owc&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h3bad98561a"
-                    await send_whatsapp_interactive_link(sender_id, link)
-                    return
-                elif serviceitems_text == "Find Medical Help":
-                    link = "https://www.canva.com/design/DAGbfiNdbTw/rJdf8dxswAQDXZf3XtPSqw/view?utm_content=DAGbfiNdbTw&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h17b7214f43"
-                    await send_whatsapp_interactive_link(sender_id, link)
-                    return
-                elif serviceitems_text == "Know the Local Rules":
-                    link = "https://www.canva.com/design/DAGbZYkN0V8/SRJA3kOkFPzFqRmJEjlGbQ/view?utm_content=DAGbZYkN0V8&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h1d8411966d"
-                    await send_whatsapp_interactive_link(sender_id, link)
-                    return
-                elif serviceitems_text == "Shop the Best Places":
-                    link = "https://maps.app.goo.gl/soEShhHPXVJhM5ms6"
-                    await send_whatsapp_interactive_link(sender_id, link)
-                    return
-                elif serviceitems_text == "Find Your Spot":
-                    link = "https://maps.app.goo.gl/YvPCmHqJTh2ZNz3HA"
-                    await send_whatsapp_interactive_link(sender_id, link)
-                    return
-                elif serviceitems_text == "Relax & Recharge":
-                    link = "https://maps.app.goo.gl/26FqxqXMmgvdyXvRA"
-                    await send_whatsapp_interactive_link(sender_id, link)
-                    return
-                elif serviceitems_text == "Explore After Dark":
-                    link = "https://maps.app.goo.gl/NcKZhc3vRUeqKF6M7"
-                    await send_whatsapp_interactive_link(sender_id, link)
-                    return
-                elif serviceitems_text == "Locate Hospital":
-                    link = "https://maps.app.goo.gl/SVWEZTNwhZUjPpZR6"
-                    await send_whatsapp_interactive_link(sender_id, link)
-                    return
-
-                elif serviceitems_text in ["Find Dining Options", "Discover Spots"]:
-                    main_design = await fetch_menu_design(serviceitems_text)
-                    if not main_design:
-                        await send_whatsapp_message(sender_id, "Sorry, we couldn't fetch the menu design at this time.")
                         return
-                    await send_whatsapp_menu_list_message(sender_id, main_design)
+                    # Sheet has no items yet — fall through to AI chat
+
+                # ── 3. Sheet Button URL lookup (title match, any item) ────────
+                _btn_url = None
+                try:
+                    from app.services.menu_services import cache as _menu_cache
+                    _df = _menu_cache.get("main_menu_design")
+                    if _df is not None:
+                        _match = _df[_df["Title"].str.strip() == serviceitems_text.strip()]
+                        if not _match.empty:
+                            _btn_url = str(_match.iloc[0].get("Button", "") or "").strip()
+                            if not _btn_url.startswith("http"):
+                                _btn_url = None
+                except Exception:
+                    pass
+
+                if _btn_url:
+                    await send_whatsapp_interactive_link(sender_id, _btn_url)
                     return
 
-                # For any sub-menu item with a button URL in the sheet (e.g. Recommendations items with Google Maps links)
-                elif serviceitems_text:
-                    try:
-                        from app.services.menu_services import cache as _menu_cache
-                        _df = _menu_cache.get("main_menu_design")
-                        if _df is not None:
-                            _match = _df[_df["Title"] == serviceitems_text]
-                            if not _match.empty:
-                                _btn = str(_match.iloc[0].get("Button", "") or "").strip()
-                                if _btn.startswith("http"):
-                                    await send_whatsapp_interactive_link(sender_id, _btn)
-                                    return
-                    except Exception:
-                        pass
-
+                # ── 4. Universal AI chat fallback ─────────────────────────────
+                # Every unhandled item enters a persistent AI chat mode.
+                # chat_type is inferred from the item title for best relevance.
+                chat_type = _infer_chat_type(serviceitems_text)
+                mode_key = re.sub(r'[^\w]', '', serviceitems_text.lower().replace(" ", "_"))
+                persistent_mode_sessions[sender_id] = mode_key
+                data = await _whatsapp_ai_chat(
+                    sender_id,
+                    f"I selected '{serviceitems_text}' from the menu. Please give me relevant information about this in Bali.",
+                    chat_type,
+                )
+                if data:
+                    await send_whatsapp_message(sender_id, data)
                 else:
-                    api_url = settings.BASE_URL
-                    serviceitem_data = await fetch_service_items(api_url, serviceitems_text)
-
-                    if not serviceitem_data:
-                        print("DEBUG: No submenu data received!")
-                        await send_whatsapp_message(sender_id, "Sorry, we couldn't fetch the categories at this time.")
-                        return
-
-                    for subcard_data in serviceitem_data:
-                        await send_whatsapp_card(sender_id, subcard_data)
-                    return
+                    await send_whatsapp_message(
+                        sender_id,
+                        f"I couldn't load information for *{serviceitems_text}* right now. "
+                        "You can type your question directly and I'll do my best to help!"
+                    )
+                return
 
             else:
                 if message_text:

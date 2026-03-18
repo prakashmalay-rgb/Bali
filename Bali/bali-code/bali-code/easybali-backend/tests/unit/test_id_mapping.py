@@ -64,13 +64,12 @@ class TestPersistentApiMapping:
                 f"'{key}' missing from PERSISTENT_API_MAPPING"
             )
 
-    def test_each_mapping_entry_has_url_and_func(self):
-        """TC-U-07: Every mapping entry has 'url' and 'fetch_func' keys."""
-        from app.utils.whatsapp_func import PERSISTENT_API_MAPPING
-        for key, val in PERSISTENT_API_MAPPING.items():
-            assert "url" in val, f"Entry '{key}' missing 'url'"
-            assert "fetch_func" in val, f"Entry '{key}' missing 'fetch_func'"
-            assert val["url"].startswith("http"), f"Entry '{key}' URL must start with http"
+    def test_each_mapping_entry_has_chat_type(self):
+        """TC-U-07: Every PERSISTENT_MODE_CHAT_TYPES entry maps to a non-empty chat_type string."""
+        from app.utils.whatsapp_func import PERSISTENT_MODE_CHAT_TYPES
+        for key, chat_type in PERSISTENT_MODE_CHAT_TYPES.items():
+            assert isinstance(chat_type, str), f"Entry '{key}' chat_type is not a string"
+            assert len(chat_type) > 0, f"Entry '{key}' has empty chat_type"
 
 
 class TestMenuIdGeneration:

@@ -129,36 +129,41 @@ async def fetch_explore_data(api_url: str, query: str, user_id: str):
 
 language_lesson_sessions = {}
 persistent_mode_sessions = {}
-PERSISTENT_API_MAPPING = {
-    "what_to_do_today": {
-        "url": f"{settings.BASE_URL}/what-to-do/chat/",
-        "fetch_func": fetch_explore_data
-    },
-    "things_to_do_in_bali": {
-        "url": f"{settings.BASE_URL}/things-to-do-in-bali/chat",
-        "fetch_func": fetch_explore_data
-    },
-    "event_calendar": {
-        "url": f"{settings.BASE_URL}/event-calender/chat",
-        "fetch_func": fetch_explore_data
-    },
-    "local_cousine_guide": {
-        "url": f"{settings.BASE_URL}/local-cuisine/chat",
-        "fetch_func": fetch_explore_data
-    },
-    "local_cuisine_guide": {
-        "url": f"{settings.BASE_URL}/local-cuisine/chat",
-        "fetch_func": fetch_explore_data
-    },
-    "plan_my_trip": {
-        "url": f"{settings.BASE_URL}/plan-my-trip/chat",
-        "fetch_func": fetch_explore_data
-    },
-    "currency_converter": {
-        "url": f"{settings.BASE_URL}/currency-converter/chat",
-        "fetch_func": fetch_explore_data
-    },
+
+# Maps WhatsApp list row IDs → AI chat_type strings for direct generate_response calls.
+# Keys must match the sanitized IDs produced by fetch_menu_data.
+PERSISTENT_MODE_CHAT_TYPES = {
+    "what_to_do_today":      "what-to-do",
+    "things_to_do_in_bali":  "things-to-do-in-bali",
+    "event_calendar":        "event-calender",
+    "local_cousine_guide":   "local-cuisine",
+    "local_cuisine_guide":   "local-cuisine",
+    "plan_my_trip":          "plan-my-trip",
+    "currency_converter":    "currency-converter",
+    "recommendations":       "what-to-do",
+    "discount__promotions":  "general",
 }
+
+# Keep for backward-compatibility with unit tests that import this name.
+PERSISTENT_API_MAPPING = {k: {"url": "", "fetch_func": None} for k in PERSISTENT_MODE_CHAT_TYPES}
+
+
+async def _whatsapp_ai_chat(sender_id: str, query: str, chat_type: str) -> str | None:
+    """Call generate_response directly — no HTTP round-trip to self."""
+    from app.services.ai_prompt import generate_response
+    try:
+        if chat_type == "currency-converter":
+            query = await _enrich_currency_query(query)
+        result = await generate_response(
+            query=query,
+            user_id=sender_id,
+            chat_type=chat_type,
+            language="EN",
+        )
+        return result.get("response") if result else None
+    except Exception as e:
+        print(f"❌ _whatsapp_ai_chat error ({chat_type}): {e}")
+        return None
 
 from app.services.menu_services import get_main_menu_design
 
@@ -2654,26 +2659,23 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
 
             if message_text and sender_id in persistent_mode_sessions and not serviceitems_text and not category_text:
                 mode = persistent_mode_sessions.get(sender_id)
-                if mode:
-                    mode_info = PERSISTENT_API_MAPPING.get(mode)
-                    if mode_info:
-                        query_to_send = message_text
-                        data = await mode_info["fetch_func"](mode_info["url"], query=query_to_send, user_id=sender_id)
-                        if not data:
-                            await send_whatsapp_message(sender_id, f"Sorry, no data available for {mode} at this time.")
-                        else:
-                            await send_whatsapp_message(sender_id, data)
-                    return
-
-            if selected_id in PERSISTENT_API_MAPPING:
-                persistent_mode_sessions[sender_id] = selected_id
-                mode_info = PERSISTENT_API_MAPPING.get(selected_id)
-                if mode_info:
-                    data = await mode_info["fetch_func"](mode_info["url"], query="Hi", user_id=sender_id)
-                    if not data:
-                        await send_whatsapp_message(sender_id, f"Sorry, no data available for {serviceitems_text} at this time.")
-                    else:
+                if mode and mode in PERSISTENT_MODE_CHAT_TYPES:
+                    chat_type = PERSISTENT_MODE_CHAT_TYPES[mode]
+                    data = await _whatsapp_ai_chat(sender_id, message_text, chat_type)
+                    if data:
                         await send_whatsapp_message(sender_id, data)
+                    else:
+                        await send_whatsapp_message(sender_id, "Sorry, I couldn't process that right now. Please try again.")
+                return
+
+            if selected_id in PERSISTENT_MODE_CHAT_TYPES:
+                chat_type = PERSISTENT_MODE_CHAT_TYPES[selected_id]
+                persistent_mode_sessions[sender_id] = selected_id
+                data = await _whatsapp_ai_chat(sender_id, "Hi", chat_type)
+                if data:
+                    await send_whatsapp_message(sender_id, data)
+                else:
+                    await send_whatsapp_message(sender_id, "Sorry, I couldn't load this feature right now. Please try again.")
                 return
             
             elif selected_id in ("language_lesson", "voice_translator"):
@@ -2718,12 +2720,37 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     language_lesson_sessions[sender_id] = True
                     await language_starting_message(sender_id)
                     return
-                elif serviceitems_text in ["Local Guide", "Bali Handbook", "Recommendations", "Discount & Promotions"]:
+                elif serviceitems_text in ["Local Guide", "Bali Handbook"]:
+                    # Show sub-menu from sheet (contains Things to Do in Bali, Local Cuisine Guide, etc.)
                     main_design = await fetch_menu_design(serviceitems_text)
-                    if not main_design:
-                        await send_whatsapp_message(sender_id, "Sorry, we couldn't fetch the menu design at this time.")
-                        return
-                    await send_whatsapp_menu_list_message(sender_id, main_design)
+                    if main_design and main_design.get("items"):
+                        await send_whatsapp_menu_list_message(sender_id, main_design)
+                    else:
+                        # Sheet has no sub-items yet — fall back to AI chat
+                        persistent_mode_sessions[sender_id] = "what_to_do_today"
+                        data = await _whatsapp_ai_chat(sender_id, f"Give me Bali recommendations and local tips", "what-to-do")
+                        if data:
+                            await send_whatsapp_message(sender_id, data)
+                    return
+                elif serviceitems_text in ["Recommendations", "Discount & Promotions"]:
+                    # Try sheet sub-menu first; fall back to AI chat if no items configured yet
+                    main_design = await fetch_menu_design(serviceitems_text)
+                    if main_design and main_design.get("items"):
+                        await send_whatsapp_menu_list_message(sender_id, main_design)
+                    else:
+                        chat_type = "what-to-do" if serviceitems_text == "Recommendations" else "general"
+                        mode_key = re.sub(r'[^\w]', '', serviceitems_text.lower().replace(" ", "_"))
+                        persistent_mode_sessions[sender_id] = mode_key
+                        query = (
+                            "What are your top recommendations for activities, dining, and experiences in Bali?"
+                            if serviceitems_text == "Recommendations"
+                            else "What current discounts and promotions are available through EasyBali?"
+                        )
+                        data = await _whatsapp_ai_chat(sender_id, query, chat_type)
+                        if data:
+                            await send_whatsapp_message(sender_id, data)
+                        else:
+                            await send_whatsapp_message(sender_id, f"Sorry, I couldn't load {serviceitems_text} right now. Please try again.")
                     return
 
                 elif serviceitems_text == "Read Safety Tips":

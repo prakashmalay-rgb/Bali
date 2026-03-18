@@ -4,10 +4,67 @@ from app.db.session import db
 from datetime import datetime
 from uuid import uuid4
 from typing import Optional, List
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/onboarding", tags=["Villa Onboarding"])
 
 villa_collection = db["villas"]
+partnership_applications = db["partnership_applications"]
+
+
+class PartnershipApplication(BaseModel):
+    # Step 1
+    villa_name: str
+    address: str
+    area: str
+    # Step 2
+    property_type: str = "Villa"
+    num_rooms: str = ""
+    max_guests: str = ""
+    year_established: str = ""
+    # Step 3
+    amenities: List[str] = []
+    # Step 4
+    services: List[str] = []
+    # Step 5
+    target_guests: List[str] = []
+    # Step 6
+    rate_min: str = ""
+    rate_max: str = ""
+    commission: str = "15"
+    agreed_to_terms: bool = False
+    # Step 7
+    contact_name: str
+    contact_role: str = ""
+    contact_phone: str
+    contact_email: str
+    # Step 8
+    bank_name: str = ""
+    account_holder: str = ""
+    account_number: str = ""
+    # Step 9
+    business_reg: str = ""
+    website: str = ""
+    instagram: str = ""
+    photo_url: str = ""
+
+
+@router.post("/apply")
+async def submit_partnership_application(application: PartnershipApplication):
+    """Submit a villa partnership application."""
+    try:
+        doc = application.model_dump()
+        doc["status"] = "pending_review"
+        doc["submitted_at"] = datetime.now()
+        doc["application_id"] = str(uuid4())[:8].upper()
+        await partnership_applications.insert_one(doc)
+        return {
+            "status": "success",
+            "message": "Application received. Our team will contact you within 2-3 business days.",
+            "application_id": doc["application_id"]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to submit application: {str(e)}")
 
 @router.post("/generate-qr")
 async def generate_villa_qr(

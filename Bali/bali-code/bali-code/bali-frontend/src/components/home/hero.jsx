@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Modal, Select, message } from "antd";
 import Button from "../shared/button";
 import { useNavigate } from "react-router-dom";
 import { useVoiceToText } from "../../hooks/useVoiceToText";
 import { useLanguage } from "../../context/LanguageContext";
+import { API_BASE_URL } from "../../api/apiClient";
 
 const { Option } = Select;
 
@@ -11,9 +12,33 @@ const Hero = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedVilla, setSelectedVilla] = useState(null);
   const [chatInput, setChatInput] = useState("");
+  const [villas, setVillas] = useState([]);
   const navigate = useNavigate();
 
   const { language, toggleLanguage, t } = useLanguage();
+
+  // Auto-trigger QR modal on first visit
+  useEffect(() => {
+    const hasSeenModal = localStorage.getItem('qr_modal_shown');
+    if (!hasSeenModal) {
+      setIsModalOpen(true);
+      localStorage.setItem('qr_modal_shown', '1');
+    }
+  }, []);
+
+  // Fetch real villas from API
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/onboarding/villas`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.villas && data.villas.length > 0) {
+          setVillas(data.villas);
+        }
+      })
+      .catch(() => {
+        // silently fallback — modal still usable without villa list
+      });
+  }, []);
 
   const { isListening, toggleListening } = useVoiceToText(
     (transcript) => setChatInput(transcript),
@@ -87,14 +112,6 @@ const Hero = () => {
     handleChat();
   };
 
-  const villas = [
-    "Villa Sunset Paradise",
-    "Villa Ocean View",
-    "Villa Mountain Retreat",
-    "Villa Tropical Garden",
-    "Villa Beachfront Bliss",
-  ];
-
   return (
     <>
       <section className="hero relative max-w-[1392px] w-full flex flex-col justify-center items-center gap-[12px] rounded-[35px] sm:rounded-[50px] h-[500px] sm:h-[711px] z-[1] bg-no-repeat bg-cover bg-center">
@@ -103,15 +120,28 @@ const Hero = () => {
           alt="logo"
           className="hero-logo absolute top-[30px] left-[30px]"
         />
-        <div
-          className="language cursor-pointer flex justify-center items-center absolute top-[30px] right-[30px] rounded-full size-9 sm:size-[60px] border-[2px] border-solid border-white hover:bg-white hover:text-black transition-all"
+        <button
+          type="button"
+          aria-label="Toggle language"
+          className="language cursor-pointer flex justify-center items-center absolute top-[30px] right-[30px] rounded-full size-9 sm:size-[60px] border-[2px] border-solid border-white hover:bg-white hover:text-black transition-all bg-transparent"
           onClick={toggleLanguage}
         >
           <h5 className="text-[10px] sm:text-[22px] font-semibold text-white">
             {language}
           </h5>
+        </button>
+
+        {/* Hero headline overlay */}
+        <div className="flex flex-col items-center text-center px-6 z-[2]">
+          <h1 className="text-[28px] sm:text-[48px] lg:text-[56px] font-bold text-white leading-tight drop-shadow-lg">
+            {t("hero_title") || "Welcome to EASY BALI"}
+          </h1>
+          <p className="text-[14px] sm:text-[18px] text-white/90 font-medium mt-2 drop-shadow">
+            {t("hero_subtitle") || "Your personal travel companion"}
+          </p>
         </div>
-        <div className="hero-chat-input absolute -bottom-[7%] sm:-bottom-[10%] left-[12px] sm:left-0 z-[3] w-[90%] lg:w-full">
+
+        <div className="hero-chat-input absolute -bottom-[7%] sm:-bottom-[10%] left-1/2 -translate-x-1/2 lg:left-0 lg:translate-x-0 z-[3] w-[90%] lg:w-full">
           <input
             type="text"
             placeholder={t("chat_placeholder")}
@@ -160,7 +190,7 @@ const Hero = () => {
               You can also do this later if you would like to order any of our
               services.
             </p>
-            <Button text={t("skip")} className="btn-primary modal-skip-btn" />
+            <Button text={t("skip")} className="btn-primary modal-skip-btn" onClick={handleCancel} />
             <div className="villa-dropdown-wrapper">
               <Select
                 placeholder={t("villas_placeholder")}
@@ -184,9 +214,9 @@ const Hero = () => {
                   </svg>
                 }
               >
-                {villas.map((villa, index) => (
-                  <Option key={index} value={villa}>
-                    {villa}
+                {villas.map((villa) => (
+                  <Option key={villa.villa_code || villa.villa_name} value={villa.villa_code || villa.villa_name}>
+                    {villa.villa_name}
                   </Option>
                 ))}
               </Select>

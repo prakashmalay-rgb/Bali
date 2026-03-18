@@ -38,6 +38,7 @@ import PaymentBucket from "./page/dashboard/PaymentBucket";
 import ServiceBucket from "./page/dashboard/ServiceBucket";
 import ContentLibrary from "./page/dashboard/ContentLibrary";
 import RefundsView from "./page/dashboard/RefundsView";
+import PartnersView from "./page/dashboard/PartnersView";
 import { Navigate } from "react-router-dom";
 import { LanguageProvider } from "./context/LanguageContext";
 import PageTransition from "./components/layout/PageTransition";
@@ -213,6 +214,10 @@ const appRouter = createBrowserRouter([
       {
         path: "change-password",
         element: <ChangePassword />
+      },
+      {
+        path: "partners",
+        element: <PartnersView />
       }
     ],
   },

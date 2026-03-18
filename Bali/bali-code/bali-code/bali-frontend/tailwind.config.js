@@ -17,8 +17,21 @@ export default {
         xl: "1280px",
         "2xl": "1440",
       },
+      fontFamily: {
+        sans: ['Urbanist', 'sans-serif'],
+      },
+      fontSize: {
+        'h1': ['56px', { lineHeight: '1.1', fontWeight: '700' }],
+        'h2': ['35px', { lineHeight: '1.2', fontWeight: '700' }],
+        'h3': ['24px', { lineHeight: '1.3', fontWeight: '600' }],
+        'body1': ['18px', { lineHeight: '1.6', fontWeight: '400' }],
+        'body2': ['16px', { lineHeight: '1.6', fontWeight: '400' }],
+        'body3': ['12px', { lineHeight: '1.5', fontWeight: '400' }],
+      },
       colors: {
         primary: "#0169E4",
+        orange: "#FF8000",
+        midgrey: "#C5C4C4",
         white: "#ffffff",
         secondarywhite: "#F7F8F9",
         light: "#f6f8f9",
@@ -42,7 +55,7 @@ export default {
         "orange-gradient": "linear-gradient(180deg, #ED8612 0%, #FE7E59 100%)",
         "primary-background":
           "linear-gradient(97deg, #fff 26.64%, rgba(242, 244, 246, 0) 94.3%)",
-        "gradient-to-r": "linear-gradient(90deg, #3579F6 0%, #1F4790 100%)",
+        "blue-navy-gradient": "linear-gradient(90deg, #3579F6 0%, #1F4790 100%)",
       },
 
       boxShadow: {

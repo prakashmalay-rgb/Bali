@@ -364,7 +364,7 @@ const ServiceItems = () => {
       </div>
 
       {isModalOpen && selectedItem && (
-        <div className='fixed inset-0 bg-gray-800/20 backdrop-blur-md flex items-center justify-center z-50 p-4'>
+        <div className='fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4'>
           <div className='bg-white rounded-[30px] sm:rounded-[50px] py-4 sm:py-[20px] w-[370px] sm:w-[90vw] lg:w-[750px] max-w-[370px] sm:max-w-[90vw] lg:max-w-[750px] h-auto max-h-[870px] sm:max-h-[90vh] relative shadow-[0_0_40px_rgba(0,0,0,0.3)] overflow-y-auto'>
 
             {/* Header */}
@@ -454,9 +454,9 @@ const ServiceItems = () => {
                   onChange={handleInputChange}
                   className='w-full h-[56px] sm:h-[70px] px-4 sm:px-8 py-3 border border-black rounded-[20px] focus:outline-none focus:border-blue-400 bg-white appearance-none cursor-pointer text-black'
                 >
-                  <option value="12:00-14:00" className='bg-white text-black hover:bg-blue-50'>12:00 PM - 02:00 PM</option>
-                  <option value="14:00-16:00" className='bg-white text-black hover:bg-blue-50'>02:00 PM - 04:00 PM</option>
-                  <option value="16:00-18:00" className='bg-white text-black hover:bg-blue-50'>04:00 PM - 06:00 PM</option>
+                  <option value="12:00-14:00" className='bg-white text-black hover:bg-blue-50'>12:00 PM – 02:00 PM</option>
+                  <option value="14:00-16:00" className='bg-white text-black hover:bg-blue-50'>02:00 PM – 04:00 PM</option>
+                  <option value="16:00-18:00" className='bg-white text-black hover:bg-blue-50'>04:00 PM – 06:00 PM</option>
                 </select>
               </div>
 

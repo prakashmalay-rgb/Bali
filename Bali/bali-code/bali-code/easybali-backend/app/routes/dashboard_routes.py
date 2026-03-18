@@ -1125,3 +1125,106 @@ async def reject_refund(
             pass
 
     return {"success": True, "message": "Refund request rejected."}
+
+
+# ─── PARTNER APPLICATIONS ────────────────────────────────────────────────────
+
+partner_applications_collection = db["partnership_applications"]
+
+
+@router.get("/partners")
+async def list_partner_applications(
+    user: Annotated[dict, Depends(requires_role("admin"))],
+    status: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+) -> Dict[str, Any]:
+    try:
+        query: Dict[str, Any] = {}
+        if status and status != "all":
+            query["status"] = status
+        if search:
+            query["$or"] = [
+                {"villa_name": {"$regex": search, "$options": "i"}},
+                {"contact_name": {"$regex": search, "$options": "i"}},
+                {"contact_email": {"$regex": search, "$options": "i"}},
+                {"area": {"$regex": search, "$options": "i"}},
+            ]
+        docs = await partner_applications_collection.find(query).sort("submitted_at", -1).to_list(500)
+        results = []
+        for d in docs:
+            d["id"] = str(d.pop("_id"))
+            if isinstance(d.get("submitted_at"), datetime):
+                d["submitted_at"] = d["submitted_at"].isoformat()
+            if isinstance(d.get("reviewed_at"), datetime):
+                d["reviewed_at"] = d["reviewed_at"].isoformat()
+            results.append(d)
+        total = len(results)
+        counts = {
+            "all": await partner_applications_collection.count_documents({}),
+            "pending_review": await partner_applications_collection.count_documents({"status": "pending_review"}),
+            "accepted": await partner_applications_collection.count_documents({"status": "accepted"}),
+            "denied": await partner_applications_collection.count_documents({"status": "denied"}),
+        }
+        return {"success": True, "applications": results, "total": total, "counts": counts}
+    except Exception as e:
+        return {"success": False, "error": str(e), "applications": [], "counts": {}}
+
+
+@router.put("/partners/{application_id}/status")
+async def update_partner_status(
+    application_id: str,
+    body: Dict[str, Any],
+    user: Annotated[dict, Depends(requires_role("admin"))],
+) -> Dict[str, Any]:
+    try:
+        new_status = body.get("status")
+        if new_status not in ("pending_review", "accepted", "denied"):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail="Invalid status value")
+        update = {
+            "status": new_status,
+            "reviewed_at": datetime.now(),
+            "reviewed_by": user.get("email"),
+        }
+        if body.get("admin_note"):
+            update["admin_note"] = body["admin_note"]
+        await partner_applications_collection.update_one(
+            {"application_id": application_id},
+            {"$set": update}
+        )
+        return {"success": True, "message": f"Application {new_status}"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.put("/partners/{application_id}")
+async def edit_partner_application(
+    application_id: str,
+    body: Dict[str, Any],
+    user: Annotated[dict, Depends(requires_role("admin"))],
+) -> Dict[str, Any]:
+    try:
+        body.pop("_id", None)
+        body.pop("id", None)
+        body.pop("application_id", None)
+        body["updated_at"] = datetime.now()
+        body["updated_by"] = user.get("email")
+        await partner_applications_collection.update_one(
+            {"application_id": application_id},
+            {"$set": body}
+        )
+        return {"success": True, "message": "Application updated"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.delete("/partners/{application_id}")
+async def delete_partner_application(
+    application_id: str,
+    user: Annotated[dict, Depends(requires_role("admin"))],
+) -> Dict[str, Any]:
+    try:
+        await partner_applications_collection.delete_one({"application_id": application_id})
+        return {"success": True, "message": "Application deleted"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}

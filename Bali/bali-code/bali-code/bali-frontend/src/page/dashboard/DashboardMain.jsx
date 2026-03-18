@@ -121,7 +121,7 @@ const DashboardMain = () => {
                         <h2 className="text-lg font-black text-neutral uppercase tracking-tight">Recent Interactions</h2>
                         <p className="text-[10px] font-bold text-lightneutral mt-0.5 uppercase tracking-widest">Real-time guest events</p>
                     </div>
-                    <Link to="/dashboard/activity" className="text-xs font-black text-primary hover:underline flex items-center gap-1 group">
+                    <Link to="/dashboard/guests" className="text-xs font-black text-primary hover:underline flex items-center gap-1 group">
                         VIEW FULL TIMELINE <FiArrowRight className="group-hover:translate-x-1 transition-transform" />
                     </Link>
                 </div>

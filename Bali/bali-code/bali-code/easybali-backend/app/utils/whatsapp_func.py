@@ -1758,7 +1758,8 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                             _mtype = "image" if "image" in message_payload else "document"
                             _ok, _att_url, _ = await process_whatsapp_issue(
                                 sender_id, media_id, _vc,
-                                _recent_issue.get("description", "Issue follow-up"), _mtype
+                                _recent_issue.get("description", "Issue follow-up"), _mtype,
+                                customer_id=customer_id
                             )
                             if _ok:
                                 await issue_collection.update_one(
@@ -1844,7 +1845,8 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     _vc = await get_user_villa_code(sender_id) or "UNKNOWN"
                     _ok, _att_url, _transcript = await process_whatsapp_issue(
                         sender_id, pending["media_id"], _vc,
-                        f"📸 Issue photo submitted by Guest {sender_id[-4:]}", pending["media_type"]
+                        f"📸 Issue photo submitted by Guest {sender_id[-4:]}", pending["media_type"],
+                        customer_id=customer_id
                     )
                     if _ok:
                         _description = _transcript or f"📸 Issue photo submitted by Guest {sender_id[-4:]}"
@@ -1876,7 +1878,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                         await send_whatsapp_message(sender_id, "Sorry, your image session expired. Please send the photo again.")
                         return
                     _vc = await get_user_villa_code(sender_id) or "UNKNOWN"
-                    _ok, _msg = await process_whatsapp_passport(sender_id, pending["media_id"], _vc)
+                    _ok, _msg = await process_whatsapp_passport(sender_id, pending["media_id"], _vc, customer_id=customer_id)
                     await send_whatsapp_message(sender_id, _msg)
                     return
                 # ────────────────────────────────────────────────────────────
@@ -2411,7 +2413,8 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     villa_for_passport = user_villa_code or await get_user_villa_code(sender_id) or "UNKNOWN"
                     await send_whatsapp_message(sender_id, "⏳ Processing your document, please wait...")
                     success, msg = await process_whatsapp_passport(
-                        sender_id, media_id, villa_for_passport, session.get("guest_name")
+                        sender_id, media_id, villa_for_passport, session.get("guest_name"),
+                        customer_id=customer_id
                     )
                     await send_whatsapp_message(sender_id, msg)
                     if success:
@@ -2493,7 +2496,8 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                 # Process and upload media if present
                 if media_id:
                     success, attachment_url, transcript = await process_whatsapp_issue(
-                        sender_id, media_id, user_villa_code, description, media_type
+                        sender_id, media_id, user_villa_code, description, media_type,
+                        customer_id=customer_id
                     )
                     if not success:
                         await send_whatsapp_message(sender_id, "⚠️ Sorry, there was an issue processing your media. Type *DONE* to submit without it.")

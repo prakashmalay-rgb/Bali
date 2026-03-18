@@ -69,16 +69,17 @@ def upload_bytes_to_s3(file_bytes: bytes, content_type: str, folder: str = "pass
     url = f"https://{settings.AWS_BUCKET_NAME}.s3.{settings.AWS_REGION}.amazonaws.com/{key}"
     return key, url
 
-async def process_whatsapp_passport(sender_id: str, media_id: str, villa_code: str = "UNKNOWN", guest_name: str = None):
+async def process_whatsapp_passport(sender_id: str, media_id: str, villa_code: str = "UNKNOWN", guest_name: str = None, customer_id: str = None):
     """Downloads WA media, uploads to S3, and saves as a pending passport."""
     try:
         file_bytes, content_type = await download_whatsapp_media(media_id)
         s3_key, s3_url = upload_bytes_to_s3(file_bytes, content_type, folder="passports")
-        
+
         final_guest_name = guest_name or f"WhatsApp Guest {sender_id[-4:]}"
-        
+
         passport_data = {
             "user_id": sender_id,
+            "customer_id": customer_id,
             "villa_code": villa_code,
             "guest_name": final_guest_name,
             "passport_url": s3_url,
@@ -95,7 +96,7 @@ async def process_whatsapp_passport(sender_id: str, media_id: str, villa_code: s
         logger.error(f"Failed to process WhatsApp passport {media_id}: {e}")
         return False, "Sorry, there was an issue processing your document. Please try again later."
 
-async def process_whatsapp_issue(sender_id: str, media_id: str, villa_code: str, description: str, media_type: str = "image"):
+async def process_whatsapp_issue(sender_id: str, media_id: str, villa_code: str, description: str, media_type: str = "image", customer_id: str = None):
     """Handles issue reporting with media attachments. Transcribes if voice note."""
     try:
         file_bytes, content_type = await download_whatsapp_media(media_id)
@@ -125,6 +126,7 @@ async def process_whatsapp_issue(sender_id: str, media_id: str, villa_code: str,
         
         issue_data = {
             "sender_id": sender_id,
+            "customer_id": customer_id,
             "villa_code": villa_code,
             "description": description,
             "media_url": s3_url,

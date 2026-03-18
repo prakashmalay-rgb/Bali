@@ -183,6 +183,7 @@ class ConciergeAI:
                         from datetime import datetime as _dt
                         await _issue_db["issues"].insert_one({
                             "sender_id": user_id,
+                            "customer_id": None,
                             "villa_code": villa_code or "WEB_VILLA_01",
                             "description": query,
                             "media_type": "text",

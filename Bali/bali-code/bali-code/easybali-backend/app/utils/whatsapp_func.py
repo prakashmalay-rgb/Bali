@@ -124,7 +124,8 @@ async def fetch_explore_data(api_url: str, query: str, user_id: str):
             print(f"DEBUG: Response from API: {data}")
             return data.get("response")
     except Exception as e:
-        return e
+        print(f"❌ fetch_explore_data error: {e}")
+        return None
 
 language_lesson_sessions = {}
 persistent_mode_sessions = {}
@@ -2675,10 +2676,10 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                         await send_whatsapp_message(sender_id, data)
                 return
             
-            elif selected_id == "language_lesson":
-                    language_lesson_sessions[sender_id] = True
-                    await language_starting_message(sender_id)
-                    return
+            elif selected_id in ("language_lesson", "voice_translator"):
+                language_lesson_sessions[sender_id] = True
+                await language_starting_message(sender_id)
+                return
 
             if sender_id in language_lesson_sessions:
                 if message_text:
@@ -2712,6 +2713,10 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                 if serviceitems_text == "Order Services":
                     token = f"order{sender_id}"
                     await send_whatsapp_order_flow_message(sender_id, flow_token=token)
+                    return
+                elif serviceitems_text in ["Voice Translator", "Language Lesson"]:
+                    language_lesson_sessions[sender_id] = True
+                    await language_starting_message(sender_id)
                     return
                 elif serviceitems_text in ["Local Guide", "Bali Handbook", "Recommendations", "Discount & Promotions"]:
                     main_design = await fetch_menu_design(serviceitems_text)
@@ -2759,8 +2764,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     if not main_design:
                         await send_whatsapp_message(sender_id, "Sorry, we couldn't fetch the menu design at this time.")
                         return
-                    for subcard_data in main_design:
-                        await send_whatsapp_card_with_link(sender_id, subcard_data)
+                    await send_whatsapp_menu_list_message(sender_id, main_design)
                     return
 
                 # For any sub-menu item with a button URL in the sheet (e.g. Recommendations items with Google Maps links)

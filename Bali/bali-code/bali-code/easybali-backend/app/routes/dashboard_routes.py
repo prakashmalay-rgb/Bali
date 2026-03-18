@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query, Response
-from app.db.session import db, order_collection, passport_collection, checkin_collection, inquiry_collection, issue_collection, feedback_collection
+from app.db.session import db, order_collection, passport_collection, checkin_collection, inquiry_collection, issue_collection, feedback_collection, customer_collection
 from app.utils.auth import requires_role, get_current_user
 from typing import Dict, Any, Optional, List, Annotated
 from datetime import datetime
@@ -109,6 +109,7 @@ async def get_guest_activity(user: Annotated[dict, Depends(requires_role("read_o
             activity_list.append({
                 "id": str(order.get("_id")),
                 "type": "order",
+                "customer_id": order.get("customer_id"),
                 "guest_name": f"Guest {str(order.get('sender_id', ''))[-4:]}",
                 "action": f"Paid for {order.get('service_name')}" if db_status == "PAID" else f"Requested {order.get('service_name')}",
                 "service": order.get("service_name", "Service"),
@@ -121,6 +122,7 @@ async def get_guest_activity(user: Annotated[dict, Depends(requires_role("read_o
             activity_list.append({
                 "id": str(inq.get("_id")),
                 "type": "inquiry",
+                "customer_id": inq.get("customer_id"),
                 "guest_name": f"Guest {str(inq.get('sender_id', ''))[-4:]}",
                 "action": "Messaged AI",
                 "service": f"Topic: {inq.get('intent', 'General')}",
@@ -133,6 +135,7 @@ async def get_guest_activity(user: Annotated[dict, Depends(requires_role("read_o
             activity_list.append({
                 "id": str(issue.get("_id")),
                 "type": "issue",
+                "customer_id": issue.get("customer_id"),
                 "guest_name": f"Guest {str(issue.get('sender_id', ''))[-4:]}",
                 "action": "Reported Issue",
                 "service": (issue.get("description", "Maintenance")[:30] + "...") if issue.get("description") else "Maintenance",
@@ -1226,5 +1229,129 @@ async def delete_partner_application(
     try:
         await partner_applications_collection.delete_one({"application_id": application_id})
         return {"success": True, "message": "Application deleted"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# ── Customers ─────────────────────────────────────────────────────────────────
+
+@router.get("/customers")
+async def get_customers(
+    user: Annotated[dict, Depends(requires_role("read_only"))],
+    search: Optional[str] = Query(None),
+    villa_code: Optional[str] = Query(None),
+    limit: int = Query(50, le=200),
+) -> Dict[str, Any]:
+    """Return customer master list with aggregated activity counts."""
+    try:
+        villa_filter = {}
+        if "*" not in user.get("villa_codes", ["*"]):
+            villa_filter = {"villa_code": {"$in": user["villa_codes"]}}
+
+        query: dict = {**villa_filter}
+        if villa_code:
+            query["villa_code"] = villa_code
+        if search:
+            query["$or"] = [
+                {"customer_id": {"$regex": search, "$options": "i"}},
+                {"phone": {"$regex": search, "$options": "i"}},
+                {"name": {"$regex": search, "$options": "i"}},
+            ]
+
+        raw = await customer_collection.find(query).sort("last_active", -1).limit(limit).to_list(limit)
+
+        customers = []
+        for c in raw:
+            cid = c.get("customer_id")
+            phone = c.get("phone", "")
+
+            # Aggregate counts from each collection
+            orders = await order_collection.count_documents({"customer_id": cid})
+            paid = await order_collection.count_documents({"customer_id": cid, "status": "PAID"})
+            issues = await issue_collection.count_documents({"customer_id": cid})
+            feedbacks = await feedback_collection.find_one(
+                {"customer_id": cid}, sort=[("timestamp", -1)]
+            )
+            last_rating = feedbacks.get("rating") if feedbacks else None
+
+            # Passport name fallback
+            name = c.get("name")
+            if not name:
+                passport = await passport_collection.find_one(
+                    {"user_id": phone}, sort=[("uploaded_at", -1)]
+                )
+                name = passport.get("guest_name") if passport else None
+
+            first_contact = c.get("first_contact")
+            last_active = c.get("last_active")
+
+            customers.append({
+                "customer_id": cid,
+                "phone": phone,
+                "name": name or f"Guest ...{phone[-4:]}",
+                "villa_code": c.get("villa_code"),
+                "total_bookings": orders,
+                "paid_bookings": paid,
+                "open_issues": issues,
+                "last_rating": last_rating,
+                "first_contact": first_contact.isoformat() if isinstance(first_contact, datetime) else None,
+                "last_active": last_active.isoformat() if isinstance(last_active, datetime) else None,
+            })
+
+        return {"success": True, "customers": customers, "total": len(customers)}
+    except Exception as e:
+        return {"success": False, "error": str(e), "customers": []}
+
+
+@router.get("/customers/{customer_id}/activity")
+async def get_customer_activity(
+    customer_id: str,
+    _user: Annotated[dict, Depends(requires_role("read_only"))],
+) -> Dict[str, Any]:
+    """Return full activity timeline for a single customer."""
+    try:
+        customer = await customer_collection.find_one({"customer_id": customer_id})
+        if not customer:
+            return {"success": False, "error": "Customer not found"}
+
+        phone = customer.get("phone", "")
+
+        # Fetch all related records (by customer_id OR phone for legacy records)
+        id_filter = {"$or": [{"customer_id": customer_id}, {"sender_id": phone}]}
+
+        orders = await order_collection.find(id_filter).sort("created_at", -1).to_list(50)
+        inquiries = await inquiry_collection.find(id_filter).sort("timestamp", -1).to_list(50)
+        issues = await issue_collection.find(id_filter).sort("timestamp", -1).to_list(50)
+        feedbacks = await feedback_collection.find(id_filter).sort("timestamp", -1).to_list(20)
+        checkins = await checkin_collection.find(id_filter).sort("checkin_time", -1).to_list(20)
+
+        def fmt(doc: dict) -> dict:
+            doc["_id"] = str(doc["_id"])
+            for f in ("created_at", "updated_at", "timestamp", "checkin_time", "uploaded_at"):
+                if isinstance(doc.get(f), datetime):
+                    doc[f] = doc[f].isoformat()
+            return doc
+
+        name = customer.get("name")
+        if not name:
+            passport = await passport_collection.find_one({"user_id": phone})
+            name = passport.get("guest_name") if passport else None
+
+        return {
+            "success": True,
+            "customer": {
+                "customer_id": customer_id,
+                "phone": phone,
+                "name": name or f"Guest ...{phone[-4:]}",
+                "villa_code": customer.get("villa_code"),
+                "first_contact": customer.get("first_contact").isoformat() if isinstance(customer.get("first_contact"), datetime) else None,
+                "last_active": customer.get("last_active").isoformat() if isinstance(customer.get("last_active"), datetime) else None,
+            },
+            "orders": [fmt(o) for o in orders],
+            "inquiries": [fmt(i) for i in inquiries],
+            "issues": [fmt(s) for s in issues],
+            "feedback": [fmt(f) for f in feedbacks],
+            "checkins": [fmt(c) for c in checkins],
+        }
     except Exception as e:
         return {"success": False, "error": str(e)}

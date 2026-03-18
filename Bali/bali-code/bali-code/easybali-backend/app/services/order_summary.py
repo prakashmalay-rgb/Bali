@@ -76,13 +76,15 @@ def format_order_summary(order: dict) -> str:
         order_date = order_date
     else:
         order_date = "N/A"
-    
+
     summary_lines = [
+        f"Customer ID: {order.get('customer_id', 'N/A')}",
         f"Order ID: {order.get('order_number', 'N/A')}",
         f"Service: {order.get('service_name', 'N/A')}",
         f"Date: {order_date}",
         f"Time: {order.get('time', 'N/A')}",
         f"Price: {order.get('price', 'N/A')}",
+        f"Location: {order.get('villa_code', 'N/A')}",
     ]
     return "\n".join(summary_lines)
 

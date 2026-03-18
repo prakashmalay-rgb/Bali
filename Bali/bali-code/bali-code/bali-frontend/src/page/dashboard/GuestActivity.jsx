@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { API_BASE_URL, apiRequest, getUserFriendlyError } from '../../api/apiClient';
 import axios from 'axios';
-import { FiClock, FiCheck, FiInfo, FiSearch, FiFilter, FiMessageSquare, FiAlertCircle, FiX, FiMapPin, FiPhone, FiTag } from 'react-icons/fi';
+import { FiClock, FiCheck, FiInfo, FiSearch, FiFilter, FiMessageSquare, FiAlertCircle, FiX, FiMapPin, FiPhone, FiTag, FiUser } from 'react-icons/fi';
 
 // ── Detail slide-over panel ───────────────────────────────────────────────────
 
@@ -44,6 +44,7 @@ const DetailPanel = ({ act, onClose }) => {
 
         if (act.type === 'issue') return (
             <div className="space-y-4">
+                <Row icon={<FiUser />} label="Customer ID" value={detail.customer_id} />
                 <Row icon={<FiAlertCircle />} label="Description" value={detail.description} />
                 <Row icon={<FiMapPin />} label="Villa" value={detail.villa_code} />
                 <Row icon={<FiPhone />} label="Guest Number" value={detail.sender_id} />
@@ -60,6 +61,7 @@ const DetailPanel = ({ act, onClose }) => {
 
         if (act.type === 'inquiry') return (
             <div className="space-y-4">
+                <Row icon={<FiUser />} label="Customer ID" value={detail.customer_id} />
                 <Row icon={<FiMessageSquare />} label="Guest Query" value={detail.query} />
                 <div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-lightneutral mb-1">AI Response</p>
@@ -74,6 +76,7 @@ const DetailPanel = ({ act, onClose }) => {
 
         if (act.type === 'order') return (
             <div className="space-y-4">
+                <Row icon={<FiUser />} label="Customer ID" value={detail.customer_id} />
                 <Row icon={<FiTag />} label="Service" value={detail.service_name} />
                 <Row icon={<FiMapPin />} label="Villa" value={detail.villa_code} />
                 <Row icon={<FiPhone />} label="Guest Number" value={detail.sender_id} />
@@ -107,7 +110,12 @@ const DetailPanel = ({ act, onClose }) => {
                                 {typeLabel[act.type] || act.type}
                             </span>
                             <h2 className="text-lg font-black text-neutral mt-2">{act.guest_name}</h2>
-                            <p className="text-xs text-lightneutral">{act.time}</p>
+                            {act.customer_id && (
+                                <p className="text-xs font-bold text-primary/70 flex items-center gap-1 mt-0.5">
+                                    <FiUser size={11} /> {act.customer_id}
+                                </p>
+                            )}
+                            <p className="text-xs text-lightneutral mt-0.5">{act.time}</p>
                         </div>
                         <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100 text-lightneutral flex-shrink-0">
                             <FiX size={18} />
@@ -272,6 +280,12 @@ const GuestActivity = () => {
                                                 </div>
                                                 <div>
                                                     <p className="text-sm font-black text-neutral group-hover:text-primary transition-colors tracking-tight">{act.guest_name}</p>
+                                                    {act.customer_id && (
+                                                        <p className="text-[10px] font-bold text-primary/70 mt-0.5 flex items-center gap-1">
+                                                            <FiUser size={9} />
+                                                            {act.customer_id}
+                                                        </p>
+                                                    )}
                                                     <p className="text-[10px] font-bold text-lightneutral mt-0.5 opacity-70 uppercase">{act.time}</p>
                                                 </div>
                                             </div>

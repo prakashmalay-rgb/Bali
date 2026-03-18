@@ -14,7 +14,8 @@ from app.services.menu_services import get_service_provider_by_whatsapp, get_vil
 from app.services.order_summary import initiate_chat_session, active_chat_sessions, save_order_to_db, format_order_summary, check_order_confirmation,order_sessions, update_order_confirmation, get_sender_id_by_order, get_order_by_number
 from app.settings.config import settings
 from app.utils.media_upload import process_whatsapp_passport, process_whatsapp_issue
-from app.db.session import db, order_collection, villa_code_collection, checkin_collection, inquiry_collection, issue_collection, feedback_collection
+from app.db.session import db, order_collection, villa_code_collection, checkin_collection, inquiry_collection, issue_collection, feedback_collection, customer_collection
+from pymongo import ReturnDocument
 from app.models.order_summary import Order
 from app.services.websocket_managerr import ConnectionManager
 from app.services.website_sess import website_sessions
@@ -34,6 +35,38 @@ pending_media_sessions = {}   # sender_id -> {media_id, media_type, timestamp} �
 local_order_store: Dict[str, str] = {}
 
 decline_sessions : Dict[str, str] = {}
+
+
+async def get_or_create_customer(sender_id: str) -> str:
+    """Return existing customer_id or create a new one for this phone number."""
+    try:
+        customer = await customer_collection.find_one({"phone": sender_id})
+        if customer:
+            await customer_collection.update_one(
+                {"phone": sender_id},
+                {"$set": {"last_active": datetime.datetime.now()}}
+            )
+            return customer["customer_id"]
+        counter = await db.counters.find_one_and_update(
+            {"_id": "customer_number"},
+            {"$inc": {"sequence_value": 1}},
+            upsert=True,
+            return_document=ReturnDocument.AFTER
+        )
+        customer_id = f"EB-C-{counter['sequence_value']:05d}"
+        await customer_collection.insert_one({
+            "customer_id": customer_id,
+            "phone": sender_id,
+            "name": None,
+            "villa_code": None,
+            "first_contact": datetime.datetime.now(),
+            "last_active": datetime.datetime.now(),
+        })
+        logger.info(f"New customer created: {customer_id} for ...{sender_id[-4:]}")
+        return customer_id
+    except Exception as e:
+        logger.error(f"get_or_create_customer error for {sender_id}: {e}")
+        return f"EB-C-TEMP-{sender_id[-6:]}"
 
 
 TIME_SLOTS = [
@@ -398,7 +431,7 @@ async def send_confirmation_order_to_SP(recipient_number: str, order_number: str
                             "type": "reply",
                             "reply": {
                                 "id": f"no_order_{order_number}",
-                                "title": "No"
+                                "title": "No, Go Back"
                             }
                         }
                     ]
@@ -1004,16 +1037,26 @@ async def starting_message(recipient_number: str):
 
 
 
-async def perform_arrival_confirmation(sender_id: str, villa_code: str):
+async def perform_arrival_confirmation(sender_id: str, villa_code: str, customer_id: str = None):
     """Logs check-in, notifies manager, and activates guest profile."""
     try:
         from app.db.session import db
         villa_info = await get_villa_info_by_code(villa_code)
         villa_name = villa_info.get("name") if villa_info else f"Villa {villa_code}"
-        
+
+        if not customer_id:
+            customer_id = await get_or_create_customer(sender_id)
+
+        # Update customer record with villa_code and name
+        await customer_collection.update_one(
+            {"phone": sender_id},
+            {"$set": {"villa_code": villa_code, "last_active": datetime.datetime.now()}}
+        )
+
         # 1. Log to DB
         checkin_data = {
             "sender_id": sender_id,
+            "customer_id": customer_id,
             "villa_code": villa_code,
             "villa_name": villa_name,
             "checkin_time": datetime.datetime.now(),
@@ -1068,11 +1111,14 @@ async def perform_arrival_confirmation(sender_id: str, villa_code: str):
         return False
 
 
-async def log_guest_inquiry(sender_id: str, villa_code: str, query: str, response: str, intent: str = "general"):
+async def log_guest_inquiry(sender_id: str, villa_code: str, query: str, response: str, intent: str = "general", customer_id: str = None):
     """Logs a guest's question/interaction to the database for oversight."""
     try:
+        if not customer_id:
+            customer_id = await get_or_create_customer(sender_id)
         inquiry_doc = {
             "sender_id": sender_id,
+            "customer_id": customer_id,
             "villa_code": villa_code,
             "query": query,
             "response": response,
@@ -1663,6 +1709,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
     try:
         logger.info(f"📩 Processing message {message_id} from {sender_id}")
         await send_typing_indicator(sender_id, message_id)
+        customer_id = await get_or_create_customer(sender_id)
 
         message_text = None
         serviceitems_text = None
@@ -2004,16 +2051,26 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
 
                         await send_whatsapp_message(
                             sender_id,
-                            "You've successfully confirmed the booking! The guest has been sent a payment link. "
-                            "You'll receive final confirmation once the payment is completed."
+                            "You've successfully confirmed the booking! The guest has been notified and is completing payment. "
+                            "You'll receive final details once the payment is confirmed.\n"
+                            "_Anda telah berhasil mengonfirmasi pemesanan! Tamu telah diberitahu dan sedang menyelesaikan pembayaran. "
+                            "Anda akan menerima detail akhir setelah pembayaran dikonfirmasi._"
                         )
                         order_sessions.pop(sender_id, None)
                     else:
                         await send_whatsapp_message(sender_id, "No order found for confirmation.")
 
-                elif category_text == "No":
+                elif category_text in ["No", "No, Go Back"]:
+                    order_num = local_order_store.get(sender_id)
+                    if order_num:
+                        order = await get_order_by_number(order_num)
+                        if order and order.get("status") == "pending":
+                            await send_whatsapp_order_to_SP(sender_id, order)
+                        else:
+                            await send_whatsapp_message(sender_id, "This request is no longer available.")
+                    else:
+                        await send_whatsapp_message(sender_id, "No active request found.")
                     order_sessions.pop(sender_id, None)
-                    await send_whatsapp_message(sender_id, "Order cancelled.")
 
                 category_id = message_payload["interactive"]["button_reply"]["id"]
                 service_name = category_id.replace("_", " ")
@@ -2184,9 +2241,11 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                         new_order.date = user_date
                         new_order.time = time_selection
                         new_order.status = "pending_confirmation"
-                        
-                        # Save the completed order to database
-                        await save_order_to_db(new_order.dict())
+
+                        # Save the completed order to database (include customer_id)
+                        order_dict = new_order.dict()
+                        order_dict["customer_id"] = customer_id
+                        await save_order_to_db(order_dict)
                         logger.info(f"🛎️ Order {new_order.order_number} created - waiting for SP confirmation")
 
                         # Clean price — strip EVERYTHING non-numeric (handles \xa0, commas, spaces from Google Sheets)
@@ -2219,7 +2278,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                         logger.info(f"🚀 Notifying {len(service_numbers)} numbers: {service_numbers}")
                         for num in service_numbers:
                             try:
-                                await send_whatsapp_order_to_SP(num, new_order.dict())
+                                await send_whatsapp_order_to_SP(num, order_dict)
                             except Exception as e:
                                 logger.error(f"Failed to notify {num}: {e}")
                         
@@ -2252,7 +2311,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                 if villa_code:
                     success = await save_user_villa_code(sender_id, villa_code)
                     if success:
-                        await perform_arrival_confirmation(sender_id, villa_code)
+                        await perform_arrival_confirmation(sender_id, villa_code, customer_id)
                         await starting_message(sender_id)
                         return
                     else:
@@ -2445,6 +2504,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     # Log plain text issue (no media at all)
                     issue_data = {
                         "sender_id": sender_id,
+                        "customer_id": customer_id,
                         "villa_code": user_villa_code,
                         "description": description,
                         "media_type": "text",
@@ -2517,6 +2577,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
             if message_text and any(kw in message_text.lower() for kw in _feedback_keywords):
                 await feedback_collection.insert_one({
                     "sender_id": sender_id,
+                    "customer_id": customer_id,
                     "villa_code": user_villa_code,
                     "rating": None,
                     "comment": message_text.strip(),
@@ -2535,6 +2596,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     rating = int(message_text.strip())
                     result = await feedback_collection.insert_one({
                         "sender_id": sender_id,
+                        "customer_id": customer_id,
                         "villa_code": user_villa_code,
                         "rating": rating,
                         "comment": "",

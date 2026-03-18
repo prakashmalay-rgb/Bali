@@ -633,57 +633,6 @@ async def send_whatsapp_list_message(recipient_id: str, card_data: dict):
     except Exception as e:
         print(f"❌ Unexpected Error sending WhatsApp list: {e}")
 
-async def send_whatsapp_menu_list_message(recipient_id: str, card_data: dict):
-    try:
-        headers = {
-            "Authorization": f"Bearer {settings.access_token}",
-            "Content-Type": "application/json",
-        }
-
-        title = card_data.get("main_title", "Untitled")
-        description = card_data.get("main_description", "No description available")
-
-        if len(description) > 72:
-            description = description[:69] + "..."
-        sections = [
-            {
-                "title": "Available Options",
-                "rows": [
-                    {
-                        "id": f"{item['category'].lower().replace(' ', '_')}",  # Create ID from category
-                        "title": item["category"][:24],  # WhatsApp limit is 24 chars for title
-                        "description": item["description"][:69] + "..."
-                        if len(item["description"]) > 72
-                        else item["description"]
-                    }
-                    for item in card_data.get("items", [])
-                ],
-            }
-        ]
-
-        payload = {
-            "messaging_product": "whatsapp",
-            "to": recipient_id,
-            "type": "interactive",
-            "interactive": {
-                "type": "list",
-                "body": {"text": f"*{title}*\n{description}"},
-                "footer": {"text": "Tap to view options"},
-                "action": {
-                    "button": "View Options",
-                    "sections": sections,
-                },
-            },
-        }
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(settings.whatsapp_api_url, json=payload, headers=headers)
-            response.raise_for_status()
-            print(f"✅ WhatsApp Category List Sent: {response.status_code}")
-
-    except Exception as e:
-        print(f"❌ Error sending Category list: {e}")
-
 async def send_whatsapp_subcategory_list_message(recipient_id: str, card_data: dict, category_name: str):
     """Send secondary list for subcategories"""
     try:
@@ -850,35 +799,49 @@ async def send_ai_whatsapp_list_message(
 
 
 async def send_whatsapp_menu_list_message(recipient_id: str, card_data: dict):
+    """Send a WhatsApp interactive list message.
+
+    Accepts two dict shapes:
+      Shape A (from fetch_menu_data):  {"data": [{id, title, description}, ...]}
+      Shape B (from get_sub_menu):     {"main_title": ..., "main_description": ...,
+                                        "items": [{category, description, ...}, ...]}
+    """
     try:
         headers = {
             "Authorization": f"Bearer {settings.access_token}",
             "Content-Type": "application/json",
         }
 
-        title = "EASYBali Menu"
-        description = "Choose from our available services"
-
+        title = card_data.get("main_title", "EASYBali Menu")
+        description = card_data.get("main_description", "Choose from our available services")
         if len(description) > 72:
             description = description[:69] + "..."
 
-        # Create rows for all menu items
         rows = []
-        for item in card_data["data"]:
-            rows.append({
-                "id": item["id"],
-                "title": item["title"],
-                "description": item["description"][:69] + "..."
-                if len(item["description"]) > 72
-                else item["description"]
-            })
+        if "data" in card_data:
+            # Shape A: pre-built list items with id/title/description
+            for item in card_data["data"]:
+                rows.append({
+                    "id": item["id"],
+                    "title": item["title"][:24],
+                    "description": item["description"][:69] + "..."
+                    if len(item["description"]) > 72
+                    else item["description"]
+                })
+        else:
+            # Shape B: sub-menu items keyed by "category"
+            for item in card_data.get("items", []):
+                cat = item["category"]
+                row_id = re.sub(r'[^\w]', '', cat.lower().replace(' ', '_'))
+                rows.append({
+                    "id": row_id,
+                    "title": cat[:24],
+                    "description": item["description"][:69] + "..."
+                    if len(item["description"]) > 72
+                    else item["description"]
+                })
 
-        sections = [
-            {
-                "title": "Available Options",
-                "rows": rows,
-            }
-        ]
+        sections = [{"title": "Available Options", "rows": rows}]
 
         payload = {
             "messaging_product": "whatsapp",

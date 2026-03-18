@@ -190,6 +190,24 @@ _SUBMENU_PARENTS = {
     "Discount & Promotions", "Find Dining Options", "Discover Spots",
 }
 
+# Known button URLs — used when the sheet Button column is empty.
+# Sheet always takes priority; update the sheet to override any entry here.
+_KNOWN_BUTTON_URLS: dict[str, str] = {
+    # Safety & health
+    "Safety & Health Tips":  "https://www.canva.com/design/DAGaNLT8Owc/gDSbEepIXK4OJxdOOtx92Q/view?utm_content=DAGaNLT8Owc&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h3bad98561a",
+    "Read Safety Tips":      "https://www.canva.com/design/DAGaNLT8Owc/gDSbEepIXK4OJxdOOtx92Q/view?utm_content=DAGaNLT8Owc&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h3bad98561a",
+    "Medical Suggestions":   "https://www.canva.com/design/DAGbfiNdbTw/rJdf8dxswAQDXZf3XtPSqw/view?utm_content=DAGbfiNdbTw&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h17b7214f43",
+    "Find Medical Help":     "https://www.canva.com/design/DAGbfiNdbTw/rJdf8dxswAQDXZf3XtPSqw/view?utm_content=DAGbfiNdbTw&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h17b7214f43",
+    "Do's and Don't":        "https://www.canva.com/design/DAGbZYkN0V8/SRJA3kOkFPzFqRmJEjlGbQ/view?utm_content=DAGbZYkN0V8&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h1d8411966d",
+    "Know the Local Rules":  "https://www.canva.com/design/DAGbZYkN0V8/SRJA3kOkFPzFqRmJEjlGbQ/view?utm_content=DAGbZYkN0V8&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h1d8411966d",
+    # Shopping & spots
+    "Shop the Best Places":  "https://maps.app.goo.gl/soEShhHPXVJhM5ms6",
+    "Find Your Spot":        "https://maps.app.goo.gl/YvPCmHqJTh2ZNz3HA",
+    "Relax & Recharge":      "https://maps.app.goo.gl/26FqxqXMmgvdyXvRA",
+    "Explore After Dark":    "https://maps.app.goo.gl/NcKZhc3vRUeqKF6M7",
+    "Locate Hospital":       "https://maps.app.goo.gl/SVWEZTNwhZUjPpZR6",
+}
+
 from app.services.menu_services import get_main_menu_design
 
 async def fetch_menu_data(api_url: str, menu_type: str) -> list:
@@ -2769,6 +2787,11 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                                 _btn_url = None
                 except Exception:
                     pass
+
+                # 3b. Known default URLs (sheet overrides these; kept so items
+                #     work even before the sheet Button column is filled in)
+                if not _btn_url:
+                    _btn_url = _KNOWN_BUTTON_URLS.get(serviceitems_text)
 
                 if _btn_url:
                     await send_whatsapp_interactive_link(sender_id, _btn_url)

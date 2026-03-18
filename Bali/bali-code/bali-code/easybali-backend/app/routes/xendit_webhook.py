@@ -100,11 +100,13 @@ async def handle_xendit_webhook(webhook_data: dict):
                     order_date = order_data.get("date")
                     if isinstance(order_date, datetime.datetime):
                         order_date = order_date.strftime("%d %b %Y")
+                    guest_contact = order_data.get("sender_id", "N/A")
                     sp_final_msg = (
                         f"🎉 *Assignment Confirmed!* Here are the booking details for your service.\n"
                         f"_Penugasan dikonfirmasi! Berikut detail pemesanan layanan Anda._\n\n"
-                        f"*Order ID:* {order_number}\n"
                         f"*Customer ID:* {order_data.get('customer_id', 'N/A')}\n"
+                        f"*Customer Contact:* {guest_contact}\n"
+                        f"*Order ID:* {order_number}\n"
                         f"*Service:* {order_data.get('service_name', 'N/A')}\n"
                         f"*Date:* {order_date or 'N/A'}\n"
                         f"*Time:* {order_data.get('time', 'N/A')}\n"

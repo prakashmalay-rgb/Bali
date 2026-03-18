@@ -129,27 +129,31 @@ async def fetch_explore_data(api_url: str, query: str, user_id: str):
 language_lesson_sessions = {}
 persistent_mode_sessions = {}
 PERSISTENT_API_MAPPING = {
-    "what_to_do_today?": {
-        "url": f"{settings.BASE_URL}/what-to-do/chat/",  # Dynamic Base URL
+    "what_to_do_today": {
+        "url": f"{settings.BASE_URL}/what-to-do/chat/",
         "fetch_func": fetch_explore_data
     },
-    "things_to_do_in_bali":{
+    "things_to_do_in_bali": {
         "url": f"{settings.BASE_URL}/things-to-do-in-bali/chat",
-        "fetch_func":fetch_explore_data
+        "fetch_func": fetch_explore_data
     },
-    "event_calendar":{
+    "event_calendar": {
         "url": f"{settings.BASE_URL}/event-calender/chat",
         "fetch_func": fetch_explore_data
     },
-    "local_cousine_guide":{
+    "local_cousine_guide": {
         "url": f"{settings.BASE_URL}/local-cuisine/chat",
         "fetch_func": fetch_explore_data
     },
-    "plan_my_trip!":{
+    "local_cuisine_guide": {
+        "url": f"{settings.BASE_URL}/local-cuisine/chat",
+        "fetch_func": fetch_explore_data
+    },
+    "plan_my_trip": {
         "url": f"{settings.BASE_URL}/plan-my-trip/chat",
         "fetch_func": fetch_explore_data
     },
-    "currency_converter":{
+    "currency_converter": {
         "url": f"{settings.BASE_URL}/currency-converter/chat",
         "fetch_func": fetch_explore_data
     },
@@ -2746,55 +2750,70 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     token = f"order{sender_id}"
                     await send_whatsapp_order_flow_message(sender_id, flow_token=token)
                     return
-                elif serviceitems_text in ["Local Guide", "Recommendations", "Discount & Promotions"]:
+                elif serviceitems_text in ["Local Guide", "Bali Handbook", "Recommendations", "Discount & Promotions"]:
                     main_design = await fetch_menu_design(serviceitems_text)
                     if not main_design:
                         await send_whatsapp_message(sender_id, "Sorry, we couldn't fetch the menu design at this time.")
                         return
-                    await send_whatsapp_main_menu_list_message(sender_id, main_design)
+                    await send_whatsapp_menu_list_message(sender_id, main_design)
                     return
 
-                elif category_text == "Read Safety Tips":
+                elif serviceitems_text == "Read Safety Tips":
                     link = "https://www.canva.com/design/DAGaNLT8Owc/gDSbEepIXK4OJxdOOtx92Q/view?utm_content=DAGaNLT8Owc&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h3bad98561a"
                     await send_whatsapp_interactive_link(sender_id, link)
                     return
-                elif category_text == "Find Medical Help":
-                    link= "https://www.canva.com/design/DAGbfiNdbTw/rJdf8dxswAQDXZf3XtPSqw/view?utm_content=DAGbfiNdbTw&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h17b7214f43"
+                elif serviceitems_text == "Find Medical Help":
+                    link = "https://www.canva.com/design/DAGbfiNdbTw/rJdf8dxswAQDXZf3XtPSqw/view?utm_content=DAGbfiNdbTw&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h17b7214f43"
                     await send_whatsapp_interactive_link(sender_id, link)
                     return
-                elif category_text == "Know the Local Rules":
+                elif serviceitems_text == "Know the Local Rules":
                     link = "https://www.canva.com/design/DAGbZYkN0V8/SRJA3kOkFPzFqRmJEjlGbQ/view?utm_content=DAGbZYkN0V8&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h1d8411966d"
                     await send_whatsapp_interactive_link(sender_id, link)
                     return
-                elif category_text == "Shop the Best Places":
+                elif serviceitems_text == "Shop the Best Places":
                     link = "https://maps.app.goo.gl/soEShhHPXVJhM5ms6"
                     await send_whatsapp_interactive_link(sender_id, link)
                     return
-                elif category_text == "Find Your Spot":
+                elif serviceitems_text == "Find Your Spot":
                     link = "https://maps.app.goo.gl/YvPCmHqJTh2ZNz3HA"
                     await send_whatsapp_interactive_link(sender_id, link)
                     return
-                elif category_text == "Relax & Recharge":
+                elif serviceitems_text == "Relax & Recharge":
                     link = "https://maps.app.goo.gl/26FqxqXMmgvdyXvRA"
                     await send_whatsapp_interactive_link(sender_id, link)
                     return
-                elif category_text == "Explore After Dark":
+                elif serviceitems_text == "Explore After Dark":
                     link = "https://maps.app.goo.gl/NcKZhc3vRUeqKF6M7"
                     await send_whatsapp_interactive_link(sender_id, link)
                     return
-                elif category_text == "Locate Hospital":
+                elif serviceitems_text == "Locate Hospital":
                     link = "https://maps.app.goo.gl/SVWEZTNwhZUjPpZR6"
                     await send_whatsapp_interactive_link(sender_id, link)
                     return
 
-                elif category_text in ["Find Dining Options", "Discover Spots"]:
-                    main_design = await fetch_menu_design(service_name)
+                elif serviceitems_text in ["Find Dining Options", "Discover Spots"]:
+                    main_design = await fetch_menu_design(serviceitems_text)
                     if not main_design:
                         await send_whatsapp_message(sender_id, "Sorry, we couldn't fetch the menu design at this time.")
                         return
                     for subcard_data in main_design:
                         await send_whatsapp_card_with_link(sender_id, subcard_data)
                     return
+
+                # For any sub-menu item with a button URL in the sheet (e.g. Recommendations items with Google Maps links)
+                elif serviceitems_text:
+                    try:
+                        from app.services.menu_services import cache as _menu_cache
+                        _df = _menu_cache.get("main_menu_design")
+                        if _df is not None:
+                            _match = _df[_df["Title"] == serviceitems_text]
+                            if not _match.empty:
+                                _btn = str(_match.iloc[0].get("Button", "") or "").strip()
+                                if _btn.startswith("http"):
+                                    await send_whatsapp_interactive_link(sender_id, _btn)
+                                    return
+                    except Exception:
+                        pass
 
                 else:
                     api_url = settings.BASE_URL

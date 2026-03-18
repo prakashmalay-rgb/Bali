@@ -172,7 +172,7 @@ async def fetch_menu_data(api_url: str, menu_type: str) -> list:
         result = []
         for _, row in filtered_data.iterrows():
             result.append({
-                "id":row["Title"].lower().replace(" ", "_"),
+                "id": re.sub(r'[^\w]', '', row["Title"].lower().replace(" ", "_")),
                 "title": row["Title"],
                 "picture": row["Picture"],
                 "description": row["Description"],

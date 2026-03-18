@@ -23,21 +23,23 @@ class TestMenuIdRouting:
     """TC-I-70+: Menu item IDs route correctly."""
 
     def test_what_to_do_today_id_in_mapping(self, loaded_cache):
-        """TC-I-70: 'What To Do Today' sheet item generates ID in PERSISTENT_API_MAPPING."""
+        """TC-I-70: 'What To Do Today' sheet item generates sanitized ID in PERSISTENT_API_MAPPING."""
+        import re
         from app.utils.whatsapp_func import PERSISTENT_API_MAPPING
-        from app.utils.whatsapp_func import fetch_menu_data
-        import asyncio
 
-        # Simulate what fetch_menu_data does: title.lower().replace(" ", "_")
         cache_df = loaded_cache.get("main_menu_design")
         if cache_df is None:
             pytest.skip("Menu Design cache not loaded")
 
         main_menu_items = cache_df[cache_df["Menu Location"] == "Main Menu"]["Title"].str.strip().tolist()
-        if "What To Do Today" not in main_menu_items:
+        # Accept both 'What To Do Today' and 'What To Do Today?' (sheet may have trailing ?)
+        matching = [t for t in main_menu_items if t.rstrip("?! ") == "What To Do Today"]
+        if not matching:
             pytest.skip("'What To Do Today' not in Main Menu (add to Menu Design sheet)")
 
-        generated_id = "What To Do Today".lower().replace(" ", "_")
+        # fetch_menu_data sanitizes: lower + replace spaces + strip non-word chars
+        raw_id = matching[0].lower().replace(" ", "_")
+        generated_id = re.sub(r'[^\w]', '', raw_id)
         assert generated_id in PERSISTENT_API_MAPPING, (
             f"Generated ID '{generated_id}' not in PERSISTENT_API_MAPPING. "
             f"Available keys: {list(PERSISTENT_API_MAPPING.keys())}"

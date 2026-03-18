@@ -117,29 +117,30 @@ class TestMenuDesign:
         )
 
     def test_what_to_do_today_in_main_menu(self, sheet_frames):
-        """TC-I-41: 'What To Do Today' is active in Main Menu."""
+        """TC-I-41: 'What To Do Today' (with or without trailing ?) is active in Main Menu."""
         df = sheet_frames.get("Menu Design")
         main_menu = df[df["Menu Location"] == "Main Menu"]["Title"].str.strip().tolist()
-        assert "What To Do Today" in main_menu, (
-            "'What To Do Today' not found in Main Menu. "
-            "Add it with Menu Location='Main Menu' in the Menu Design sheet."
+        normalized = [t.rstrip("?! ") for t in main_menu]
+        assert "What To Do Today" in normalized, (
+            f"'What To Do Today' not found in Main Menu. Got: {main_menu}"
         )
 
     def test_plan_my_trip_in_main_menu(self, sheet_frames):
-        """TC-I-42: 'Plan My Trip' is active in Main Menu."""
+        """TC-I-42: 'Plan My Trip' (with or without trailing !) is active in Main Menu."""
         df = sheet_frames.get("Menu Design")
         main_menu = df[df["Menu Location"] == "Main Menu"]["Title"].str.strip().tolist()
-        assert "Plan My Trip" in main_menu, (
-            "'Plan My Trip' not found in Main Menu. "
-            "Add it with Menu Location='Main Menu' in the Menu Design sheet."
+        normalized = [t.rstrip("?! ") for t in main_menu]
+        assert "Plan My Trip" in normalized, (
+            f"'Plan My Trip' not found in Main Menu. Got: {main_menu}"
         )
 
     def test_currency_converter_in_main_menu(self, sheet_frames):
         """TC-I-43: 'Currency Converter' is active in Main Menu."""
         df = sheet_frames.get("Menu Design")
         main_menu = df[df["Menu Location"] == "Main Menu"]["Title"].str.strip().tolist()
-        assert "Currency Converter" in main_menu, (
-            "'Currency Converter' not found in Main Menu."
+        normalized = [t.rstrip("?! ") for t in main_menu]
+        assert "Currency Converter" in normalized, (
+            f"'Currency Converter' not found in Main Menu. Got: {main_menu}"
         )
 
     def test_recommendations_submenu_has_google_maps(self, sheet_frames):

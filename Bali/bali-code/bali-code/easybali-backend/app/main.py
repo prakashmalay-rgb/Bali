@@ -24,7 +24,6 @@ from app.routes.admin_routes import router as admin_router
 from fastapi.middleware.cors import CORSMiddleware
 from app.services.menu_services import start_cache_refresh, stop_cache_refresh
 from app.services.automation_butler import process_automations
-from app.services.openai_client import client
 import logging
 import asyncio
 
@@ -83,7 +82,7 @@ app.include_router(dashboard_router)
 app.include_router(admin_router)
 
 @app.on_event("startup")
-def on_startup():
+async def on_startup():
     start_cache_refresh()
     # Start the automated messaging background task engine
     asyncio.create_task(process_automations())
@@ -91,13 +90,6 @@ def on_startup():
 @app.on_event("shutdown")
 def on_shutdown():
     stop_cache_refresh()
-
-@app.on_event("startup")
-async def init():
-    await client.chat.completions.create(
-        model="gpt-4",
-        messages=[{"role": "system", "content": "System check"}]
-    )
 
 @app.get("/")
 def read_root():

@@ -89,18 +89,16 @@ def _is_currency_query(text: str) -> bool:
     words = set(re.findall(r'[a-z]+', text.lower()))
     return len(words & (_CURRENCY_CODES | _CURRENCY_WORDS)) >= 2
 
-_WHATSAPP_TRACKED_CURRENCIES = ["IDR", "EUR", "GBP", "SGD", "AUD", "JPY", "CNY", "MYR", "THB", "CHF", "INR", "KRW", "HKD", "PHP", "VND", "CAD"]
-
 async def _fetch_live_rates_for_whatsapp() -> str:
-    """Fetch live USD exchange rates and return a compact string for AI context."""
+    """Fetch ALL live USD exchange rates and return a compact string for AI context."""
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get("https://open.er-api.com/v6/latest/USD")
             if resp.status_code == 200:
                 rates = resp.json().get("rates", {})
-                parts = [f"1 USD = {rates[cur]:,.2f} {cur}" for cur in _WHATSAPP_TRACKED_CURRENCIES if cur in rates]
-                if parts:
-                    return "Live rates: " + " | ".join(parts)
+                if rates:
+                    parts = [f"1 USD = {v:,.4f} {k}" for k, v in sorted(rates.items())]
+                    return "Live exchange rates (base USD): " + " | ".join(parts)
     except Exception as e:
         logger.warning(f"Live rate fetch failed: {e}")
     return ""
@@ -109,7 +107,7 @@ async def _enrich_currency_query(text: str) -> str:
     """Prepend live exchange rates to a currency query so the AI can do exact math."""
     live_rates = await _fetch_live_rates_for_whatsapp()
     if live_rates:
-        return f"[{live_rates}]\n{text}"
+        return f"[LIVE_RATES: {live_rates}]\nUSER QUERY: {text}"
     return text
 
 async def fetch_explore_data(api_url: str, query: str, user_id: str):

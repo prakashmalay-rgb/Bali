@@ -8,24 +8,20 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/currency-converter", tags=["Chatbot"])
 
-_TRACKED_CURRENCIES = ["IDR", "EUR", "GBP", "SGD", "AUD", "JPY", "CNY", "MYR", "THB", "CHF"]
-
 async def _fetch_live_rates() -> str:
     """
-    Fetch current exchange rates from open.er-api.com (free, no key required).
-    Returns a compact rate string to inject into the AI prompt.
+    Fetch ALL current exchange rates from open.er-api.com (free, no key required).
+    Returns a compact rate string for every available currency to inject into the AI prompt.
     """
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get("https://open.er-api.com/v6/latest/USD")
             if resp.status_code == 200:
-                rates = resp.json().get("rates", {})
-                parts = []
-                for cur in _TRACKED_CURRENCIES:
-                    if cur in rates:
-                        parts.append(f"1 USD = {rates[cur]:,.2f} {cur}")
-                if parts:
-                    return "Live rates: " + " | ".join(parts)
+                data = resp.json()
+                rates = data.get("rates", {})
+                if rates:
+                    parts = [f"1 USD = {v:,.4f} {k}" for k, v in sorted(rates.items())]
+                    return "Live exchange rates (base USD): " + " | ".join(parts)
     except Exception as e:
         logger.warning(f"Live rate fetch failed: {e}")
     return ""
@@ -43,8 +39,8 @@ async def chat_endpoint(request: ChatbotQuery, user_id: str):
 
     live_rates = await _fetch_live_rates()
 
-    # Prepend live rates as context so the AI does exact math
-    enriched_query = f"[{live_rates}]\n{user_query}" if live_rates else user_query
+    # Prepend live rates as context so the AI does exact math using ONLY current rates
+    enriched_query = f"[LIVE_RATES: {live_rates}]\nUSER QUERY: {user_query}" if live_rates else user_query
 
     try:
         return await generate_response(

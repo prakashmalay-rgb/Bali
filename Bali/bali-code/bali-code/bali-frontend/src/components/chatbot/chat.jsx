@@ -775,15 +775,17 @@ const Chat = () => {
                 <tbody>
                   {data.options.map((opt, i) => (
                     <tr key={i} className="border-t border-white/10 hover:bg-white/5 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="font-bold">{opt.title}</div>
+                      <td className="px-4 py-3 bg-[#FF8000]">
+                        <div className="font-bold text-white">{opt.title}</div>
                         <div className="text-xs text-white/70 line-clamp-1">{opt.description}</div>
                       </td>
-                      <td className="px-4 py-3 font-mono">{opt.price}</td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-4 py-3 font-mono bg-[#FF8000] text-white">
+                        {opt.price && opt.price !== "0" ? opt.price : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-center bg-[#FF8000]">
                         <button
                           onClick={() => handleServiceSelect(opt)}
-                          className="bg-white text-orange-600 px-3 py-1 rounded-full text-xs font-bold hover:bg-orange-600 hover:text-white transition shadow-sm"
+                          className="bg-white text-orange-600 px-3 py-1 rounded-full text-xs font-bold hover:bg-orange-600 hover:text-white transition shadow-sm whitespace-nowrap"
                         >
                           {t("book_btn")}
                         </button>
@@ -1102,9 +1104,9 @@ const Chat = () => {
                       />
                     </div>
                     <div className="flex flex-col bg-[#FF8000] px-7 py-4 rounded-[25px] rounded-bl-none break-words max-w-[85%]">
-                      <p className="text-white font-medium leading-relaxed" style={{ whiteSpace: 'pre-line' }}>
+                      <div className="text-white font-medium leading-relaxed" style={{ whiteSpace: 'pre-line' }}>
                         {renderBotMessage(message.text)}
-                      </p>
+                      </div>
                       <p className="text-white text-end font-bold text-sm mt-0">
                         {message.timestamp}
                       </p>

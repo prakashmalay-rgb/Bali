@@ -261,19 +261,24 @@ Return ONLY valid JSON:
         for idx, service in enumerate(filtered[:15]):
             name = service.get("service_name", "Unknown Service")
             
-            # Dynamic zone pricing check
-            price_val = service.get("price", "0")
+            # Resolve customer-facing price
+            price_val = service.get("price", "")  # Final Price (Service Item Button) from sheet
+            price_digits = re.sub(r'[^\d]', '', str(price_val))
+            if not price_digits or price_digits == "0":
+                # Sheet price missing — estimate from vendor price (SP ≈ 70% of final)
+                try:
+                    from app.routes.main_menu_routes import get_price_distribution_details
+                    price_info = await get_price_distribution_details(name, location_zone)
+                    sp = int(re.sub(r'[^\d]', '', str(price_info.get("service_provider_price", "0"))) or 0)
+                    if sp > 0:
+                        estimated = int(sp / 0.70)
+                        price_digits = str(estimated)
+                except Exception:
+                    pass
             try:
-                from app.routes.main_menu_routes import get_price_distribution_details
-                price_info = await get_price_distribution_details(name, location_zone)
-                p = int(price_info.get("service_provider_price", 0)) + int(price_info.get("villa_price", 0))
-                if p > 0: price_val = str(p)
-            except: pass
-            
-            try:
-                price_digits = re.sub(r'[^\d]', '', str(price_val))
-                price_clean = f"{int(price_digits or 0):,}".replace(',', ' ')
-            except: price_clean = str(price_val)
+                price_clean = f"{int(price_digits or 0):,}".replace(',', '.') if price_digits and price_digits != "0" else "0"
+            except Exception:
+                price_clean = "0"
             
             rows.append({
                 "id": f"ai_service_{idx}_{name.replace(' ', '_')}",

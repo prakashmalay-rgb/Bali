@@ -761,39 +761,42 @@ const Chat = () => {
       try {
         const data = JSON.parse(text.split("|")[1]);
         return (
-          <div className="services-table-container mt-2">
-            <p className="mb-3 text-white font-medium">{data.message}</p>
-            <div className="overflow-x-auto rounded-xl border border-white/20">
-              <table className="min-w-full bg-[#FF8000] text-white text-sm">
-                <thead>
-                  <tr className="bg-white/10">
-                    <th className="px-4 py-2 text-left">{t("service_col")}</th>
-                    <th className="px-4 py-2 text-left">{t("price_col")}</th>
-                    <th className="px-4 py-2 text-center">{t("action_col")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.options.map((opt, i) => (
-                    <tr key={i} className="border-t border-white/10 hover:bg-white/5 transition-colors">
-                      <td className="px-4 py-3 bg-[#FF8000]">
-                        <div className="font-bold text-white">{opt.title}</div>
-                        <div className="text-xs text-white/70 line-clamp-1">{opt.description}</div>
-                      </td>
-                      <td className="px-4 py-3 font-mono bg-[#FF8000] text-white">
-                        {opt.price && opt.price !== "0" ? opt.price : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-center bg-[#FF8000]">
-                        <button
-                          onClick={() => handleServiceSelect(opt)}
-                          className="bg-white text-orange-600 px-3 py-1 rounded-full text-xs font-bold hover:bg-orange-600 hover:text-white transition shadow-sm whitespace-nowrap"
-                        >
-                          {t("book_btn")}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <div className="mt-2" style={{ color: '#fff' }}>
+            <p className="mb-3 font-medium" style={{ color: '#fff' }}>{data.message}</p>
+            <div className="rounded-xl border border-white/20 overflow-hidden" style={{ backgroundColor: '#FF8000' }}>
+              {/* Header */}
+              <div className="flex items-center px-3 py-2 text-xs font-bold" style={{ backgroundColor: 'rgba(255,255,255,0.1)', color: '#fff' }}>
+                <span className="flex-1">{t("service_col")}</span>
+                <span className="w-16 text-right">{t("price_col")}</span>
+                <span className="w-16 text-center">{t("action_col")}</span>
+              </div>
+              {/* Rows */}
+              {data.options.map((opt, i) => (
+                <div
+                  key={i}
+                  className="flex items-center px-3 py-2 text-sm transition-colors hover:bg-white/5"
+                  style={{ backgroundColor: '#FF8000', borderTop: i === 0 ? 'none' : '1px solid rgba(255,255,255,0.1)' }}
+                >
+                  <div className="flex-1 min-w-0 pr-2">
+                    <div className="font-bold truncate" style={{ color: '#fff' }}>{opt.title}</div>
+                    <div className="text-xs truncate" style={{ color: 'rgba(255,255,255,0.7)' }}>{opt.description}</div>
+                  </div>
+                  <div className="w-16 text-right font-mono text-xs" style={{ color: '#fff' }}>
+                    {opt.price && opt.price !== "0" ? opt.price : "—"}
+                  </div>
+                  <div className="w-16 text-center">
+                    <button
+                      onClick={() => handleServiceSelect(opt)}
+                      className="text-xs font-bold px-2 py-1 rounded-full transition whitespace-nowrap"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)' }}
+                      onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.35)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.2)'; }}
+                    >
+                      {t("book_btn")}
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         );

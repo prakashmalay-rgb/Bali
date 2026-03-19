@@ -143,7 +143,7 @@ const Chat = () => {
 
     const idToEnglish = {
       'order_services': 'Order Services',
-      'local_guide': 'Local Guide',
+      'local_guide': 'Bali Handbook',
       'recommendations': 'Recommendations',
       'discounts_promotions': 'Discount & Promotions',
       'currency_converter': 'Currency Converter',

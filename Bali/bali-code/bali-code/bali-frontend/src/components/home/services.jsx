@@ -104,7 +104,7 @@ const Services = () => {
           </h5>
         </div>
 
-        {/* Card 2 - Local Guide */}
+        {/* Card 2 - Bali Handbook */}
         <div
           className={`card group max-w-[425px] w-full h-[101px] md:h-[200px] bg-white rounded-[20px] md:rounded-[50px] flex flex-col justify-center items-center gap-[10px] md:gap-[25px] shadow-[0_8px_24px_rgba(0,0,0,0.15)] transition-all duration-300 ease-in-out hover:bg-[#ff8000] hover:shadow-[0_12px_28px_rgba(0,0,0,0.25)] cursor-pointer ${localGuideLoading ? 'opacity-50 cursor-not-allowed' : ''
             }`}
@@ -113,7 +113,7 @@ const Services = () => {
           <div className="h-[34.25px] md:h-[54px] flex items-center justify-center">
             <img
               src="/assets/guide.svg"
-              alt="Local Guide"
+              alt="Bali Handbook"
               className={`w-[42.78px] h-[42.78px] md:w-[90px] md:h-[90px] filter transition duration-300 ease-in-out group-hover:brightness-0 group-hover:invert ${localGuideLoading ? 'animate-spin' : ''
                 }`}
             />

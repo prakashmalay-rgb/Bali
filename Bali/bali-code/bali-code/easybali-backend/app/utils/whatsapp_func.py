@@ -149,7 +149,11 @@ PERSISTENT_API_MAPPING = {k: {"url": "", "fetch_func": None} for k in PERSISTENT
 
 
 async def _whatsapp_ai_chat(sender_id: str, query: str, chat_type: str) -> str | None:
-    """Call generate_response directly — no HTTP round-trip to self."""
+    """Call generate_response directly — no HTTP round-trip to self.
+
+    Returns the response text, or None if already handled (e.g. booking flow sent).
+    Intercepts the SERVICES_DATA| sentinel and routes it to the order flow UI.
+    """
     from app.services.ai_prompt import generate_response
     try:
         if chat_type == "currency-converter":
@@ -160,7 +164,23 @@ async def _whatsapp_ai_chat(sender_id: str, query: str, chat_type: str) -> str |
             chat_type=chat_type,
             language="EN",
         )
-        return result.get("response") if result else None
+        if not result:
+            return None
+        response_text = result.get("response", "")
+        # Intercept SERVICES_DATA sentinel — render as booking flow, not raw text
+        if response_text.startswith("SERVICES_DATA|"):
+            try:
+                import json as _json
+                menu_data = _json.loads(response_text[len("SERVICES_DATA|"):])
+                await send_ai_whatsapp_order_flow_message(
+                    sender_id,
+                    flow_token=f"book_{sender_id}",
+                    menu_data=menu_data,
+                )
+            except Exception as parse_err:
+                print(f"❌ SERVICES_DATA parse error: {parse_err}")
+            return None  # already handled (or failed silently)
+        return response_text
     except Exception as e:
         print(f"❌ _whatsapp_ai_chat error ({chat_type}): {e}")
         return None
@@ -2707,8 +2727,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     data = await _whatsapp_ai_chat(sender_id, message_text, chat_type)
                     if data:
                         await send_whatsapp_message(sender_id, data)
-                    else:
-                        await send_whatsapp_message(sender_id, "Sorry, I couldn't process that right now. Please try again.")
+                    # None means either booking flow was sent or error — either way, no extra message needed
                 return
 
             if selected_id in PERSISTENT_MODE_CHAT_TYPES:
@@ -2717,8 +2736,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                 data = await _whatsapp_ai_chat(sender_id, "Hi", chat_type)
                 if data:
                     await send_whatsapp_message(sender_id, data)
-                else:
-                    await send_whatsapp_message(sender_id, "Sorry, I couldn't load this feature right now. Please try again.")
+                # None means booking flow sent or error — no extra message needed
                 return
             
             elif selected_id in ("language_lesson", "voice_translator"):
@@ -2810,12 +2828,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                 )
                 if data:
                     await send_whatsapp_message(sender_id, data)
-                else:
-                    await send_whatsapp_message(
-                        sender_id,
-                        f"I couldn't load information for *{serviceitems_text}* right now. "
-                        "You can type your question directly and I'll do my best to help!"
-                    )
+                # None means booking flow sent or error — no extra message needed
                 return
 
             else:

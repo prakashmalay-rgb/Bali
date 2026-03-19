@@ -62,5 +62,3 @@ python-dateutil==2.9.0.post0
 pytz==2024.2
 xendit-python==7.0.0
 
-# ── Security audit (used in CI) ──────────────────────────────────
-pip-audit==2.9.0

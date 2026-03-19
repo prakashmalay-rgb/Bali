@@ -2463,6 +2463,33 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
 
         if user_villa_code:
 
+            # ── Universal session escape + auto-expiry ───────────────────────────
+            # Escape words always clear ALL active sessions and show the main menu,
+            # so users are never permanently stuck in issue / feedback / language mode.
+            _ESCAPE_WORDS = {
+                "hi", "hello", "hey", "menu", "start", "back", "main menu",
+                "home", "cancel", "reset", "restart", "begin", "help",
+                "good morning", "good afternoon", "good evening",
+            }
+            _SESSION_TTL = datetime.timedelta(minutes=30)
+            _now_ts = datetime.datetime.now()
+
+            # Auto-expire issue sessions older than 30 min
+            if sender_id in issue_reporting_sessions:
+                _iss_ts = issue_reporting_sessions[sender_id].get("timestamp", _now_ts)
+                if (_now_ts - _iss_ts) > _SESSION_TTL:
+                    issue_reporting_sessions.pop(sender_id, None)
+                    logger.info(f"Auto-expired stale issue session for {sender_id}")
+
+            if message_text and message_text.strip().lower() in _ESCAPE_WORDS:
+                issue_reporting_sessions.pop(sender_id, None)
+                persistent_mode_sessions.pop(sender_id, None)
+                feedback_sessions.pop(sender_id, None)
+                language_lesson_sessions.pop(sender_id, None)
+                await starting_message(sender_id)
+                return
+            # ────────────────────────────────────────────────────────────────────
+
             # Task 22: Active Issue Reporting Session
             if sender_id in issue_reporting_sessions:
                 session = issue_reporting_sessions[sender_id]
@@ -2833,6 +2860,32 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
 
             else:
                 if message_text:
+                    # ── Intent-based routing for common free-text queries ────────────
+                    # Routes natural-language queries to the right specialised AI
+                    # instead of the generic WhatsApp chatbot.
+                    _FREE_TEXT_INTENTS = [
+                        (["what to do today", "what should i do today", "today activities", "things to do today"], "what_to_do_today"),
+                        (["plan my trip", "plan a trip", "trip plan", "itinerary", "day plan"], "plan_my_trip"),
+                        (["things to do in bali", "bali activities", "things to do", "what to do in bali"], "things_to_do_in_bali"),
+                        (["event calendar", "events today", "festivals", "whats on", "what's on"], "event_calendar"),
+                        (["local cuisine", "food guide", "where to eat", "restaurants", "bali food"], "local_cousine_guide"),
+                    ]
+                    _msg_lower = message_text.strip().lower()
+                    _routed = False
+                    for _phrases, _mode_key in _FREE_TEXT_INTENTS:
+                        if any(_p in _msg_lower for _p in _phrases):
+                            _chat_type = PERSISTENT_MODE_CHAT_TYPES.get(_mode_key)
+                            if _chat_type:
+                                persistent_mode_sessions[sender_id] = _mode_key
+                                _data = await _whatsapp_ai_chat(sender_id, message_text, _chat_type)
+                                if _data:
+                                    await send_whatsapp_message(sender_id, _data)
+                                _routed = True
+                                break
+                    if _routed:
+                        return
+                    # ────────────────────────────────────────────────────────────────
+
                     query_for_ai = await _enrich_currency_query(message_text) if _is_currency_query(message_text) else message_text
                     ai_result = await whatsapp_response(query_for_ai, sender_id, user_villa_code or "WEB_VILLA_01")
 

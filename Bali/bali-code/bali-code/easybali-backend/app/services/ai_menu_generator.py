@@ -221,7 +221,7 @@ Return ONLY valid JSON:
         
         return reqs
 
-    async def generate_service_menu(self, category: str, subcategory: Optional[str], requirements: Dict[str, Any], villa_code: str = "WEB_VILLA_01") -> Optional[Dict[str, Any]]:
+    async def generate_service_menu(self, category: str, subcategory: Optional[str], requirements: Dict[str, Any], _villa_code: str = "WEB_VILLA_01") -> Optional[Dict[str, Any]]:
         """Filter services and create a structured menu for the web UI"""
         from app.services.google_sheets_service import google_sheets_service
         all_services = await google_sheets_service.get_services_data()
@@ -254,29 +254,15 @@ Return ONLY valid JSON:
             
         if not filtered: return None
         
-        from app.services.menu_services import get_villa_location_by_code
-        location_zone = await get_villa_location_by_code(villa_code)
-
         rows = []
         for idx, service in enumerate(filtered[:15]):
             name = service.get("service_name", "Unknown Service")
             
-            # Resolve customer-facing price
-            price_val = service.get("price", "")  # Final Price (Service Item Button) from sheet
-            price_digits = re.sub(r'[^\d]', '', str(price_val))
-            if not price_digits or price_digits == "0":
-                # Sheet price missing — estimate from vendor price (SP ≈ 70% of final)
-                try:
-                    from app.routes.main_menu_routes import get_price_distribution_details
-                    price_info = await get_price_distribution_details(name, location_zone)
-                    sp = int(re.sub(r'[^\d]', '', str(price_info.get("service_provider_price", "0"))) or 0)
-                    if sp > 0:
-                        estimated = int(sp / 0.70)
-                        price_digits = str(estimated)
-                except Exception:
-                    pass
+            # Use Final Price (Service Item Button) from sheet — only digits
+            price_val = service.get("price", "")
             try:
-                price_clean = f"{int(price_digits or 0):,}".replace(',', '.') if price_digits and price_digits != "0" else "0"
+                price_digits = re.sub(r'[^\d]', '', str(price_val))
+                price_clean = f"{int(price_digits):,}".replace(',', '.') if price_digits and int(price_digits) > 0 else "0"
             except Exception:
                 price_clean = "0"
             

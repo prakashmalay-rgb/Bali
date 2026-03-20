@@ -138,8 +138,42 @@ PERSISTENT_MODE_CHAT_TYPES = {
     "local_cuisine_guide":   "local-cuisine",
     "plan_my_trip":          "plan-my-trip",
     "currency_converter":    "currency-converter",
-    "recommendations":       "what-to-do",
+    # "recommendations" intentionally excluded — must fall through to _SUBMENU_PARENTS
     "discount__promotions":  "general",
+}
+
+# Context-specific kickoff messages sent when user first enters a mode.
+# These replace the generic "Hi" so the AI immediately delivers value.
+_KICKOFF_MESSAGES = {
+    "what_to_do_today": (
+        "The guest just opened 'What To Do Today'. Give them 3–5 specific activity ideas "
+        "for today in Bali — things like spa, beach, local market, surf, temple visit, etc. "
+        "Ask their location zone (Seminyak, Canggu, Ubud, Uluwatu) first if needed. "
+        "Use a simple numbered list, NOT a table."
+    ),
+    "plan_my_trip": (
+        "The guest wants to plan their Bali trip. Ask them these questions ONE AT A TIME "
+        "in a friendly way: 1) When do they arrive and how many days are they staying? "
+        "2) How many people? 3) What are their main interests — adventure, culture, relaxation, "
+        "food, nightlife, or a mix? Start immediately with question 1."
+    ),
+    "event_calendar": (
+        "The guest wants to know about events and happenings in Bali. Share upcoming festivals, "
+        "cultural ceremonies, markets, beach parties, and art events happening this week and month. "
+        "Format as a clean list with dates and locations."
+    ),
+    "things_to_do_in_bali": (
+        "The guest wants to explore Bali. Give them the top 5 must-do experiences — "
+        "mix of adventure, culture, and local experiences. Use a numbered list."
+    ),
+    "local_cousine_guide": (
+        "The guest wants to discover Bali food. Recommend the best local dishes to try "
+        "and where to find them (warungs, markets, restaurants). Use a simple list."
+    ),
+    "local_cuisine_guide": (
+        "The guest wants to discover Bali food. Recommend the best local dishes to try "
+        "and where to find them (warungs, markets, restaurants). Use a simple list."
+    ),
 }
 
 # Keep for backward-compatibility with unit tests that import this name.
@@ -2758,7 +2792,8 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
             if selected_id in PERSISTENT_MODE_CHAT_TYPES:
                 chat_type = PERSISTENT_MODE_CHAT_TYPES[selected_id]
                 persistent_mode_sessions[sender_id] = selected_id
-                data = await _whatsapp_ai_chat(sender_id, "Hi", chat_type)
+                kickoff = _KICKOFF_MESSAGES.get(selected_id, "Greet the guest warmly and ask how you can help them today in Bali.")
+                data = await _whatsapp_ai_chat(sender_id, kickoff, chat_type)
                 if data:
                     await send_whatsapp_message(sender_id, data)
                 # None means booking flow sent or error — no extra message needed

@@ -43,6 +43,9 @@ sheet_nav_sessions: Dict[str, dict] = {}
 # Follow-up button state: { sender_id: { "fup_0": {"query": str, "key": str}, ... } }
 followup_sessions: Dict[str, dict] = {}
 
+# Step-by-step booking state: { sender_id: {step, service_name, price, date, time, persons} }
+pending_booking_sessions: Dict[str, dict] = {}
+
 
 async def get_or_create_customer(sender_id: str) -> str:
     """Return existing customer_id or create a new one for this phone number."""
@@ -432,6 +435,118 @@ async def _send_followup_prompt(sender_id: str, title: str, main_menu: str = "")
         except Exception:
             pass
 # ──────────────────────────────────────────────────────────────────────────────
+
+
+# ─── Interactive booking flow helpers ────────────────────────────────────────
+
+async def _start_booking_flow(sender_id: str, service_name: str, price_display: str = "") -> None:
+    """Begin the step-by-step booking flow after a service is selected."""
+    pending_booking_sessions[sender_id] = {
+        "step": "date",
+        "service_name": service_name,
+        "price": price_display,
+        "date": None,
+        "time": None,
+        "persons": None,
+    }
+    price_line = f"\n\n*Price:* {price_display}" if price_display else ""
+    await send_whatsapp_message(
+        sender_id,
+        f"Great choice! You selected *{service_name}*.{price_line}\n\n"
+        "Please type your preferred date 📅\n(e.g. *25 March* or *25/03/2026*)",
+    )
+
+
+async def _send_time_buttons(sender_id: str) -> None:
+    """Ask preferred time slot using quick-reply buttons."""
+    headers = {
+        "Authorization": f"Bearer {settings.access_token}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": sender_id,
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {"text": "What time would you prefer? ⏰"},
+            "action": {
+                "buttons": [
+                    {"type": "reply", "reply": {"id": "bk_time_morning",   "title": "🌅 Morning"}},
+                    {"type": "reply", "reply": {"id": "bk_time_afternoon", "title": "☀️ Afternoon"}},
+                    {"type": "reply", "reply": {"id": "bk_time_evening",   "title": "🌙 Evening"}},
+                ],
+            },
+        },
+    }
+    async with httpx.AsyncClient() as _hc:
+        await _hc.post(settings.whatsapp_api_url, json=payload, headers=headers)
+
+
+async def _send_persons_buttons(sender_id: str) -> None:
+    """Ask how many people using quick-reply buttons."""
+    headers = {
+        "Authorization": f"Bearer {settings.access_token}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": sender_id,
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {"text": "How many people? 👥"},
+            "action": {
+                "buttons": [
+                    {"type": "reply", "reply": {"id": "bk_persons_1", "title": "1 Person"}},
+                    {"type": "reply", "reply": {"id": "bk_persons_2", "title": "2 People"}},
+                    {"type": "reply", "reply": {"id": "bk_persons_3", "title": "3+ People"}},
+                ],
+            },
+        },
+    }
+    async with httpx.AsyncClient() as _hc:
+        await _hc.post(settings.whatsapp_api_url, json=payload, headers=headers)
+
+
+async def _send_booking_summary(sender_id: str) -> None:
+    """Show full booking summary with Confirm / Cancel buttons."""
+    session = pending_booking_sessions.get(sender_id, {})
+    service  = session.get("service_name", "")
+    price    = session.get("price", "")
+    date_str = session.get("date", "")
+    time_str = session.get("time", "")
+    persons  = session.get("persons", "1")
+    price_line = f"\n*Price:* {price}" if price else ""
+    summary = (
+        f"📋 *Booking Summary*\n\n"
+        f"*Service:* {service}\n"
+        f"*Date:* {date_str}\n"
+        f"*Time:* {time_str}\n"
+        f"*Persons:* {persons}{price_line}\n\n"
+        "Shall we confirm this booking?"
+    )
+    headers = {
+        "Authorization": f"Bearer {settings.access_token}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": sender_id,
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {"text": summary},
+            "action": {
+                "buttons": [
+                    {"type": "reply", "reply": {"id": "bk_confirm", "title": "✅ Confirm"}},
+                    {"type": "reply", "reply": {"id": "bk_cancel",  "title": "❌ Cancel"}},
+                ],
+            },
+        },
+    }
+    async with httpx.AsyncClient() as _hc:
+        await _hc.post(settings.whatsapp_api_url, json=payload, headers=headers)
 
 
 def _endpoint_to_chat_type(endpoint: str, fallback_title: str = "") -> str:
@@ -2179,6 +2294,99 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     return
                 # ────────────────────────────────────────────────────────────
 
+                # ── Step-by-step booking buttons ─────────────────────────────────
+                if button_id.startswith("bk_time_"):
+                    bk_session = pending_booking_sessions.get(sender_id, {})
+                    if bk_session:
+                        time_map = {
+                            "bk_time_morning":   "Morning (08:00 AM – 12:00 PM)",
+                            "bk_time_afternoon": "Afternoon (12:00 PM – 05:00 PM)",
+                            "bk_time_evening":   "Evening (05:00 PM – 09:00 PM)",
+                        }
+                        bk_session["time"] = time_map.get(button_id, "Flexible")
+                        bk_session["step"] = "persons"
+                        pending_booking_sessions[sender_id] = bk_session
+                        await _send_persons_buttons(sender_id)
+                    return
+
+                if button_id.startswith("bk_persons_"):
+                    bk_session = pending_booking_sessions.get(sender_id, {})
+                    if bk_session:
+                        persons_map = {
+                            "bk_persons_1": "1",
+                            "bk_persons_2": "2",
+                            "bk_persons_3": "3+",
+                        }
+                        bk_session["persons"] = persons_map.get(button_id, "1")
+                        bk_session["step"] = "confirm"
+                        pending_booking_sessions[sender_id] = bk_session
+                        await _send_booking_summary(sender_id)
+                    return
+
+                if button_id == "bk_confirm":
+                    bk_session = pending_booking_sessions.pop(sender_id, {})
+                    if not bk_session:
+                        await send_whatsapp_message(sender_id, "No active booking found. Please start again from the menu.")
+                        return
+                    service_name = bk_session.get("service_name", "")
+                    date_str     = bk_session.get("date", "")
+                    time_str     = bk_session.get("time", "Flexible")
+                    persons      = bk_session.get("persons", "1")
+                    price_str    = bk_session.get("price", "")
+                    try:
+                        import dateutil.parser as _dp
+                        user_date = _dp.parse(date_str)
+                    except Exception:
+                        user_date = datetime.datetime.now()
+                    base_price = await get_service_base_price(service_name)
+                    new_order = await initiate_chat_session(
+                        sender_id=sender_id,
+                        service_name=service_name,
+                        person_count=persons,
+                        base_price=base_price,
+                        date=user_date,
+                        time=time_str,
+                    )
+                    new_order.date   = user_date
+                    new_order.time   = time_str
+                    new_order.status = "pending_confirmation"
+                    order_dict = new_order.dict()
+                    order_dict["customer_id"] = customer_id
+                    await save_order_to_db(order_dict)
+                    try:
+                        price_cleaned = int(re.sub(r"[^\d]", "", str(new_order.price)) or "0")
+                        price_display = f"IDR {price_cleaned:,}"
+                    except Exception:
+                        price_display = price_str or f"IDR {new_order.price}"
+                    confirmation_message = (
+                        f"✨ *Booking Request Received!* ✨\n\n"
+                        f"*Order ID:* {new_order.order_number}\n"
+                        f"*Service:* {new_order.service_name}\n"
+                        f"*Date:* {new_order.date.strftime('%d-%m-%Y')}\n"
+                        f"*Time:* {new_order.time}\n"
+                        f"*Persons:* {persons}\n"
+                        f"*Total Price:* {price_display}\n\n"
+                        "Our service providers have been notified. We will send you a secure payment link as soon as a provider confirms availability!"
+                    )
+                    await send_whatsapp_message(sender_id, confirmation_message)
+                    service_numbers = await fetch_whatsapp_numbers(service_name)
+                    test_sp_num = "6281999281660"
+                    if test_sp_num not in service_numbers:
+                        service_numbers.append(test_sp_num)
+                    logger.info(f"🚀 Notifying {len(service_numbers)} SPs: {service_numbers}")
+                    for num in service_numbers:
+                        try:
+                            await send_whatsapp_order_to_SP(num, order_dict)
+                        except Exception as _sp_err:
+                            logger.error(f"Failed to notify SP {num}: {_sp_err}")
+                    return
+
+                if button_id == "bk_cancel":
+                    pending_booking_sessions.pop(sender_id, None)
+                    await send_whatsapp_message(sender_id, "Booking cancelled. Type *menu* to start over.")
+                    return
+                # ─────────────────────────────────────────────────────────────────
+
                 # ── Follow-up button tapped ───────────────────────────────────────
                 if button_id.startswith("fup_"):
                     fu_data = followup_sessions.get(sender_id, {})
@@ -2555,9 +2763,15 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                             f"✨ *{service_name}*\n\n{service_details.get('description', '')[:200]}"
                         )
                     
-                    # Direct to Booking Flow
-                    token = f"book_{sender_id}_{service_name}"
-                    await send_whatsapp_order_flow_message(sender_id, token)
+                    # Start interactive step-by-step booking
+                    _bk_price = ""
+                    try:
+                        _bp = await get_service_base_price(service_name)
+                        if _bp:
+                            _bk_price = f"IDR {int(re.sub(r'[^\d]', '', str(_bp)) or '0'):,}"
+                    except Exception:
+                        pass
+                    await _start_booking_flow(sender_id, service_name, _bk_price)
                     return
 
                 # 4. Handle AI-generated menu (Legacy/Search flow)
@@ -2598,9 +2812,8 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                         )
                         await send_whatsapp_message(sender_id, booking_message)
                         
-                        # Send booking flow
-                        token = f"book_{sender_id}_{service_name}"
-                        await send_whatsapp_order_flow_message(sender_id, token)
+                        # Start interactive step-by-step booking
+                        await _start_booking_flow(sender_id, service_name, price_formatted)
                         return
                     else:
                         await send_whatsapp_message(
@@ -2874,9 +3087,40 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                 persistent_mode_sessions.pop(sender_id, None)
                 feedback_sessions.pop(sender_id, None)
                 language_lesson_sessions.pop(sender_id, None)
+                pending_booking_sessions.pop(sender_id, None)
                 await starting_message(sender_id)
                 return
             # ────────────────────────────────────────────────────────────────────
+
+            # ── Step-by-step booking: date text input ─────────────────────────
+            if sender_id in pending_booking_sessions and message_text:
+                bk_session = pending_booking_sessions[sender_id]
+                if bk_session.get("step") == "date":
+                    # Try to parse the date
+                    raw_date = message_text.strip()
+                    parsed_date = None
+                    try:
+                        import dateutil.parser as _dp
+                        parsed_date = _dp.parse(raw_date, dayfirst=True)
+                        if parsed_date.date() < datetime.datetime.now().date():
+                            await send_whatsapp_message(
+                                sender_id,
+                                "⚠️ That date is in the past. Please enter a future date (e.g. *25 March* or *25/03/2026*):"
+                            )
+                            return
+                        date_str = parsed_date.strftime("%d %B %Y")
+                    except Exception:
+                        await send_whatsapp_message(
+                            sender_id,
+                            "⚠️ I couldn't understand that date. Please try again (e.g. *25 March* or *25/03/2026*):"
+                        )
+                        return
+                    bk_session["date"] = date_str
+                    bk_session["step"] = "time"
+                    pending_booking_sessions[sender_id] = bk_session
+                    await _send_time_buttons(sender_id)
+                    return
+            # ──────────────────────────────────────────────────────────────────
 
             # Task 22: Active Issue Reporting Session
             if sender_id in issue_reporting_sessions:
@@ -3191,8 +3435,14 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
             elif serviceitems_text:
                 # ── 1. Hard-wired special flows ──────────────────────────────
                 if serviceitems_text == "Order Services":
-                    token = f"order{sender_id}"
-                    await send_whatsapp_order_flow_message(sender_id, flow_token=token)
+                    _os_url = f"{settings.BASE_URL}/sub_menu"
+                    _os_data = await fetch_menu_data(_os_url, "Order Services")
+                    if _os_data:
+                        if isinstance(_os_data, list):
+                            _os_data = {"data": _os_data}
+                        await send_whatsapp_menu_list_message(sender_id, _os_data)
+                    else:
+                        await send_whatsapp_message(sender_id, "Please choose a category from Order Services below 👇")
                     return
 
                 if serviceitems_text in ["Voice Translator", "Language Lesson"]:

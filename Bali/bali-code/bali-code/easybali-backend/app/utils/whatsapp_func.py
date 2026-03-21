@@ -567,6 +567,13 @@ def _endpoint_to_chat_type(endpoint: str, fallback_title: str = "") -> str:
 
 async def _execute_sheet_endpoint(sender_id: str, endpoint: str, title: str, main_menu: str = "") -> None:
     """Execute the endpoint value from a Menu Structure sheet row."""
+    # Language lesson intercept — always trigger the structured lesson flow
+    _title_lower = title.lower()
+    if "language lesson" in _title_lower or "local language" in _title_lower or "voice translator" in _title_lower:
+        from app.utils.language_lesson_whatsapp_fucntions import language_starting_message
+        language_lesson_sessions[sender_id] = {"mode": "structured", "word_index": 0, "timestamp": datetime.datetime.now()}
+        await language_starting_message(sender_id)
+        return
     fup_key = _get_followup_key(title, main_menu)
     # Direct URL → send as link button, then follow-up prompt
     if endpoint.startswith("http"):

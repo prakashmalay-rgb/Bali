@@ -65,8 +65,49 @@ def load_data_into_cache():
             except Exception as e:
                 logger.error(f"❌ Failed to load sheet '{sheet_name}': {e}")
 
-        # Core worksheets
-        safe_load("Menu Structure", "menu_df")
+        # Core worksheets — Menu Structure needs special handling to extract hyperlink URLs
+        # from the Endpoint column (gspread.get_all_values() returns display text only).
+        try:
+            _ms_ws = workbook.worksheet("Menu Structure")
+            _ms_values = _ms_ws.get_all_values()
+            if _ms_values:
+                _ms_headers = _ms_values[0]
+                _ep_col = _ms_headers.index("Endpoint") if "Endpoint" in _ms_headers else None
+                if _ep_col is not None:
+                    try:
+                        _hl_resp = workbook.client.request(
+                            "GET",
+                            f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}",
+                            params={
+                                "ranges": "Menu Structure",
+                                "includeGridData": "true",
+                                "fields": "sheets.data.rowData.values(hyperlink)",
+                            },
+                        )
+                        _row_data = (
+                            _hl_resp.json()
+                            .get("sheets", [{}])[0]
+                            .get("data", [{}])[0]
+                            .get("rowData", [])
+                        )
+                        for _ri, _rinfo in enumerate(_row_data):
+                            if _ri == 0:
+                                continue  # skip header
+                            _cells = _rinfo.get("values", [])
+                            if _ep_col < len(_cells):
+                                _hl = _cells[_ep_col].get("hyperlink")
+                                if _hl:
+                                    while len(_ms_values[_ri]) <= _ep_col:
+                                        _ms_values[_ri].append("")
+                                    _ms_values[_ri][_ep_col] = _hl
+                    except Exception as _hl_err:
+                        logger.warning(f"Could not extract Menu Structure hyperlinks: {_hl_err}")
+                from app.utils.data_processing import clean_dataframe as _cdf
+                cache["menu_df"] = _cdf(_ms_values)
+                logger.info("✅ Loaded sheet: Menu Structure (with hyperlinks)")
+        except Exception as _ms_err:
+            logger.error(f"❌ Failed to load Menu Structure: {_ms_err}")
+            safe_load("Menu Structure", "menu_df")  # fallback
         safe_load("Services Overview", "services_df")
         safe_load("Mark-up", "price_distribution")
         safe_load("Services Providers", "service_providers")

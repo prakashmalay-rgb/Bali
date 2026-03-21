@@ -276,7 +276,12 @@ from app.services.menu_services import (
 )
 
 # Menus that use the Menu Structure sheet for navigation (Main Menu → Category → Sub-category → Endpoint)
-_SHEET_DRIVEN_MENUS = {"Bali Handbook", "Local Guide"}
+# Maps the WhatsApp button display name → the "Main Menu" column value in the Menu Structure sheet.
+# "Local Guide" is kept as alias because the Menu Design sheet may still use the old name.
+_SHEET_DRIVEN_MENUS: dict[str, str] = {
+    "Bali Handbook": "Bali Handbook",
+    "Local Guide":   "Bali Handbook",
+}
 
 
 def _endpoint_to_chat_type(endpoint: str, fallback_title: str = "") -> str:
@@ -2946,8 +2951,9 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     return
 
                 # ── 1c. Sheet-driven menus (Menu Structure tab) ──────────────────
-                if serviceitems_text in _SHEET_DRIVEN_MENUS:
-                    cats = await get_sheet_menu_categories(serviceitems_text)
+                _sheet_main_menu = _SHEET_DRIVEN_MENUS.get(serviceitems_text)
+                if _sheet_main_menu:
+                    cats = await get_sheet_menu_categories(_sheet_main_menu)
                     if cats:
                         id_map = {}
                         rows = []
@@ -2960,11 +2966,11 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                                 "description": "Tap to explore",
                             })
                         sheet_nav_sessions[sender_id] = {
-                            "main_menu": serviceitems_text,
+                            "main_menu": _sheet_main_menu,
                             "id_map": id_map,
                         }
                         card_data = {
-                            "main_title": serviceitems_text,
+                            "main_title": "Bali Handbook",
                             "main_description": "What would you like to explore?",
                             "data": rows,
                         }

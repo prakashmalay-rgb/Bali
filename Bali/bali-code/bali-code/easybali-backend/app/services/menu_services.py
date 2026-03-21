@@ -96,7 +96,18 @@ def load_data_into_cache():
                             _cells = _rinfo.get("values", [])
                             if _ep_col < len(_cells):
                                 _hl = _cells[_ep_col].get("hyperlink")
-                                if _hl:
+                                # Only substitute hyperlink URL for non-AI endpoints.
+                                # "Hybrid AI Result" / "AI Automated Result" cells may have
+                                # a reference hyperlink that should NOT override the AI trigger text.
+                                _display = (
+                                    _ms_values[_ri][_ep_col]
+                                    if _ep_col < len(_ms_values[_ri]) else ""
+                                ).lower()
+                                _is_ai_endpoint = (
+                                    _display.startswith("hybrid ai")
+                                    or _display.startswith("ai automated")
+                                )
+                                if _hl and not _is_ai_endpoint:
                                     while len(_ms_values[_ri]) <= _ep_col:
                                         _ms_values[_ri].append("")
                                     _ms_values[_ri][_ep_col] = _hl

@@ -306,19 +306,27 @@ async def _execute_sheet_endpoint(sender_id: str, endpoint: str, title: str) -> 
     if endpoint.startswith("http"):
         await send_whatsapp_interactive_link(sender_id, endpoint)
         return
-    # Hyperlinked cells lose their URL in gspread — try known URL map by title or endpoint text
+    # Known URL fallback (for non-AI items whose sheet URL didn't load)
     known_url = _KNOWN_BUTTON_URLS.get(title) or _KNOWN_BUTTON_URLS.get(endpoint)
     if known_url:
         await send_whatsapp_interactive_link(sender_id, known_url)
         return
-    # AI endpoint (e.g. "Hybrid AI Result – ...", "AI Automated Result")
+    # AI endpoint — extract specific topic from "Hybrid AI Result – <topic>"
+    topic = title
+    ep_lower = endpoint.lower()
+    if " - " in endpoint and (ep_lower.startswith("hybrid ai") or ep_lower.startswith("ai automated")):
+        topic = endpoint.split(" - ", 1)[1].strip()
     chat_type = _endpoint_to_chat_type(endpoint, title)
     mode_key = re.sub(r'[^\w]', '', title.lower().replace(" ", "_"))
     persistent_mode_sessions[sender_id] = mode_key
-    kickoff = _KICKOFF_MESSAGES.get(
-        mode_key,
-        f"The guest selected '{title}' from the Bali Handbook menu. "
-        "Provide useful, relevant information about this topic in Bali."
+    # Build a comprehensive kickoff that requests full, detailed content
+    kickoff = (
+        f"The guest tapped '{title}' in the Bali Handbook. "
+        f"Provide a COMPLETE and COMPREHENSIVE guide about '{topic}' in Bali. "
+        "Cover ALL relevant sections, categories, tips, recommendations and details — "
+        "include everything a tourist would want to know. "
+        "Do NOT give just a brief summary or top 5 list. "
+        "Use clear formatting with numbered sections and sub-points where appropriate."
     )
     data = await _whatsapp_ai_chat(sender_id, kickoff, chat_type)
     if data:

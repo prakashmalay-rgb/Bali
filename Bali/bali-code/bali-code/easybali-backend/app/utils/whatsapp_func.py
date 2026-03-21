@@ -40,6 +40,9 @@ decline_sessions : Dict[str, str] = {}
 # { sender_id: { "main_menu": str, "category": str, "id_map": {shcat_N/shsub_N: name} } }
 sheet_nav_sessions: Dict[str, dict] = {}
 
+# Follow-up button state: { sender_id: { "fup_0": {"query": str, "key": str}, ... } }
+followup_sessions: Dict[str, dict] = {}
+
 
 async def get_or_create_customer(sender_id: str) -> str:
     """Return existing customer_id or create a new one for this phone number."""
@@ -144,6 +147,14 @@ PERSISTENT_MODE_CHAT_TYPES = {
     "currency_converter":    "currency-converter",
     # "recommendations" intentionally excluded — must fall through to _SUBMENU_PARENTS
     "discount__promotions":  "general",
+    # Follow-up context keys (Option A/B — free text after follow-up buttons)
+    "safety":                "things-to-do-in-bali",
+    "medical":               "things-to-do-in-bali",
+    "cuisine":               "local-cuisine",
+    "events":                "event-calender",
+    "activities":            "things-to-do-in-bali",
+    "etiquette":             "things-to-do-in-bali",
+    "followup_general":      "general",
 }
 
 # Context-specific kickoff messages sent when user first enters a mode.
@@ -319,6 +330,110 @@ async def _send_nav_buttons(sender_id: str, body: str, buttons: list) -> None:
         resp.raise_for_status()
 
 
+# ── Follow-up prompt infrastructure (Option A + B) ────────────────────────────
+# Contextual quick-reply buttons sent after every endpoint execution.
+# 3 buttons max (WhatsApp limit); titles ≤ 20 chars.
+_FOLLOWUP_CONFIGS: dict[str, list] = {
+    "safety": [
+        ("🏥 Find Hospital",    "Where are the nearest hospitals and clinics in Bali?"),
+        ("💊 Pharmacy",         "Where can I find a pharmacy in Bali?"),
+        ("🚑 Emergency",        "What are the emergency numbers and contacts in Bali?"),
+    ],
+    "medical": [
+        ("🏥 Find Clinic",      "Where are medical clinics in Bali?"),
+        ("💊 Buy Medicines",    "Where can I buy medicines or get a prescription in Bali?"),
+        ("🚑 Emergency",        "What are the emergency contacts in Bali?"),
+    ],
+    "cuisine": [
+        ("🍜 Must Try Food",    "What food must I absolutely try in Bali?"),
+        ("🍽️ Best Warungs",    "What are the best warungs and local restaurants in Bali?"),
+        ("🥤 Local Drinks",     "What local drinks should I try in Bali?"),
+    ],
+    "events": [
+        ("🎪 This Week",        "What events are happening this week in Bali?"),
+        ("🌺 Festivals",        "What festivals and ceremonies are coming up in Bali?"),
+        ("🎵 Music & Nightlife","What music events and nightlife are in Bali?"),
+    ],
+    "activities": [
+        ("🏄 Water Sports",     "What water sports can I do in Bali?"),
+        ("🌺 Cultural Tours",   "What cultural tours and experiences are available in Bali?"),
+        ("🌅 Nightlife",        "What is the nightlife scene like in Bali?"),
+    ],
+    "etiquette": [
+        ("👗 Dress Code",       "What is the dress code and temple etiquette in Bali?"),
+        ("🙏 Temple Rules",     "What are the rules when visiting temples in Bali?"),
+        ("💰 Tipping",          "What is the tipping culture in Bali?"),
+    ],
+    "followup_general": [
+        ("🌴 Explore Bali",     "What are the top things to see and do in Bali for tourists?"),
+        ("💰 Book a Service",   "What services can I book through EasyBali?"),
+    ],
+}
+
+
+def _get_followup_key(title: str, main_menu: str = "") -> str:
+    t = title.lower()
+    m = main_menu.lower()
+    if "safety" in t or "health" in t:
+        return "safety"
+    if "medical" in t or "hospital" in t or "clinic" in t or "reccom" in t:
+        return "medical"
+    if "cuisine" in t or "food" in t or "dining" in t or "cousine" in t or "restaurant" in t:
+        return "cuisine"
+    if "event" in t or "calendar" in t or "festival" in t or "ceremony" in t:
+        return "events"
+    if "things to do" in t or "activit" in t or "what to do" in t:
+        return "activities"
+    if "don't" in t or "dos" in t or "rule" in t or "etiquette" in t or "do's" in t:
+        return "etiquette"
+    if "recommendation" in m or "recommendation" in t:
+        return "activities"  # Recommendations items default to activities context
+    return "followup_general"
+
+
+async def _send_followup_prompt(sender_id: str, title: str, main_menu: str = "") -> None:
+    """Send contextual follow-up buttons (Option B) + open invite (Option A) after an endpoint executes."""
+    key = _get_followup_key(title, main_menu)
+    config = _FOLLOWUP_CONFIGS.get(key, _FOLLOWUP_CONFIGS["followup_general"])
+    btn_map = {}
+    btns = []
+    for i, (btn_title, query) in enumerate(config):
+        bid = f"fup_{i}"
+        btn_map[bid] = {"query": query, "key": key}
+        btns.append({"id": bid, "title": btn_title[:20]})
+    followup_sessions[sender_id] = btn_map
+    headers = {
+        "Authorization": f"Bearer {settings.access_token}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": sender_id,
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {"text": "💬 Anything else I can help with?\nTap a question or just type your own!"},
+            "action": {
+                "buttons": [
+                    {"type": "reply", "reply": {"id": b["id"], "title": b["title"]}}
+                    for b in btns
+                ]
+            },
+        },
+    }
+    try:
+        async with httpx.AsyncClient() as _hc:
+            resp = await _hc.post(settings.whatsapp_api_url, json=payload, headers=headers)
+            resp.raise_for_status()
+    except Exception as _fe:
+        logger.warning(f"Could not send follow-up prompt: {_fe}")
+        try:
+            await send_whatsapp_message(sender_id, "💬 Have a question? Just type it and I'll help!")
+        except Exception:
+            pass
+# ──────────────────────────────────────────────────────────────────────────────
+
+
 def _endpoint_to_chat_type(endpoint: str, fallback_title: str = "") -> str:
     """Derive an AI chat_type from a Menu Structure endpoint value."""
     ep = endpoint.lower()
@@ -335,16 +450,21 @@ def _endpoint_to_chat_type(endpoint: str, fallback_title: str = "") -> str:
     return _infer_chat_type(fallback_title)
 
 
-async def _execute_sheet_endpoint(sender_id: str, endpoint: str, title: str) -> None:
+async def _execute_sheet_endpoint(sender_id: str, endpoint: str, title: str, main_menu: str = "") -> None:
     """Execute the endpoint value from a Menu Structure sheet row."""
-    # Direct URL → send as link button
+    fup_key = _get_followup_key(title, main_menu)
+    # Direct URL → send as link button, then follow-up prompt
     if endpoint.startswith("http"):
         await send_whatsapp_interactive_link(sender_id, endpoint)
+        persistent_mode_sessions[sender_id] = fup_key
+        await _send_followup_prompt(sender_id, title, main_menu)
         return
     # Known URL fallback (for non-AI items whose sheet URL didn't load)
     known_url = _KNOWN_BUTTON_URLS.get(title) or _KNOWN_BUTTON_URLS.get(endpoint)
     if known_url:
         await send_whatsapp_interactive_link(sender_id, known_url)
+        persistent_mode_sessions[sender_id] = fup_key
+        await _send_followup_prompt(sender_id, title, main_menu)
         return
     # AI endpoint — extract specific topic from "Hybrid AI Result – <topic>"
     topic = title
@@ -366,6 +486,8 @@ async def _execute_sheet_endpoint(sender_id: str, endpoint: str, title: str) -> 
     data = await _whatsapp_ai_chat(sender_id, kickoff, chat_type)
     if data:
         await send_whatsapp_message(sender_id, data)
+        persistent_mode_sessions[sender_id] = fup_key
+        await _send_followup_prompt(sender_id, title, main_menu)
 
 async def fetch_menu_data(api_url: str, menu_type: str) -> list:
     try:
@@ -2057,6 +2179,20 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     return
                 # ────────────────────────────────────────────────────────────
 
+                # ── Follow-up button tapped ───────────────────────────────────────
+                if button_id.startswith("fup_"):
+                    fu_data = followup_sessions.get(sender_id, {})
+                    fu_item = fu_data.get(button_id)
+                    if fu_item:
+                        query = fu_item.get("query", "")
+                        key = fu_item.get("key", "followup_general")
+                        chat_type = PERSISTENT_MODE_CHAT_TYPES.get(key, "general")
+                        persistent_mode_sessions[sender_id] = key
+                        data = await _whatsapp_ai_chat(sender_id, query, chat_type)
+                        if data:
+                            await send_whatsapp_message(sender_id, data)
+                    return
+
                 # ── Button-based sheet navigation (Recommendations) ──────────────
                 if button_id.startswith("shbcat_"):
                     nav = sheet_nav_sessions.get(sender_id, {})
@@ -2091,7 +2227,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     else:
                         # No subcategories — execute endpoint directly
                         endpoint = await get_sheet_menu_endpoint(main_menu, cat_name)
-                        await _execute_sheet_endpoint(sender_id, endpoint, cat_name)
+                        await _execute_sheet_endpoint(sender_id, endpoint, cat_name, main_menu)
                     return
 
                 if button_id.startswith("shbsub_"):
@@ -2101,7 +2237,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     main_menu = nav.get("main_menu", "Recommendations")
                     category = nav.get("category", "")
                     endpoint = await get_sheet_menu_endpoint(main_menu, category, sub_name)
-                    await _execute_sheet_endpoint(sender_id, endpoint, sub_name)
+                    await _execute_sheet_endpoint(sender_id, endpoint, sub_name, main_menu)
                     return
                 # ─────────────────────────────────────────────────────────────────
 
@@ -2379,7 +2515,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     else:
                         # No subcategories — execute endpoint directly
                         endpoint = await get_sheet_menu_endpoint(main_menu, cat_name)
-                        await _execute_sheet_endpoint(sender_id, endpoint, cat_name)
+                        await _execute_sheet_endpoint(sender_id, endpoint, cat_name, main_menu)
                     return
 
                 # 1c. Sheet-driven navigation — subcategory selected (shsub_N)
@@ -2390,7 +2526,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     main_menu = nav.get("main_menu", "Bali Handbook")
                     category = nav.get("category", "")
                     endpoint = await get_sheet_menu_endpoint(main_menu, category, sub_name)
-                    await _execute_sheet_endpoint(sender_id, endpoint, sub_name)
+                    await _execute_sheet_endpoint(sender_id, endpoint, sub_name, main_menu)
                     return
 
                 # 2. Handle Subcategory Selection (leads to Service Items list)
@@ -3135,6 +3271,9 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
 
                 if _btn_url:
                     await send_whatsapp_interactive_link(sender_id, _btn_url)
+                    _fup_key = _get_followup_key(serviceitems_text)
+                    persistent_mode_sessions[sender_id] = _fup_key
+                    await _send_followup_prompt(sender_id, serviceitems_text)
                     return
 
                 # ── 4. Universal AI chat fallback ─────────────────────────────
@@ -3150,6 +3289,9 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                 )
                 if data:
                     await send_whatsapp_message(sender_id, data)
+                    _fup_key = _get_followup_key(serviceitems_text)
+                    persistent_mode_sessions[sender_id] = _fup_key
+                    await _send_followup_prompt(sender_id, serviceitems_text)
                 # None means booking flow sent or error — no extra message needed
                 return
 

@@ -2768,7 +2768,8 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     try:
                         _bp = await get_service_base_price(service_name)
                         if _bp:
-                            _bk_price = f"IDR {int(re.sub(r'[^\d]', '', str(_bp)) or '0'):,}"
+                            _bp_clean = int(re.sub(r'[^\d]', '', str(_bp)) or '0')
+                            _bk_price = f"IDR {_bp_clean:,}"
                     except Exception:
                         pass
                     await _start_booking_flow(sender_id, service_name, _bk_price)

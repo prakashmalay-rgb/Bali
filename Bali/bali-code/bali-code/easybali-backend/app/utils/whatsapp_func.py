@@ -256,10 +256,14 @@ _KNOWN_BUTTON_URLS: dict[str, str] = {
     "Find Medical Help":          "https://www.canva.com/design/DAGbfiNdbTw/rJdf8dxswAQDXZf3XtPSqw/view?utm_content=DAGbfiNdbTw&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h17b7214f43",
     "Medical Reccomendation":     "https://www.canva.com/design/DAGbfiNdbTw/rJdf8dxswAQDXZf3XtPSqw/view?utm_content=DAGbfiNdbTw&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h17b7214f43",
     "Medical Reccomendations":    "https://www.canva.com/design/DAGbfiNdbTw/rJdf8dxswAQDXZf3XtPSqw/view?utm_content=DAGbfiNdbTw&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h17b7214f43",
+    "Medical Recommendations":    "https://www.canva.com/design/DAGbfiNdbTw/rJdf8dxswAQDXZf3XtPSqw/view?utm_content=DAGbfiNdbTw&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h17b7214f43",
     "Do's and Don't":             "https://www.canva.com/design/DAGbZYkN0V8/SRJA3kOkFPzFqRmJEjlGbQ/view?utm_content=DAGbZYkN0V8&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h1d8411966d",
     "Know the Local Rules":       "https://www.canva.com/design/DAGbZYkN0V8/SRJA3kOkFPzFqRmJEjlGbQ/view?utm_content=DAGbZYkN0V8&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h1d8411966d",
     "Do's and Don't of Bali":     "https://www.canva.com/design/DAGbZYkN0V8/SRJA3kOkFPzFqRmJEjlGbQ/view?utm_content=DAGbZYkN0V8&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h1d8411966d",
+    "Do's and Don'ts of Bali":    "https://www.canva.com/design/DAGbZYkN0V8/SRJA3kOkFPzFqRmJEjlGbQ/view?utm_content=DAGbZYkN0V8&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h1d8411966d",
     "Dos and Don'ts":             "https://www.canva.com/design/DAGbZYkN0V8/SRJA3kOkFPzFqRmJEjlGbQ/view?utm_content=DAGbZYkN0V8&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h1d8411966d",
+    "Dos and Don'ts of Bali":     "https://www.canva.com/design/DAGbZYkN0V8/SRJA3kOkFPzFqRmJEjlGbQ/view?utm_content=DAGbZYkN0V8&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h1d8411966d",
+    "Safety and Health Tips":     "https://www.canva.com/design/DAGaNLT8Owc/gDSbEepIXK4OJxdOOtx92Q/view?utm_content=DAGaNLT8Owc&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h3bad98561a",
     # Shopping & spots
     "Shop the Best Places":  "https://maps.app.goo.gl/soEShhHPXVJhM5ms6",
     "Find Your Spot":        "https://maps.app.goo.gl/YvPCmHqJTh2ZNz3HA",
@@ -279,9 +283,40 @@ from app.services.menu_services import (
 # Maps the WhatsApp button display name → the "Main Menu" column value in the Menu Structure sheet.
 # "Local Guide" is kept as alias because the Menu Design sheet may still use the old name.
 _SHEET_DRIVEN_MENUS: dict[str, str] = {
-    "Bali Handbook": "Bali Handbook",
-    "Local Guide":   "Bali Handbook",
+    "Bali Handbook":  "Bali Handbook",
+    "Local Guide":    "Bali Handbook",
+    "Recommendations": "Recommendations",
 }
+
+# Menus that use interactive BUTTONS for navigation instead of list messages (≤3 items per level).
+# Falls back to list automatically if a level has more than 3 items.
+_BUTTON_NAV_MENUS: set = {"Recommendations"}
+
+
+async def _send_nav_buttons(sender_id: str, body: str, buttons: list) -> None:
+    """Send up to 3 reply buttons for sheet-driven navigation."""
+    headers = {
+        "Authorization": f"Bearer {settings.access_token}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": sender_id,
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {"text": body},
+            "action": {
+                "buttons": [
+                    {"type": "reply", "reply": {"id": b["id"], "title": b["title"][:20]}}
+                    for b in buttons[:3]
+                ]
+            },
+        },
+    }
+    async with httpx.AsyncClient() as _hc:
+        resp = await _hc.post(settings.whatsapp_api_url, json=payload, headers=headers)
+        resp.raise_for_status()
 
 
 def _endpoint_to_chat_type(endpoint: str, fallback_title: str = "") -> str:
@@ -2022,6 +2057,54 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     return
                 # ────────────────────────────────────────────────────────────
 
+                # ── Button-based sheet navigation (Recommendations) ──────────────
+                if button_id.startswith("shbcat_"):
+                    nav = sheet_nav_sessions.get(sender_id, {})
+                    id_map = nav.get("id_map", {})
+                    cat_name = id_map.get(button_id, category_text)
+                    main_menu = nav.get("main_menu", "Recommendations")
+                    subs = await get_sheet_menu_subcategories(main_menu, cat_name)
+                    if subs and len(subs) <= 3:
+                        sub_id_map = {}
+                        btns = []
+                        for i, s in enumerate(subs):
+                            sid = f"shbsub_{i}"
+                            sub_id_map[sid] = s["subcategory"]
+                            btns.append({"id": sid, "title": s["subcategory"][:20]})
+                        sheet_nav_sessions[sender_id] = {
+                            "main_menu": main_menu,
+                            "category": cat_name,
+                            "id_map": sub_id_map,
+                            "use_buttons": True,
+                        }
+                        await _send_nav_buttons(sender_id, f"*{cat_name}*\nChoose an option:", btns)
+                    elif subs and len(subs) > 3:
+                        # Fallback to list if more than 3 subcategories
+                        sub_id_map = {}
+                        rows = []
+                        for i, s in enumerate(subs):
+                            sid = f"shsub_{i}"
+                            sub_id_map[sid] = s["subcategory"]
+                            rows.append({"id": sid, "title": s["subcategory"][:24], "description": "Tap to explore"})
+                        sheet_nav_sessions[sender_id] = {"main_menu": main_menu, "category": cat_name, "id_map": sub_id_map}
+                        await send_whatsapp_menu_list_message(sender_id, {"main_title": cat_name, "main_description": "Choose an option:", "data": rows})
+                    else:
+                        # No subcategories — execute endpoint directly
+                        endpoint = await get_sheet_menu_endpoint(main_menu, cat_name)
+                        await _execute_sheet_endpoint(sender_id, endpoint, cat_name)
+                    return
+
+                if button_id.startswith("shbsub_"):
+                    nav = sheet_nav_sessions.get(sender_id, {})
+                    id_map = nav.get("id_map", {})
+                    sub_name = id_map.get(button_id, category_text)
+                    main_menu = nav.get("main_menu", "Recommendations")
+                    category = nav.get("category", "")
+                    endpoint = await get_sheet_menu_endpoint(main_menu, category, sub_name)
+                    await _execute_sheet_endpoint(sender_id, endpoint, sub_name)
+                    return
+                # ─────────────────────────────────────────────────────────────────
+
                 if button_id == "language_yes":
                     session = language_lesson_sessions.get(sender_id, {})
                     word_index = session.get("word_index", 0) + 1 if isinstance(session, dict) else 1
@@ -2987,25 +3070,39 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     cats = await get_sheet_menu_categories(_sheet_main_menu)
                     if cats:
                         id_map = {}
-                        rows = []
-                        for i, c in enumerate(cats):
-                            cid = f"shcat_{i}"
-                            id_map[cid] = c["category"]
-                            rows.append({
-                                "id": cid,
-                                "title": c["category"][:24],
-                                "description": "Tap to explore",
-                            })
-                        sheet_nav_sessions[sender_id] = {
-                            "main_menu": _sheet_main_menu,
-                            "id_map": id_map,
-                        }
-                        card_data = {
-                            "main_title": "Bali Handbook",
-                            "main_description": "What would you like to explore?",
-                            "data": rows,
-                        }
-                        await send_whatsapp_menu_list_message(sender_id, card_data)
+                        _use_buttons = serviceitems_text in _BUTTON_NAV_MENUS and len(cats) <= 3
+                        if _use_buttons:
+                            btns = []
+                            for i, c in enumerate(cats):
+                                cid = f"shbcat_{i}"
+                                id_map[cid] = c["category"]
+                                btns.append({"id": cid, "title": c["category"][:20]})
+                            sheet_nav_sessions[sender_id] = {
+                                "main_menu": _sheet_main_menu,
+                                "id_map": id_map,
+                                "use_buttons": True,
+                            }
+                            await _send_nav_buttons(sender_id, f"*{serviceitems_text}*\nWhat would you like to explore?", btns)
+                        else:
+                            rows = []
+                            for i, c in enumerate(cats):
+                                cid = f"shcat_{i}"
+                                id_map[cid] = c["category"]
+                                rows.append({
+                                    "id": cid,
+                                    "title": c["category"][:24],
+                                    "description": "Tap to explore",
+                                })
+                            sheet_nav_sessions[sender_id] = {
+                                "main_menu": _sheet_main_menu,
+                                "id_map": id_map,
+                            }
+                            card_data = {
+                                "main_title": "Bali Handbook",
+                                "main_description": "What would you like to explore?",
+                                "data": rows,
+                            }
+                            await send_whatsapp_menu_list_message(sender_id, card_data)
                         return
                     # No categories in sheet — fall through to existing logic
 

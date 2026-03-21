@@ -84,6 +84,15 @@ def load_data_into_cache():
             if _ms_values:
                 _ms_headers = _ms_values[0]
                 _ep_col = _ms_headers.index("Endpoint") if "Endpoint" in _ms_headers else None
+                # Sub-categories that must ALWAYS use their sheet hyperlink URL (never AI text)
+                _LINK_ONLY_SUBCATS = {
+                    "safety and health tips", "safety & health tips",
+                    "medical recommendations", "medical reccomendations", "medical reccomendation",
+                    "do's and don'ts of bali", "do's and don't of bali", "dos and don'ts of bali",
+                    "dos and don'ts", "do's and don'ts",
+                    "local cuisine guide", "local cousine guide",
+                }
+                _sub_col = _ms_headers.index("Sub-category") if "Sub-category" in _ms_headers else None
                 if _ep_col is not None:
                     try:
                         _hl_resp = workbook.client.request(
@@ -107,9 +116,13 @@ def load_data_into_cache():
                             _cells = _rinfo.get("values", [])
                             if _ep_col < len(_cells):
                                 _hl = _cells[_ep_col].get("hyperlink")
-                                # Only substitute hyperlink URL for non-AI endpoints.
-                                # "Hybrid AI Result" / "AI Automated Result" cells may have
-                                # a reference hyperlink that should NOT override the AI trigger text.
+                                # Check if this row's Sub-category is in the force-link list
+                                _subcat_val = ""
+                                if _sub_col is not None and _sub_col < len(_ms_values[_ri]):
+                                    _subcat_val = _ms_values[_ri][_sub_col].lower().strip()
+                                _is_force_link = _subcat_val in _LINK_ONLY_SUBCATS
+                                # Only substitute hyperlink for non-AI endpoints,
+                                # UNLESS this sub-category is force-link (always use the URL).
                                 _display = (
                                     _ms_values[_ri][_ep_col]
                                     if _ep_col < len(_ms_values[_ri]) else ""
@@ -118,7 +131,7 @@ def load_data_into_cache():
                                     _display.startswith("hybrid ai")
                                     or _display.startswith("ai automated")
                                 )
-                                if _hl and not _is_ai_endpoint:
+                                if _hl and (not _is_ai_endpoint or _is_force_link):
                                     while len(_ms_values[_ri]) <= _ep_col:
                                         _ms_values[_ri].append("")
                                     _ms_values[_ri][_ep_col] = _hl

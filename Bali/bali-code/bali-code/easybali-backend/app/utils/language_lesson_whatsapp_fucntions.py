@@ -1,258 +1,177 @@
 import httpx
-import json
-
+import logging
 
 from fastapi import HTTPException
 from app.settings.config import settings
 from app.services.openai_client import client
 from app.utils.chat_memory import get_conversation_history, trim_history, save_message
 
+logger = logging.getLogger(__name__)
 
 
-async def language_lesson_ai(user_id: str) -> dict:
+def _get_words() -> list:
+    """Fetch language lesson words from the cache (AI Material sheet)."""
     try:
-        chat_history = get_conversation_history(user_id)
-        conversation = trim_history(chat_history)
-        response = await client.responses.create(
-            model=settings.OPENAI_MODEL_NAME,
-            input=[
-                {"role": "system", "content": (f"""You are a helpful Indonesian and Balinese language tutor. Your job is to create a lesson which includes: 1. Word, 2. Pronunciation, 3. Meaning in English, 4. Sentence in English and Indonesian. These are the previous lessons which you have generated {conversation} """)},
-            ],
-            text={
-                "format": {
-                    "type": "json_schema",
-                    "name": "language_lesson",
-                    "schema": {
-                        "type": "object",
-                        "properties": {
-                            "word": {"type": "string"},
-                            "pronounciation": {"type": "string"},
-                            "Meaning": {"type": "string"},
-                            "sentence": {"type": "string"},
-                        },
-                        "required": ["word", "pronounciation", "Meaning", "sentence"],
-                        "additionalProperties": False
-                    },
-                    "strict": True
-                }
-            }
-        )
-        save_message(user_id, "assistant", response.output_text)
-        lesson_data = json.loads(response.output_text)
-        return lesson_data
-    except json.JSONDecodeError:
-        print("Failed to parse AI response")
-        return None
+        from app.services.menu_services import get_language_lesson_words
+        return get_language_lesson_words()
     except Exception as e:
-        print(f"Error generating lesson: {e}")
-        return None
+        logger.warning(f"Could not load language lesson words from cache: {e}")
+        return []
 
-async def language_starting_message(recipient_number: str):
-    try:
-        lesson_data = await language_lesson_ai(recipient_number)
-        if not lesson_data:
-            raise ValueError("Failed to generate language lesson")
-        lesson_text = (
-            "Hi! Ready for your first language lesson of the day? Or feel free to ask us about any word or phrase you're curious about – We’re happy to help you with that too! 😊\n\n"
-            "Today’s word/phrase is:\n\n"
-            f"Word: {lesson_data['word']}\n"
-            f"Pronunciation: {lesson_data['pronounciation']}\n"
-            f"Meaning: {lesson_data['Meaning']}\n"
-            f"Sentence: {lesson_data['sentence']}\n\n"
-            "Would you like to learn more?"
+
+def _format_lesson_card(word_data: dict, index: int, total: int) -> str:
+    english = str(word_data.get("English", "")).strip()
+    indonesian = str(word_data.get("Indonesian", "")).strip()
+    id_pron = str(word_data.get("Indonesian Pronunciation", "")).strip()
+    balinese = str(word_data.get("Balinese", "")).strip()
+    bal_pron = str(word_data.get("Balinese Pronunciation", "")).strip()
+    context = str(word_data.get("Cultural Context", "")).strip()
+
+    lines = [f"📖 Word {index + 1} of {total}: *{english}*", ""]
+    if indonesian:
+        lines.append(f"🇮🇩 Indonesian: {indonesian}")
+        if id_pron:
+            lines.append(f"   Pronunciation: {id_pron}")
+    if balinese:
+        lines.append(f"🌺 Balinese: {balinese}")
+        if bal_pron:
+            lines.append(f"   Pronunciation: {bal_pron}")
+    if context:
+        lines += ["", f"💡 {context}"]
+    return "\n".join(lines)
+
+
+async def _send_lesson_with_buttons(sender_id: str, body_text: str) -> None:
+    """Send an interactive button message with ✅ Yes / ❌ No for lesson cycling."""
+    headers = {
+        "Authorization": f"Bearer {settings.access_token}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": sender_id,
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {"text": body_text},
+            "action": {
+                "buttons": [
+                    {"type": "reply", "reply": {"id": "language_yes", "title": "✅ Yes"}},
+                    {"type": "reply", "reply": {"id": "language_no", "title": "❌ No"}},
+                ]
+            },
+        },
+    }
+    async with httpx.AsyncClient() as http:
+        resp = await http.post(settings.whatsapp_api_url, json=payload, headers=headers)
+        resp.raise_for_status()
+
+
+async def language_starting_message(sender_id: str) -> None:
+    """Send the first lesson card (word index 0) with an intro message."""
+    words = _get_words()
+    if not words:
+        from app.utils.whatsapp_func import send_whatsapp_message
+        await send_whatsapp_message(
+            sender_id,
+            "Sorry, the language lesson content is being updated. Please try again shortly.",
         )
-
-        headers = {
-            "Authorization": f"Bearer {settings.access_token}",
-            "Content-Type": "application/json"
-        }
-        
-        payload = {
-            "messaging_product": "whatsapp",
-            "to": recipient_number,
-            "type": "interactive",
-            "interactive": {
-                "type": "button",
-                "body": {
-                    "text": lesson_text
-                },
-                "action": {
-                    "buttons": [
-                        {
-                            "type": "reply",
-                            "reply": {"id": "language_yes", "title": "✅ Yes"}
-                        },
-                        {
-                            "type": "reply",
-                            "reply": {"id": "language_no", "title": "❌ No"}
-                        }
-                    ]
-                }
-            }
-        }
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(settings.whatsapp_api_url, json=payload, headers=headers)
-            response.raise_for_status()
-
-    except httpx.HTTPStatusError as e:
-        print(f"HTTP error: {e}")
-        return None
-    except Exception as e:
-        print(f"Error: {e}")
-        return None
-
-    return response.json()
+        return
+    card = _format_lesson_card(words[0], 0, len(words))
+    intro = (
+        "Hi! Ready for your Balinese language lesson? 😊\n"
+        "I'll guide you through words one by one.\n"
+        "Tap ✅ Yes for the next word or ❌ No to explore phrases.\n\n"
+        + card
+        + "\n\nWould you like to learn the next word?"
+    )
+    await _send_lesson_with_buttons(sender_id, intro)
 
 
+async def language_yes_message(sender_id: str, word_index: int = 1) -> None:
+    """Send the lesson card at the given word_index (wraps around at end)."""
+    words = _get_words()
+    if not words:
+        from app.utils.whatsapp_func import send_whatsapp_message
+        await send_whatsapp_message(sender_id, "Sorry, lesson content unavailable. Try again shortly.")
+        return
+    idx = word_index % len(words)
+    card = _format_lesson_card(words[idx], idx, len(words))
+    body = card + "\n\nWould you like to learn another word?"
+    await _send_lesson_with_buttons(sender_id, body)
 
 
-async def language_yes_message(recipient_number: str):
-    try:
-        lesson_data = await language_lesson_ai(recipient_number)
-        if not lesson_data:
-            raise ValueError("Failed to generate language lesson")
-        lesson_text = (
-            f"Word: {lesson_data['word']}\n"
-            f"Pronunciation: {lesson_data['pronounciation']}\n"
-            f"Meaning: {lesson_data['Meaning']}\n"
-            f"Sentence: {lesson_data['sentence']}\n\n"
-            "Would you like to learn more?"
-        )
-
-        headers = {
-            "Authorization": f"Bearer {settings.access_token}",
-            "Content-Type": "application/json"
-        }
-        
-        payload = {
-            "messaging_product": "whatsapp",
-            "to": recipient_number,
-            "type": "interactive",
-            "interactive": {
-                "type": "button",
-                "body": {
-                    "text": lesson_text
-                },
-                "action": {
-                    "buttons": [
-                        {
-                            "type": "reply",
-                            "reply": {"id": "language_yes", "title": "✅ Yes"}
-                        },
-                        {
-                            "type": "reply",
-                            "reply": {"id": "language_no", "title": "❌ No"}
-                        }
-                    ]
-                }
-            }
-        }
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(settings.whatsapp_api_url, json=payload, headers=headers)
-            response.raise_for_status()
-
-    except httpx.HTTPStatusError as e:
-        print(f"HTTP error: {e}")
-        return None
-    except Exception as e:
-        print(f"Error: {e}")
-        return None
-
-    return response.json()
+async def language_no_message(sender_id: str) -> None:
+    """Send the 'What next?' options after user taps No."""
+    headers = {
+        "Authorization": f"Bearer {settings.access_token}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": sender_id,
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {"text": "What would you like to do next?"},
+            "action": {
+                "buttons": [
+                    {"type": "reply", "reply": {"id": "language_phrase", "title": "💬 Ask Phrases"}},
+                    {"type": "reply", "reply": {"id": "back_to_menu", "title": "🔙 Main Menu"}},
+                ]
+            },
+        },
+    }
+    async with httpx.AsyncClient() as http:
+        resp = await http.post(settings.whatsapp_api_url, json=payload, headers=headers)
+        resp.raise_for_status()
 
 
+async def language_lesson_response(query: str, user_id: str) -> str:
+    """
+    Freestyle mode: try sheet lookup first, then AI fallback.
+    Searches for matching English words in the lesson sheet before hitting OpenAI.
+    """
+    words = _get_words()
 
-async def language_lesson_response(query: str, user_id: str):
-    
+    # Sheet lookup: check if any English word in the lesson appears in the query
+    if words:
+        query_lower = query.lower()
+        for i, word_data in enumerate(words):
+            english = str(word_data.get("English", "")).lower().strip()
+            if english and english in query_lower:
+                card = _format_lesson_card(word_data, i, len(words))
+                return f"Here's what I found in the lesson sheet:\n\n{card}"
+
+    # AI fallback
     chat_history = get_conversation_history(user_id)
     conversation = trim_history(chat_history + [{"role": "user", "content": query}])
 
-    prompt = f"""
-    You are a friendly and knowledgeable local guide in Bali helping tourists learn useful Balinese and Indonesian phrases.
-    Use the ongoing {conversation} history to maintain context, avoid repeating answers, and build on what the user has already learned.
+    prompt = (
+        "You are a friendly Balinese and Indonesian language tutor for tourists visiting Bali.\n"
+        "For each phrase or question:\n"
+        "- Provide the phrase in both Balinese and Indonesian (if different).\n"
+        "- Include a simple phonetic pronunciation for both.\n"
+        "- Give a brief explanation of when/how to use it.\n"
+        "- Keep a warm, helpful, culturally respectful tone.\n"
+        "Do NOT use Markdown symbols (*, #, -, etc.) — plain text only for WhatsApp.\n"
+        "Be concise."
+    )
 
-    For each phrase or request from the user:
-    - Provide the phrase in both Balinese and Indonesian (if different).
-    - Include a phonetic pronunciation for both.
-    - Give a brief explanation of when and how the phrase is used.
-    - Maintain a warm, helpful, and culturally respectful tone, as if you're a patient local guide assisting a traveler.
-    
-    Do not use Markdown formatting like asterisks, hashtags, or symbols (e.g. *, #, -, etc.). Keep the formatting plain and simple for messaging apps like WhatsApp.
-    Always assume the user is new to these languages, so avoid jargon. If they ask for general help (like greetings, restaurant terms, or customs), suggest common phrases tourists will find useful.
-
-    Example question a user might ask:
-    “How do I say 'thank you' in Balinese and Indonesian?”
-
-    Example output:
-    — Balinese: Suksma (pronounced: sooks-ma)
-    — Indonesian: Terima kasih (pronounced: tuh-ree-mah kah-see)
-    Use it after receiving help, like after someone serves you food or gives directions.
-    """
     try:
         completion = await client.chat.completions.create(
             model=settings.OPENAI_MODEL_NAME,
             messages=[
                 {"role": "system", "content": prompt},
+                *[{"role": m["role"], "content": m["content"]} for m in conversation[-6:]],
                 {"role": "user", "content": query},
             ],
-            max_tokens=250,
+            max_tokens=350,
             temperature=0.4,
         )
-
         response = completion.choices[0].message.content
-
         save_message(user_id, "user", query)
         save_message(user_id, "assistant", response)
-        
         return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating response: {e}")
-    
-
-
-async def language_no_message(recipient_number: str):
-    try:
-
-        headers = {
-            "Authorization": f"Bearer {settings.access_token}",
-            "Content-Type": "application/json"
-        }
-        
-        payload = {
-            "messaging_product": "whatsapp",
-            "to": recipient_number,
-            "type": "interactive",
-            "interactive": {
-                "type": "button",
-                "body": {
-                    "text": "What would you like to do next?"
-                },
-                "action": {
-                    "buttons": [
-                        {
-                            "type": "reply",
-                            "reply": {"id": "language_phrase", "title": "💬 Phrases"}
-                        },
-                        {
-                            "type": "reply", 
-                            "reply": {"id": "back_to_menu", "title": "🔙 Main Menu"}
-                        }
-                    ]
-                }
-            }
-        }
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(settings.whatsapp_api_url, json=payload, headers=headers)
-            response.raise_for_status()
-
-    except httpx.HTTPStatusError as e:
-        print(f"HTTP error: {e}")
-        return None
-    except Exception as e:
-        print(f"Error: {e}")
-        return None
-
-    return response.json()

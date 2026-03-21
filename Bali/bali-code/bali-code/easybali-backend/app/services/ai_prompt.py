@@ -268,6 +268,14 @@ class ConciergeAI:
             # ─── WHAT TO DO / EVENT CALENDAR / LOCAL GUIDE ────────────────────────
             if chat_type in ["what-to-do", "local-cuisine", "things-to-do-in-bali", "event-calender"]:
                 sheet_ctx = self.get_sheet_context()
+                # Inject real event calendar data from AI Material spreadsheet
+                if chat_type == "event-calender":
+                    try:
+                        from app.services.menu_services import get_event_calendar_context
+                        event_ctx = get_event_calendar_context()
+                        sheet_ctx = f"--- REAL EVENT CALENDAR DATA (use this as primary source) ---\n{event_ctx}\n\n" + sheet_ctx
+                    except Exception as _ec_err:
+                        logger.warning(f"Could not load event calendar context: {_ec_err}")
                 rag_ctx = await self.get_rag_context(query, chat_type, villa_code)
                 persona = PERSONAS.get(chat_type, PERSONAS["what-to-do"])
                 resp = await self._call_openai(query, persona, sheet_ctx, rag_ctx, language, formatted_history, villa_code)

@@ -1940,7 +1940,8 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                         pass
         elif "interactive" in message_payload:
             persistent_mode_sessions.pop(sender_id, None)
-            language_lesson_sessions.pop(sender_id, None)
+            # NOTE: language_lesson_sessions is NOT cleared here — button taps (Yes/No/Phrases)
+            # must be able to read and update the session inside the button_reply handlers below.
             interactive_type = message_payload["interactive"].get("type")
 
             if interactive_type == "button_reply":
@@ -2022,14 +2023,36 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                 # ────────────────────────────────────────────────────────────
 
                 if button_id == "language_yes":
-                    await language_yes_message(sender_id)
+                    session = language_lesson_sessions.get(sender_id, {})
+                    word_index = session.get("word_index", 0) + 1 if isinstance(session, dict) else 1
+                    language_lesson_sessions[sender_id] = {
+                        "mode": session.get("mode", "structured") if isinstance(session, dict) else "structured",
+                        "word_index": word_index,
+                        "timestamp": datetime.datetime.now(),
+                    }
+                    await language_yes_message(sender_id, word_index)
                     return
                 if button_id == "language_no":
                     await language_no_message(sender_id)
                     return
                 if button_id == "language_phrase":
-                    response = await language_lesson_response(query="Hi", user_id=sender_id)
-                    await send_whatsapp_message(recipient_id=sender_id, message=response)
+                    # Switch to freestyle mode — user will type phrases next
+                    session = language_lesson_sessions.get(sender_id, {})
+                    language_lesson_sessions[sender_id] = {
+                        "mode": "freestyle",
+                        "word_index": session.get("word_index", 0) if isinstance(session, dict) else 0,
+                        "timestamp": datetime.datetime.now(),
+                    }
+                    await send_whatsapp_message(
+                        sender_id,
+                        "Sure! Ask me anything about Balinese or Indonesian phrases.\n"
+                        "For example: 'How do I say thank you?' or 'What is selamat pagi?'\n\n"
+                        "Type your question and I'll help you out! 😊"
+                    )
+                    return
+                if button_id == "back_to_menu":
+                    language_lesson_sessions.pop(sender_id, None)
+                    await starting_message(sender_id)
                     return
 
                 if button_id == "menu_button":
@@ -2914,7 +2937,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                 return
             
             elif selected_id in ("language_lesson", "voice_translator"):
-                language_lesson_sessions[sender_id] = True
+                language_lesson_sessions[sender_id] = {"mode": "structured", "word_index": 0, "timestamp": datetime.datetime.now()}
                 await language_starting_message(sender_id)
                 return
 
@@ -2954,7 +2977,7 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     return
 
                 if serviceitems_text in ["Voice Translator", "Language Lesson"]:
-                    language_lesson_sessions[sender_id] = True
+                    language_lesson_sessions[sender_id] = {"mode": "structured", "word_index": 0, "timestamp": datetime.datetime.now()}
                     await language_starting_message(sender_id)
                     return
 

@@ -11,8 +11,10 @@ logger = logging.getLogger(__name__)
 
 # Google Sheet configurations
 SHEET_ID = os.getenv("GOOGLE_SHEET_ID", "1tuGBnQFjDntJQglofA17uHhiyekkVyDoSInErbwfR24")
+AI_MATERIAL_SHEET_ID = "1u-bZneHYE2OAURxyuy9RjVO3HEZCn6hWByHisLDg_qI"
 
 _workbook = None
+_ai_material_workbook = None
 
 def get_cached_workbook():
     global _workbook
@@ -20,6 +22,13 @@ def get_cached_workbook():
         from app.services.google_sheets import get_workbook
         _workbook = get_workbook(SHEET_ID)
     return _workbook
+
+def get_ai_material_workbook():
+    global _ai_material_workbook
+    if _ai_material_workbook is None:
+        from app.services.google_sheets import get_workbook
+        _ai_material_workbook = get_workbook(AI_MATERIAL_SHEET_ID)
+    return _ai_material_workbook
 
 # Cache for storing data
 cache = {
@@ -34,7 +43,9 @@ cache = {
     "archive_df": None,
     "platform_design_df": None,
     "price_diff_df": None,
-    "price_diff_sp_df": None
+    "price_diff_sp_df": None,
+    "language_lesson_df": None,
+    "event_calendar_df": None,
 }
 
 # Refresh thread control
@@ -132,7 +143,27 @@ def load_data_into_cache():
         safe_load("Price Diff", "price_diff_df")
         safe_load("Price Diff SP", "price_diff_sp_df")
         safe_load("AI Data", "ai_data_df")
-        
+
+        # AI Material spreadsheet (separate Google Sheet)
+        try:
+            ai_wb = get_ai_material_workbook()
+            def safe_load_ai(sheet_name, cache_key):
+                try:
+                    ws = ai_wb.worksheet(sheet_name)
+                    data = ws.get_all_values()
+                    if not data:
+                        logger.warning(f"AI Material sheet '{sheet_name}' is empty.")
+                        return
+                    df = pd.DataFrame(data[1:], columns=data[0])
+                    cache[cache_key] = df
+                    logger.info(f"✅ Loaded AI Material sheet: {sheet_name}")
+                except Exception as e:
+                    logger.error(f"❌ Failed to load AI Material sheet '{sheet_name}': {e}")
+            safe_load_ai("Local Language Lesson", "language_lesson_df")
+            safe_load_ai("Event Calendar", "event_calendar_df")
+        except Exception as e:
+            logger.error(f"❌ Failed to connect to AI Material spreadsheet: {e}")
+
         cache["last_updated"] = datetime.now()
     except Exception as e:
         logger.error(f"Critical error in load_data_into_cache: {e}")
@@ -630,3 +661,46 @@ async def get_sheet_menu_endpoint(main_menu: str, category: str, subcategory: st
     if filtered.empty:
         return ""
     return str(filtered.iloc[0].get("Endpoint", "")).strip()
+
+
+# ── AI Material helpers ────────────────────────────────────────────────────────
+
+def get_language_lesson_words() -> list:
+    """Return all language lesson rows from cache as a list of dicts."""
+    df = cache.get("language_lesson_df")
+    if df is None or df.empty:
+        return []
+    return df.to_dict(orient="records")
+
+
+def get_event_calendar_context() -> str:
+    """Return event calendar data as a plain-text block for AI context injection."""
+    df = cache.get("event_calendar_df")
+    if df is None or df.empty:
+        return "No upcoming event data is currently available."
+    lines = ["Here are the upcoming events in Bali:"]
+    for _, row in df.iterrows():
+        name = str(row.get("Event Name", "")).strip()
+        if not name:
+            continue
+        date = str(row.get("Date", "")).strip()
+        time = str(row.get("Time", "")).strip()
+        location = str(row.get("Location", "")).strip()
+        description = str(row.get("Description", "")).strip()
+        notes = str(row.get("Additional Notes", "")).strip()
+        url = str(row.get("For more details (URL)", row.get("For more details", ""))).strip()
+        line = f"- {name}"
+        if date:
+            line += f" | {date}"
+        if time:
+            line += f" at {time}"
+        if location:
+            line += f" | {location}"
+        if description:
+            line += f"\n  {description}"
+        if notes:
+            line += f"\n  Note: {notes}"
+        if url and url.startswith("http"):
+            line += f"\n  More info: {url}"
+        lines.append(line)
+    return "\n".join(lines)

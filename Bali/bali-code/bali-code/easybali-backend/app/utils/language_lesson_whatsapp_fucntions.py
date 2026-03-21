@@ -27,7 +27,7 @@ def _format_lesson_card(word_data: dict, index: int, total: int) -> str:
     bal_pron = str(word_data.get("Balinese Pronunciation", "")).strip()
     context = str(word_data.get("Cultural Context", "")).strip()
 
-    lines = [f"📖 Word {index + 1} of {total}: *{english}*", ""]
+    lines = [f"*{english}*  ({index + 1}/{total})", ""]
     if indonesian:
         lines.append(f"🇮🇩 Indonesian: {indonesian}")
         if id_pron:
@@ -36,8 +36,9 @@ def _format_lesson_card(word_data: dict, index: int, total: int) -> str:
         lines.append(f"🌺 Balinese: {balinese}")
         if bal_pron:
             lines.append(f"   Pronunciation: {bal_pron}")
+    lines.append(f"\nMeaning: {english}")
     if context:
-        lines += ["", f"💡 {context}"]
+        lines += [f"Example: {context}"]
     return "\n".join(lines)
 
 
@@ -79,11 +80,12 @@ async def language_starting_message(sender_id: str) -> None:
         return
     card = _format_lesson_card(words[0], 0, len(words))
     intro = (
-        "Hi! Ready for your Balinese language lesson? 😊\n"
-        "I'll guide you through words one by one.\n"
-        "Tap ✅ Yes for the next word or ❌ No to explore phrases.\n\n"
+        "Hi! Ready for your first language lesson of the day? "
+        "Or feel free to ask us about any word or phrase you're curious about – "
+        "We're happy to help you with that too! 😊\n\n"
+        "Today's word/phrase is:\n\n"
         + card
-        + "\n\nWould you like to learn the next word?"
+        + "\n\nWould you like to learn more?"
     )
     await _send_lesson_with_buttons(sender_id, intro)
 
@@ -97,7 +99,7 @@ async def language_yes_message(sender_id: str, word_index: int = 1) -> None:
         return
     idx = word_index % len(words)
     card = _format_lesson_card(words[idx], idx, len(words))
-    body = card + "\n\nWould you like to learn another word?"
+    body = "Here's your next word/phrase:\n\n" + card + "\n\nWould you like to learn more?"
     await _send_lesson_with_buttons(sender_id, body)
 
 
@@ -117,7 +119,7 @@ async def language_no_message(sender_id: str) -> None:
             "action": {
                 "buttons": [
                     {"type": "reply", "reply": {"id": "language_phrase", "title": "💬 Ask Phrases"}},
-                    {"type": "reply", "reply": {"id": "back_to_menu", "title": "🔙 Main Menu"}},
+                    {"type": "reply", "reply": {"id": "back_to_menu", "title": "🔙 Back to Menu"}},
                 ]
             },
         },

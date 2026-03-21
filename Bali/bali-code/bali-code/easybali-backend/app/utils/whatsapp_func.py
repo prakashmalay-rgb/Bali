@@ -2045,9 +2045,9 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     }
                     await send_whatsapp_message(
                         sender_id,
-                        "Sure! Ask me anything about Balinese or Indonesian phrases.\n"
-                        "For example: 'How do I say thank you?' or 'What is selamat pagi?'\n\n"
-                        "Type your question and I'll help you out! 😊"
+                        "Sure! Feel free to ask us about any word or phrase you're curious about – "
+                        "we're happy to help! 😊\n\n"
+                        "For example: 'How do I say thank you in Balinese?' or 'What does selamat pagi mean?'"
                     )
                     return
                 if button_id == "back_to_menu":

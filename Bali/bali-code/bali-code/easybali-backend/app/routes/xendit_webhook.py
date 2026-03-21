@@ -95,26 +95,40 @@ async def handle_xendit_webhook(webhook_data: dict):
 
             # Notify SP with final booking details (post-payment confirmation per spec)
             try:
+                order_date = order_data.get("date")
+                if isinstance(order_date, datetime.datetime):
+                    order_date = order_date.strftime("%d %b %Y")
+                guest_contact = order_data.get("sender_id", "N/A")
+                sp_final_msg = (
+                    f"🎉 *Assignment Confirmed!* The guest has paid for the service you accepted.\n"
+                    f"_Penugasan dikonfirmasi! Tamu telah membayar untuk layanan yang Anda terima._\n\n"
+                    f"*Order ID:* {order_number}\n"
+                    f"*Service:* {order_data.get('service_name', 'N/A')}\n"
+                    f"*Date:* {order_date or 'N/A'}\n"
+                    f"*Time:* {order_data.get('time', 'N/A')}\n"
+                    f"*Location:* {order_data.get('villa_code', 'N/A')}\n"
+                    f"*Customer Contact:* {guest_contact}\n\n"
+                    f"Please proceed with the service as scheduled. ✅"
+                )
+                # Primary: notify the SP who accepted the WhatsApp booking
                 sp_phone = order_data.get("confirmed_by_provider")
                 if sp_phone and str(sp_phone).isdigit():
-                    order_date = order_data.get("date")
-                    if isinstance(order_date, datetime.datetime):
-                        order_date = order_date.strftime("%d %b %Y")
-                    guest_contact = order_data.get("sender_id", "N/A")
-                    sp_final_msg = (
-                        f"🎉 *Assignment Confirmed!* Here are the booking details for your service.\n"
-                        f"_Penugasan dikonfirmasi! Berikut detail pemesanan layanan Anda._\n\n"
-                        f"*Customer ID:* {order_data.get('customer_id', 'N/A')}\n"
-                        f"*Customer Contact:* {guest_contact}\n"
-                        f"*Order ID:* {order_number}\n"
-                        f"*Service:* {order_data.get('service_name', 'N/A')}\n"
-                        f"*Date:* {order_date or 'N/A'}\n"
-                        f"*Time:* {order_data.get('time', 'N/A')}\n"
-                        f"*Location:* {order_data.get('villa_code', 'N/A')}\n\n"
-                        f"Payment has been confirmed. Please proceed with the service as scheduled. ✅"
-                    )
                     await send_whatsapp_message(sp_phone, sp_final_msg)
                     logger.info(f"Post-payment SP notification sent to {sp_phone} for order {order_number}")
+                else:
+                    # Fallback: look up SP phone numbers by service name (covers website orders)
+                    try:
+                        from app.utils.whatsapp_func import fetch_whatsapp_numbers
+                        fallback_nums = await fetch_whatsapp_numbers(order_data.get("service_name", ""))
+                        for _fnum in fallback_nums:
+                            try:
+                                await send_whatsapp_message(_fnum, sp_final_msg)
+                            except Exception:
+                                pass
+                        if fallback_nums:
+                            logger.info(f"Fallback SP notification sent to {fallback_nums} for order {order_number}")
+                    except Exception as _fb_err:
+                        logger.warning(f"Fallback SP notification failed for order {order_number}: {_fb_err}")
             except Exception as sp_notify_err:
                 logger.warning(f"Failed to send post-payment SP notification for order {order_number}: {sp_notify_err}")
             

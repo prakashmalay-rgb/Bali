@@ -148,6 +148,7 @@ PERSISTENT_MODE_CHAT_TYPES = {
     "local_cuisine_guide":   "local-cuisine",
     "plan_my_trip":          "plan-my-trip",
     "currency_converter":    "currency-converter",
+    "recommendations_interactive": "recommendations-interactive",
     # "recommendations" intentionally excluded — must fall through to _SUBMENU_PARENTS
     "discount__promotions":  "general",
     # Follow-up context keys (Option A/B — free text after follow-up buttons)
@@ -290,6 +291,7 @@ from app.services.menu_services import (
     get_main_menu_design,
     get_sheet_menu_categories,
     get_sheet_menu_subcategories,
+    get_sheet_menu_sub_subcategories,
     get_sheet_menu_endpoint,
 )
 
@@ -578,6 +580,10 @@ async def _execute_sheet_endpoint(sender_id: str, endpoint: str, title: str, mai
     # Direct URL → send as link button, then follow-up prompt
     if endpoint.startswith("http"):
         await send_whatsapp_interactive_link(sender_id, endpoint)
+        if main_menu.lower() == "recommendations":
+            persistent_mode_sessions[sender_id] = "recommendations_interactive"
+            await send_whatsapp_message(sender_id, "How can I help you further?")
+            return
         persistent_mode_sessions[sender_id] = fup_key
         await _send_followup_prompt(sender_id, title, main_menu)
         return
@@ -585,6 +591,10 @@ async def _execute_sheet_endpoint(sender_id: str, endpoint: str, title: str, mai
     known_url = _KNOWN_BUTTON_URLS.get(title) or _KNOWN_BUTTON_URLS.get(endpoint)
     if known_url:
         await send_whatsapp_interactive_link(sender_id, known_url)
+        if main_menu.lower() == "recommendations":
+            persistent_mode_sessions[sender_id] = "recommendations_interactive"
+            await send_whatsapp_message(sender_id, "How can I help you further?")
+            return
         persistent_mode_sessions[sender_id] = fup_key
         await _send_followup_prompt(sender_id, title, main_menu)
         return
@@ -608,6 +618,10 @@ async def _execute_sheet_endpoint(sender_id: str, endpoint: str, title: str, mai
     data = await _whatsapp_ai_chat(sender_id, kickoff, chat_type)
     if data:
         await send_whatsapp_message(sender_id, data)
+        if main_menu.lower() == "recommendations":
+            persistent_mode_sessions[sender_id] = "recommendations_interactive"
+            await send_whatsapp_message(sender_id, "How can I help you further?")
+            return
         persistent_mode_sessions[sender_id] = fup_key
         await _send_followup_prompt(sender_id, title, main_menu)
 
@@ -2451,8 +2465,50 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     sub_name = id_map.get(button_id, category_text)
                     main_menu = nav.get("main_menu", "Recommendations")
                     category = nav.get("category", "")
-                    endpoint = await get_sheet_menu_endpoint(main_menu, category, sub_name)
-                    await _execute_sheet_endpoint(sender_id, endpoint, sub_name, main_menu)
+                    # Check for 3rd navigation level before executing endpoint
+                    subsubs = await get_sheet_menu_sub_subcategories(main_menu, category, sub_name)
+                    if subsubs:
+                        sub2_id_map = {}
+                        if len(subsubs) <= 3:
+                            btns = []
+                            for i, s in enumerate(subsubs):
+                                sid = f"shbsub2_{i}"
+                                sub2_id_map[sid] = s["sub_subcategory"]
+                                btns.append({"id": sid, "title": s["sub_subcategory"][:20]})
+                            sheet_nav_sessions[sender_id] = {
+                                "main_menu": main_menu,
+                                "category": category,
+                                "subcategory": sub_name,
+                                "id_map": sub2_id_map,
+                            }
+                            await _send_nav_buttons(sender_id, f"*{sub_name}*\nChoose an option:", btns)
+                        else:
+                            rows = []
+                            for i, s in enumerate(subsubs):
+                                sid = f"shsub2_{i}"
+                                sub2_id_map[sid] = s["sub_subcategory"]
+                                rows.append({"id": sid, "title": s["sub_subcategory"][:24], "description": "Tap to explore"})
+                            sheet_nav_sessions[sender_id] = {
+                                "main_menu": main_menu, "category": category,
+                                "subcategory": sub_name, "id_map": sub2_id_map,
+                            }
+                            await send_whatsapp_menu_list_message(sender_id, {
+                                "main_title": sub_name, "main_description": "Choose an option:", "data": rows,
+                            })
+                    else:
+                        endpoint = await get_sheet_menu_endpoint(main_menu, category, sub_name)
+                        await _execute_sheet_endpoint(sender_id, endpoint, sub_name, main_menu)
+                    return
+
+                if button_id.startswith("shbsub2_"):
+                    nav = sheet_nav_sessions.get(sender_id, {})
+                    id_map = nav.get("id_map", {})
+                    subsub_name = id_map.get(button_id, category_text)
+                    main_menu = nav.get("main_menu", "Recommendations")
+                    category = nav.get("category", "")
+                    subcategory = nav.get("subcategory", "")
+                    endpoint = await get_sheet_menu_endpoint(main_menu, category, subcategory, subsub_name)
+                    await _execute_sheet_endpoint(sender_id, endpoint, subsub_name, main_menu)
                     return
                 # ─────────────────────────────────────────────────────────────────
 
@@ -2539,18 +2595,18 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
 
                         if session_id in website_sessions:
                             confirmation = await check_order_confirmation(order_num)
-                            if confirmation == False:
+                            if not confirmation:
                                 await send_confirmation_order_to_SP(sender_id, order_num)
-                            elif confirmation == True:
-                                await send_whatsapp_message(sender_id, "Thank you for the acceptance.Unfortunately, this order has already been booked.")
+                            else:
+                                await send_whatsapp_message(sender_id, "Thank you for the acceptance. Unfortunately, this order has already been booked.")
                         else:
                             order_num = message_payload["interactive"]["button_reply"]["id"]
                             order_sessions[sender_id] = order_num
                             confirmation = await check_order_confirmation(order_num)
-                            if confirmation == False:
+                            if not confirmation:
                                 await send_confirmation_order_to_SP(sender_id, order_num)
-                            elif confirmation == True:
-                                await send_whatsapp_message(sender_id, "Thank you for the acceptance.Unfortunately, this order has already been booked.")
+                            else:
+                                await send_whatsapp_message(sender_id, "Thank you for the acceptance. Unfortunately, this order has already been booked.")
                     elif category_text == "❌ Decline":
                         if button_id.startswith("decline_"):
                             order_num = button_id.split("_", 1)[1]
@@ -2601,22 +2657,25 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                             order_sessions.pop(sender_id, None)
                             return
                         user_sender_id = await update_order_confirmation(order_num, True)
-                        print(user_sender_id)
+                        logger.info(f"Order {order_num} confirmed by SP. Customer sender_id: {user_sender_id}")
                         order_data = await order_collection.find_one({"order_number": order_num})
                         if not order_data:
                             await send_whatsapp_message(sender_id, "Order not found.")
                             return
                         try:
-                            order = Order(**order_data)
+                            # Remove MongoDB _id field before instantiating Pydantic model
+                            order_doc = {k: v for k, v in order_data.items() if k != "_id"}
+                            order = Order(**order_doc)
                         except Exception as e:
-                            print(f"Error creating Order model: {e}")
-                            await send_whatsapp_message(sender_id, "Error processing order.")
+                            logger.error(f"Error creating Order model for {order_num}: {e}")
+                            await send_whatsapp_message(sender_id, "Error processing order. Please contact support.")
                             return
                         payment_result = await create_xendit_payment_with_distribution(order)
-                        logger.info(f"payment result : {payment_result}")
+                        logger.info(f"Payment result for {order_num}: {payment_result}")
 
-                        if payment_result['success']:
+                        if payment_result.get('success'):
                             await update_order_with_payment_info(order_num, payment_result)
+                            payment_url = payment_result.get('payment_url', '')
 
                             # Notify customer that their service request has been accepted
                             acceptance_message = (
@@ -2625,31 +2684,41 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                                 f"*Service:* {order_data.get('service_name', 'Your Service')}\n\n"
                                 f"Please complete your payment using the secure link below to confirm your booking."
                             )
-                            if user_sender_id.isdigit():
+                            # Guard: user_sender_id could be None if order was created externally
+                            if user_sender_id and str(user_sender_id).isdigit():
                                 await send_whatsapp_message(user_sender_id, acceptance_message)
-
-                            if user_sender_id.isdigit():
-                                await send_interactive_message(user_sender_id, payment_result)
-                            else:
-                                payment_message = f"""🌴 ***Your Order Awaits!***\nThank you for choosing EASY Bali.\nPlease confirm your **order** by completing the payment through the secure link below.\nOnce payment is confirmed, we'll take care of the rest — just sit back, relax, and your service will come to you as scheduled."""
-
-                                await manager.send_personal_message(
-                                    message=f"{payment_message}\n[link]({payment_result['payment_url']})",
-                                    session_id=user_sender_id,
-                                    message_type="link_message"
+                                if payment_url:
+                                    await send_interactive_message(user_sender_id, payment_result)
+                                else:
+                                    logger.error(f"No payment_url in result for order {order_num}")
+                            elif user_sender_id:
+                                payment_message = (
+                                    "🌴 ***Your Order Awaits!***\nThank you for choosing EASY Bali.\n"
+                                    "Please confirm your **order** by completing the payment through the secure link below.\n"
+                                    "Once payment is confirmed, we'll take care of the rest — just sit back, relax, and your service will come to you as scheduled."
                                 )
+                                if payment_url:
+                                    await manager.send_personal_message(
+                                        message=f"{payment_message}\n[link]({payment_url})",
+                                        session_id=user_sender_id,
+                                        message_type="link_message"
+                                    )
                         else:
                             error_detail = payment_result.get('error', 'Unknown Error')
-                            error_message = f"⚠️ *Payment System Issue*\n\nSorry, we encountered an issue creating your secure payment link:\n_{error_detail}_\n\nPlease try again or contact support."
-                            if user_sender_id.isdigit():
+                            error_message = (
+                                f"⚠️ *Payment System Issue*\n\n"
+                                f"Sorry, we encountered an issue creating your secure payment link:\n_{error_detail}_\n\n"
+                                f"Please try again or contact support."
+                            )
+                            if user_sender_id and str(user_sender_id).isdigit():
                                 await send_whatsapp_message(user_sender_id, error_message)
-                            else:
+                            elif user_sender_id:
                                 await manager.send_personal_message(message=error_message, session_id=user_sender_id, message_type="error")
 
                         await send_whatsapp_message(
                             sender_id,
-                            "You've successfully confirmed the booking! The guest has been notified and is completing payment. "
-                            "You'll receive final details once the payment is confirmed.\n"
+                            "✅ You've successfully confirmed the booking! The guest has been notified and is completing payment. "
+                            "You'll receive final details once the payment is confirmed.\n\n"
                             "_Anda telah berhasil mengonfirmasi pemesanan! Tamu telah diberitahu dan sedang menyelesaikan pembayaran. "
                             "Anda akan menerima detail akhir setelah pembayaran dikonfirmasi._"
                         )
@@ -2740,8 +2809,37 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     sub_name = id_map.get(selected_id, serviceitems_text)
                     main_menu = nav.get("main_menu", "Bali Handbook")
                     category = nav.get("category", "")
-                    endpoint = await get_sheet_menu_endpoint(main_menu, category, sub_name)
-                    await _execute_sheet_endpoint(sender_id, endpoint, sub_name, main_menu)
+                    # Check for 3rd navigation level before executing endpoint
+                    subsubs = await get_sheet_menu_sub_subcategories(main_menu, category, sub_name)
+                    if subsubs:
+                        sub2_id_map = {}
+                        rows = []
+                        for i, s in enumerate(subsubs):
+                            sid = f"shsub2_{i}"
+                            sub2_id_map[sid] = s["sub_subcategory"]
+                            rows.append({"id": sid, "title": s["sub_subcategory"][:24], "description": "Tap to explore"})
+                        sheet_nav_sessions[sender_id] = {
+                            "main_menu": main_menu, "category": category,
+                            "subcategory": sub_name, "id_map": sub2_id_map,
+                        }
+                        await send_whatsapp_menu_list_message(sender_id, {
+                            "main_title": sub_name, "main_description": "Choose an option:", "data": rows,
+                        })
+                    else:
+                        endpoint = await get_sheet_menu_endpoint(main_menu, category, sub_name)
+                        await _execute_sheet_endpoint(sender_id, endpoint, sub_name, main_menu)
+                    return
+
+                # 1d. Sheet-driven navigation — sub-subcategory selected (shsub2_N)
+                elif selected_id.startswith("shsub2_"):
+                    nav = sheet_nav_sessions.get(sender_id, {})
+                    id_map = nav.get("id_map", {})
+                    subsub_name = id_map.get(selected_id, serviceitems_text)
+                    main_menu = nav.get("main_menu", "Bali Handbook")
+                    category = nav.get("category", "")
+                    subcategory = nav.get("subcategory", "")
+                    endpoint = await get_sheet_menu_endpoint(main_menu, category, subcategory, subsub_name)
+                    await _execute_sheet_endpoint(sender_id, endpoint, subsub_name, main_menu)
                     return
 
                 # 2. Handle Subcategory Selection (leads to Service Items list)
@@ -3443,11 +3541,14 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
             elif serviceitems_text:
                 # ── 1. Hard-wired special flows ──────────────────────────────
                 if serviceitems_text == "Order Services":
-                    _os_url = f"{settings.BASE_URL}/sub_menu"
-                    _os_data = await fetch_menu_data(_os_url, "Order Services")
+                    _os_data = await fetch_menu_design("Order Services")
                     if _os_data:
                         if isinstance(_os_data, list):
-                            _os_data = {"data": _os_data}
+                            _os_data = {
+                                "main_title": "Order Services",
+                                "main_description": "Choose a service category:",
+                                "items": _os_data,
+                            }
                         await send_whatsapp_menu_list_message(sender_id, _os_data)
                     else:
                         await send_whatsapp_message(sender_id, "Please choose a category from Order Services below 👇")
@@ -3839,22 +3940,39 @@ async def notify_service_provider(order_data: dict):
             else:
                 date_str = str(appointment_date)
 
+        provider_message = (
+            f"🎉 *Payment Confirmed!* 🎉\n\n"
+            f"The customer has paid for the service. Kindly provide the service as scheduled.\n\n"
+            f"📌 *Order Details:*\n"
+            f"• *Order #:* {order_number}\n"
+            f"• *Service:* {service_name}\n"
+            f"• *Date:* {date_str}\n"
+            f"• *Time:* {appointment_time or 'As scheduled'}\n"
+            f"• *Villa:* {villa_code or 'N/A'}\n"
+            f"• *Status:* PAID ✅\n\n"
+            f"Please coordinate directly with the guest to ensure a smooth delivery. Thank you!"
+        )
+
         logger.info(f"SP payment notification: order={order_number}, sp_number={service_provider_number}")
-        if service_provider_number:
-            provider_message = (
-                f"🎉 ***Congratulations!*** 🎉\n\n"
-                f"The customer has paid for the service which you accepted. Kindly provide the accepted service.\n\n"
-                f"📌 ***Order Details:***\n"
-                f"• **Order #:** {order_number}\n"
-                f"• **Service:** {service_name}\n"
-                f"• **Date:** {date_str}\n"
-                f"• **Time:** {appointment_time or 'As scheduled'}\n"
-                f"• **Villa:** {villa_code or 'N/A'}\n"
-                f"• **Status:** PAID ✅\n\n"
-                f"Please coordinate directly to ensure a smooth delivery. Thank you for your professional service!"
-            )
+
+        # Notify the SP who accepted the order (WhatsApp-originated bookings)
+        if service_provider_number and str(service_provider_number).isdigit():
             await send_whatsapp_message(service_provider_number, provider_message)
-            
+            logger.info(f"SP post-payment notification sent to {service_provider_number}")
+        else:
+            # Fallback for website orders — look up by service name
+            try:
+                sp_numbers = await fetch_whatsapp_numbers(service_name or "")
+                for _num in sp_numbers:
+                    try:
+                        await send_whatsapp_message(_num, provider_message)
+                    except Exception:
+                        pass
+                if sp_numbers:
+                    logger.info(f"Fallback SP post-payment notification sent to {sp_numbers}")
+            except Exception as _fb_err:
+                logger.warning(f"Fallback SP notify failed for order {order_number}: {_fb_err}")
+
     except Exception as e:
         logger.error(f"Service provider notification error in notify_service_provider: {str(e)}")
 

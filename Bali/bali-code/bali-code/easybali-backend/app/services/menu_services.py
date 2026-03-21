@@ -658,7 +658,38 @@ async def get_sheet_menu_subcategories(main_menu: str, category: str) -> list:
     return result
 
 
-async def get_sheet_menu_endpoint(main_menu: str, category: str, subcategory: str = None) -> str:
+async def get_sheet_menu_sub_subcategories(main_menu: str, category: str, subcategory: str) -> list:
+    """Return sub-subcategories for a 3-level navigation path in the Menu Structure sheet."""
+    if cache["menu_df"] is None or cache["menu_df"].empty:
+        return []
+    df = cache["menu_df"]
+    # Try known column name variations
+    subsub_col = None
+    for col_name in ("Sub-sub-category", "Sub Sub-category", "Sub Sub Category", "Sub-Sub-category", "Sub-sub category"):
+        if col_name in df.columns:
+            subsub_col = col_name
+            break
+    if subsub_col is None:
+        return []
+    filtered = df[
+        (df["Main Menu"].str.strip() == main_menu.strip()) &
+        (df["Category"].str.strip() == category.strip()) &
+        (df["Sub-category"].str.strip() == subcategory.strip())
+    ]
+    seen = set()
+    result = []
+    for _, row in filtered.iterrows():
+        subsub = str(row.get(subsub_col, "")).strip()
+        if subsub and subsub.lower() not in ("nan", "") and subsub not in seen:
+            seen.add(subsub)
+            result.append({
+                "sub_subcategory": subsub,
+                "endpoint": str(row.get("Endpoint", "")).strip(),
+            })
+    return result
+
+
+async def get_sheet_menu_endpoint(main_menu: str, category: str, subcategory: str = None, sub_subcategory: str = None) -> str:
     """Return the endpoint for a navigation path in the Menu Structure sheet."""
     if cache["menu_df"] is None or cache["menu_df"].empty:
         return ""
@@ -671,6 +702,16 @@ async def get_sheet_menu_endpoint(main_menu: str, category: str, subcategory: st
         sub_filtered = filtered[filtered["Sub-category"].str.strip() == subcategory.strip()]
         if not sub_filtered.empty:
             filtered = sub_filtered
+    if sub_subcategory:
+        subsub_col = next(
+            (c for c in df.columns if c.lower().replace(" ", "-") in
+             ("sub-sub-category", "sub sub-category", "sub-sub category")),
+            None
+        )
+        if subsub_col:
+            subsub_filtered = filtered[filtered[subsub_col].str.strip() == sub_subcategory.strip()]
+            if not subsub_filtered.empty:
+                filtered = subsub_filtered
     if filtered.empty:
         return ""
     return str(filtered.iloc[0].get("Endpoint", "")).strip()

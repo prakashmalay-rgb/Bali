@@ -124,18 +124,55 @@ async def create_booking_payment(request: BookingRequest):
         
         # 4. Save to DB
         await save_order_to_db(new_order.dict())
-        
-        # 5. Notify Service Providers ONLY (No payment link yet)
+
+        # 5. Generate payment link immediately so the customer can pay right away
+        payment_url = None
+        try:
+            payment_result = await create_xendit_payment_with_distribution(new_order)
+            if payment_result.get('success'):
+                await update_order_with_payment_info(order_number, payment_result)
+                payment_url = payment_result.get('payment_url')
+            else:
+                import logging as _log
+                _log.getLogger(__name__).warning(
+                    f"Payment link creation failed for {order_number}: {payment_result.get('error')}"
+                )
+        except Exception as _pay_err:
+            import logging as _log
+            _log.getLogger(__name__).error(f"Exception creating payment for {order_number}: {_pay_err}")
+
+        # 6. Notify Service Providers (they confirm availability; payment is already initiated)
         await notify_service_providers(service, new_order.dict())
-        
+
         actual_location = await get_villa_location_by_code(req_villa_code) or "Bali"
-        success_msg = f"🎉 **Booking Request Received!**\n\n**Service**: {service['service_name']}\n**Location**: {actual_location} Zone\n**Date**: To Be Confirmed\n**Time**: To Be Confirmed\n\n💰 **Estimated Price**: IDR {final_price_val:,}"
+        success_msg = (
+            f"🎉 **Booking Request Received!**\n\n"
+            f"**Order ID**: {order_number}\n"
+            f"**Service**: {service['service_name']}\n"
+            f"**Location**: {actual_location} Zone\n\n"
+            f"💰 **Total**: IDR {final_price_val:,}"
+        )
         if discount_amount > 0:
             success_msg += f"\n🎁 **Promo Applied**: {promo_msg}\n💸 **You Saved**: IDR {int(discount_amount):,}"
-        
-        return {
-            "response": f"{success_msg}\n\n⏳ **Next Steps**:\n1. We've notified our service providers for your request.\n2. Once a provider confirms their availability, we will send you a secure payment link immediately.\n3. Complete the payment to finalize your booking.\n\n📱 **WhatsApp**: +628123456789 for support"
-        }
+
+        if payment_url:
+            response_text = (
+                f"{success_msg}\n\n"
+                f"✅ **Your secure payment link is ready!**\n\n"
+                f"[**Click here to complete your payment**]({payment_url})\n\n"
+                f"_Payment link expires in 24 hours. Once paid, you'll receive a confirmation with full booking details._"
+            )
+        else:
+            response_text = (
+                f"{success_msg}\n\n"
+                f"⏳ **Next Steps**:\n"
+                f"1. We've notified our service providers for your request.\n"
+                f"2. Once a provider confirms their availability, we will send you a secure payment link immediately.\n"
+                f"3. Complete the payment to finalize your booking.\n\n"
+                f"📱 Contact support if you need assistance."
+            )
+
+        return {"response": response_text, "payment_url": payment_url, "order_number": order_number}
             
     except Exception as e:
         print(f"Error in create_booking_payment: {e}")

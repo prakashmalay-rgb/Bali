@@ -36,6 +36,10 @@ local_order_store: Dict[str, str] = {}
 
 decline_sessions : Dict[str, str] = {}
 
+# Sheet-driven navigation state: tracks multi-step navigation per sender
+# { sender_id: { "main_menu": str, "category": str, "id_map": {shcat_N/shsub_N: name} } }
+sheet_nav_sessions: Dict[str, dict] = {}
+
 
 async def get_or_create_customer(sender_id: str) -> str:
     """Return existing customer_id or create a new one for this phone number."""
@@ -248,10 +252,14 @@ _KNOWN_BUTTON_URLS: dict[str, str] = {
     # Safety & health
     "Safety & Health Tips":  "https://www.canva.com/design/DAGaNLT8Owc/gDSbEepIXK4OJxdOOtx92Q/view?utm_content=DAGaNLT8Owc&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h3bad98561a",
     "Read Safety Tips":      "https://www.canva.com/design/DAGaNLT8Owc/gDSbEepIXK4OJxdOOtx92Q/view?utm_content=DAGaNLT8Owc&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h3bad98561a",
-    "Medical Suggestions":   "https://www.canva.com/design/DAGbfiNdbTw/rJdf8dxswAQDXZf3XtPSqw/view?utm_content=DAGbfiNdbTw&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h17b7214f43",
-    "Find Medical Help":     "https://www.canva.com/design/DAGbfiNdbTw/rJdf8dxswAQDXZf3XtPSqw/view?utm_content=DAGbfiNdbTw&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h17b7214f43",
-    "Do's and Don't":        "https://www.canva.com/design/DAGbZYkN0V8/SRJA3kOkFPzFqRmJEjlGbQ/view?utm_content=DAGbZYkN0V8&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h1d8411966d",
-    "Know the Local Rules":  "https://www.canva.com/design/DAGbZYkN0V8/SRJA3kOkFPzFqRmJEjlGbQ/view?utm_content=DAGbZYkN0V8&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h1d8411966d",
+    "Medical Suggestions":        "https://www.canva.com/design/DAGbfiNdbTw/rJdf8dxswAQDXZf3XtPSqw/view?utm_content=DAGbfiNdbTw&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h17b7214f43",
+    "Find Medical Help":          "https://www.canva.com/design/DAGbfiNdbTw/rJdf8dxswAQDXZf3XtPSqw/view?utm_content=DAGbfiNdbTw&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h17b7214f43",
+    "Medical Reccomendation":     "https://www.canva.com/design/DAGbfiNdbTw/rJdf8dxswAQDXZf3XtPSqw/view?utm_content=DAGbfiNdbTw&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h17b7214f43",
+    "Medical Reccomendations":    "https://www.canva.com/design/DAGbfiNdbTw/rJdf8dxswAQDXZf3XtPSqw/view?utm_content=DAGbfiNdbTw&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h17b7214f43",
+    "Do's and Don't":             "https://www.canva.com/design/DAGbZYkN0V8/SRJA3kOkFPzFqRmJEjlGbQ/view?utm_content=DAGbZYkN0V8&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h1d8411966d",
+    "Know the Local Rules":       "https://www.canva.com/design/DAGbZYkN0V8/SRJA3kOkFPzFqRmJEjlGbQ/view?utm_content=DAGbZYkN0V8&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h1d8411966d",
+    "Do's and Don't of Bali":     "https://www.canva.com/design/DAGbZYkN0V8/SRJA3kOkFPzFqRmJEjlGbQ/view?utm_content=DAGbZYkN0V8&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h1d8411966d",
+    "Dos and Don'ts":             "https://www.canva.com/design/DAGbZYkN0V8/SRJA3kOkFPzFqRmJEjlGbQ/view?utm_content=DAGbZYkN0V8&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h1d8411966d",
     # Shopping & spots
     "Shop the Best Places":  "https://maps.app.goo.gl/soEShhHPXVJhM5ms6",
     "Find Your Spot":        "https://maps.app.goo.gl/YvPCmHqJTh2ZNz3HA",
@@ -260,7 +268,56 @@ _KNOWN_BUTTON_URLS: dict[str, str] = {
     "Locate Hospital":       "https://maps.app.goo.gl/SVWEZTNwhZUjPpZR6",
 }
 
-from app.services.menu_services import get_main_menu_design
+from app.services.menu_services import (
+    get_main_menu_design,
+    get_sheet_menu_categories,
+    get_sheet_menu_subcategories,
+    get_sheet_menu_endpoint,
+)
+
+# Menus that use the Menu Structure sheet for navigation (Main Menu → Category → Sub-category → Endpoint)
+_SHEET_DRIVEN_MENUS = {"Bali Handbook", "Local Guide"}
+
+
+def _endpoint_to_chat_type(endpoint: str, fallback_title: str = "") -> str:
+    """Derive an AI chat_type from a Menu Structure endpoint value."""
+    ep = endpoint.lower()
+    if "currency" in ep or "convert" in ep:
+        return "currency-converter"
+    if "plan" in ep or "trip" in ep or "itinerary" in ep:
+        return "plan-my-trip"
+    if "cuisine" in ep or "food" in ep or "dining" in ep:
+        return "local-cuisine"
+    if "event" in ep or "calendar" in ep or "festival" in ep:
+        return "event-calender"
+    if "activity" in ep or "activities" in ep or "things to do" in ep:
+        return "things-to-do-in-bali"
+    return _infer_chat_type(fallback_title)
+
+
+async def _execute_sheet_endpoint(sender_id: str, endpoint: str, title: str) -> None:
+    """Execute the endpoint value from a Menu Structure sheet row."""
+    # Direct URL → send as link button
+    if endpoint.startswith("http"):
+        await send_whatsapp_interactive_link(sender_id, endpoint)
+        return
+    # Hyperlinked cells lose their URL in gspread — try known URL map by title or endpoint text
+    known_url = _KNOWN_BUTTON_URLS.get(title) or _KNOWN_BUTTON_URLS.get(endpoint)
+    if known_url:
+        await send_whatsapp_interactive_link(sender_id, known_url)
+        return
+    # AI endpoint (e.g. "Hybrid AI Result – ...", "AI Automated Result")
+    chat_type = _endpoint_to_chat_type(endpoint, title)
+    mode_key = re.sub(r'[^\w]', '', title.lower().replace(" ", "_"))
+    persistent_mode_sessions[sender_id] = mode_key
+    kickoff = _KICKOFF_MESSAGES.get(
+        mode_key,
+        f"The guest selected '{title}' from the Bali Handbook menu. "
+        "Provide useful, relevant information about this topic in Bali."
+    )
+    data = await _whatsapp_ai_chat(sender_id, kickoff, chat_type)
+    if data:
+        await send_whatsapp_message(sender_id, data)
 
 async def fetch_menu_data(api_url: str, menu_type: str) -> list:
     try:
@@ -2173,6 +2230,50 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     except Exception as e:
                         print(f"Error fetching subcategories: {e}")
 
+                # 1b. Sheet-driven navigation — category selected (shcat_N)
+                elif selected_id.startswith("shcat_"):
+                    nav = sheet_nav_sessions.get(sender_id, {})
+                    id_map = nav.get("id_map", {})
+                    cat_name = id_map.get(selected_id, serviceitems_text)
+                    main_menu = nav.get("main_menu", "Bali Handbook")
+                    subs = await get_sheet_menu_subcategories(main_menu, cat_name)
+                    if subs:
+                        sub_id_map = {}
+                        rows = []
+                        for i, s in enumerate(subs):
+                            sid = f"shsub_{i}"
+                            sub_id_map[sid] = s["subcategory"]
+                            ep = s.get("endpoint", "")
+                            desc = ep if ep and not ep.startswith("http") and len(ep) <= 69 else "Tap to explore"
+                            rows.append({"id": sid, "title": s["subcategory"][:24], "description": desc})
+                        sheet_nav_sessions[sender_id] = {
+                            "main_menu": main_menu,
+                            "category": cat_name,
+                            "id_map": sub_id_map,
+                        }
+                        card_data = {
+                            "main_title": cat_name[:60],
+                            "main_description": f"Choose a topic from {cat_name}",
+                            "data": rows,
+                        }
+                        await send_whatsapp_menu_list_message(sender_id, card_data)
+                    else:
+                        # No subcategories — execute endpoint directly
+                        endpoint = await get_sheet_menu_endpoint(main_menu, cat_name)
+                        await _execute_sheet_endpoint(sender_id, endpoint, cat_name)
+                    return
+
+                # 1c. Sheet-driven navigation — subcategory selected (shsub_N)
+                elif selected_id.startswith("shsub_"):
+                    nav = sheet_nav_sessions.get(sender_id, {})
+                    id_map = nav.get("id_map", {})
+                    sub_name = id_map.get(selected_id, serviceitems_text)
+                    main_menu = nav.get("main_menu", "Bali Handbook")
+                    category = nav.get("category", "")
+                    endpoint = await get_sheet_menu_endpoint(main_menu, category, sub_name)
+                    await _execute_sheet_endpoint(sender_id, endpoint, sub_name)
+                    return
+
                 # 2. Handle Subcategory Selection (leads to Service Items list)
                 elif selected_id.startswith("subcat_"):
                     subcategory_title = serviceitems_text
@@ -2843,6 +2944,33 @@ async def process_message(sender_id: str, message_payload: dict, message_id:str)
                     language_lesson_sessions[sender_id] = True
                     await language_starting_message(sender_id)
                     return
+
+                # ── 1c. Sheet-driven menus (Menu Structure tab) ──────────────────
+                if serviceitems_text in _SHEET_DRIVEN_MENUS:
+                    cats = await get_sheet_menu_categories(serviceitems_text)
+                    if cats:
+                        id_map = {}
+                        rows = []
+                        for i, c in enumerate(cats):
+                            cid = f"shcat_{i}"
+                            id_map[cid] = c["category"]
+                            rows.append({
+                                "id": cid,
+                                "title": c["category"][:24],
+                                "description": "Tap to explore",
+                            })
+                        sheet_nav_sessions[sender_id] = {
+                            "main_menu": serviceitems_text,
+                            "id_map": id_map,
+                        }
+                        card_data = {
+                            "main_title": serviceitems_text,
+                            "main_description": "What would you like to explore?",
+                            "data": rows,
+                        }
+                        await send_whatsapp_menu_list_message(sender_id, card_data)
+                        return
+                    # No categories in sheet — fall through to existing logic
 
                 # ── 2. Sub-menu parents → show sheet list, AI fallback if empty ──
                 if serviceitems_text in _SUBMENU_PARENTS:

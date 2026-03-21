@@ -517,3 +517,64 @@ async def get_villa_info_by_code(villa_code: str):
     except Exception as e:
         logger.error(f"Error in get_villa_info_by_code: {e}")
         return None
+
+
+# ── Sheet-driven menu navigation (Menu Structure tab) ─────────────────────────
+
+async def get_sheet_menu_categories(main_menu: str) -> list:
+    """Return unique categories for a main menu from the Menu Structure sheet."""
+    if cache["menu_df"] is None or cache["menu_df"].empty:
+        return []
+    df = cache["menu_df"]
+    filtered = df[df["Main Menu"].str.strip() == main_menu.strip()]
+    seen = set()
+    result = []
+    for _, row in filtered.iterrows():
+        cat = str(row.get("Category", "")).strip()
+        if cat and cat not in seen:
+            seen.add(cat)
+            result.append({
+                "category": cat,
+                "endpoint": str(row.get("Endpoint", "")).strip(),
+            })
+    return result
+
+
+async def get_sheet_menu_subcategories(main_menu: str, category: str) -> list:
+    """Return subcategories for a main menu + category from the Menu Structure sheet."""
+    if cache["menu_df"] is None or cache["menu_df"].empty:
+        return []
+    df = cache["menu_df"]
+    filtered = df[
+        (df["Main Menu"].str.strip() == main_menu.strip()) &
+        (df["Category"].str.strip() == category.strip())
+    ]
+    seen = set()
+    result = []
+    for _, row in filtered.iterrows():
+        sub = str(row.get("Sub-category", "")).strip()
+        if sub and sub not in seen:
+            seen.add(sub)
+            result.append({
+                "subcategory": sub,
+                "endpoint": str(row.get("Endpoint", "")).strip(),
+            })
+    return result
+
+
+async def get_sheet_menu_endpoint(main_menu: str, category: str, subcategory: str = None) -> str:
+    """Return the endpoint for a navigation path in the Menu Structure sheet."""
+    if cache["menu_df"] is None or cache["menu_df"].empty:
+        return ""
+    df = cache["menu_df"]
+    filtered = df[
+        (df["Main Menu"].str.strip() == main_menu.strip()) &
+        (df["Category"].str.strip() == category.strip())
+    ]
+    if subcategory:
+        sub_filtered = filtered[filtered["Sub-category"].str.strip() == subcategory.strip()]
+        if not sub_filtered.empty:
+            filtered = sub_filtered
+    if filtered.empty:
+        return ""
+    return str(filtered.iloc[0].get("Endpoint", "")).strip()
